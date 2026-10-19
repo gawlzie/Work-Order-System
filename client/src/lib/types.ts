@@ -9,7 +9,8 @@ export type Permission =
   | 'master.unit'
   | 'master.employee'
   | 'master.role'
-  | 'master.step';
+  | 'master.step'
+  | 'master.category';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'APPROVE_BY_SYSTEM' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
@@ -103,6 +104,12 @@ export interface StepTemplate {
 export interface Category {
   id: number;
   name: string;
+  is_active: number;
+}
+
+export interface MasterCategory extends Category {
+  description: string | null;
+  wo_count: number;
 }
 
 export interface WorkOrder {

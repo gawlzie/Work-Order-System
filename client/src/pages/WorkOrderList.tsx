@@ -61,7 +61,7 @@ export function WorkOrderListPage() {
   const list = useWorkOrders(params);
   const units = useUnits(true);
   const mechanics = useEmployees('mechanic');
-  const categories = useCategories();
+  const categories = useCategories(true);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['work-orders'] });

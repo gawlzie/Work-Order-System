@@ -270,8 +270,8 @@ function assertRefs({ unit_id, driver_id, mechanic_id, category_id }, current = 
   if (driver_id !== current.driver_id && !assignable(driver_id, 'wo.as_driver')) throw new HttpError(422, 'Driver not found');
   if (mechanic_id && mechanic_id !== current.mechanic_id && !assignable(mechanic_id, 'wo.as_mechanic'))
     throw new HttpError(422, 'Mechanic not found');
-  if (category_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ?').get(category_id))
-    throw new HttpError(422, 'Repair category not found');
+  if (category_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(category_id, current.category_id ?? null))
+    throw new HttpError(422, 'Repair category not found or inactive');
 }
 
 function validatePayload(body) {

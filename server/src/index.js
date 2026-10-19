@@ -7,6 +7,7 @@ import { hasPermission, hashPassword, issueToken, publicUser, requireAuth, requi
 import {
   assignableEmployees, createEmployee, createRole, createUnit, deleteEmployee, deleteRole, deleteUnit, getEmployee, getRole,
   getUnit, listEmployees, listRoles, listUnits, unitTypes, updateEmployee, updateRole, updateUnit,
+  createCategory, deleteCategory, getCategory, listCategories, updateCategory,
   createStepTemplate, deleteStepTemplate, getStepTemplate, listStepTemplates, moveStepTemplate, updateStepTemplate,
 } from './master.js';
 import { PERMISSIONS } from './permissions.js';
@@ -65,7 +66,9 @@ app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
 
 app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
 
-app.get('/api/master/repair-categories', wrap(() => db.prepare('SELECT * FROM repair_categories ORDER BY name').all()));
+// Inactive categories stay visible to filters (?all=1) but cannot be picked for new work orders.
+app.get('/api/master/repair-categories', wrap((req) =>
+  db.prepare(`SELECT id, name, is_active FROM repair_categories ${req.query.all ? '' : 'WHERE is_active = 1'} ORDER BY name`).all()));
 
 /* ---------- Master data CRUD ---------- */
 const crud = (path, permission, { list, get, create, update, remove }) => {
@@ -88,6 +91,7 @@ crud('roles', 'master.role', { list: listRoles, get: getRole, create: createRole
 crud('employees', 'master.employee', { list: listEmployees, get: getEmployee, create: createEmployee, update: updateEmployee, remove: deleteEmployee });
 app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTypes()));
 crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
+crud('categories', 'master.category', { list: listCategories, get: getCategory, create: createCategory, update: updateCategory, remove: deleteCategory });
 app.post('/api/steps/:id(\\d+)/move', requirePermission('master.step'), wrap((req) => moveStepTemplate(Number(req.params.id), req.body?.direction)));
 crud('steps', 'master.step', { list: listStepTemplates, get: getStepTemplate, create: createStepTemplate, update: updateStepTemplate, remove: deleteStepTemplate });
 

@@ -310,6 +310,65 @@ export function deleteUnit(id) {
 
 export const unitTypes = () => db.prepare('SELECT DISTINCT unit_type FROM units ORDER BY unit_type').all().map((r) => r.unit_type);
 
+/* ---------- Repair categories ---------- */
+
+const CATEGORY_COLUMNS = `c.*,
+  (SELECT COUNT(*) FROM work_orders w WHERE w.category_id = c.id) AS wo_count`;
+
+export function listCategories(q = {}) {
+  const s = `%${str(q.search)}%`;
+  const where = ["(c.name LIKE ? OR IFNULL(c.description, '') LIKE ?)"];
+  if (q.status === 'active' || q.status === 'inactive') where.push(`c.is_active = ${q.status === 'active' ? 1 : 0}`);
+  return pagedQuery({
+    select: CATEGORY_COLUMNS,
+    from: `FROM repair_categories c WHERE ${where.join(' AND ')}`,
+    params: [s, s],
+    order: orderBy(q, { name: 'c.name', wo_count: 'wo_count' }, 'name'),
+    q,
+  });
+}
+
+export function getCategory(id) {
+  const row = db.prepare(`SELECT ${CATEGORY_COLUMNS} FROM repair_categories c WHERE c.id = ?`).get(id);
+  if (!row) throw new HttpError(404, 'Repair category not found');
+  return row;
+}
+
+function validateCategory(body, existing) {
+  const errors = {};
+  const data = {
+    name: str(body.name),
+    description: optional(body.description),
+    is_active: flag(body.is_active, existing?.is_active ?? 1),
+  };
+  if (data.name.length < 2 || data.name.length > 50) errors.name = 'Category name must be 2-50 characters';
+  else if (taken('repair_categories', 'name', data.name, existing?.id)) errors.name = 'Category name is already used';
+  if (data.description && data.description.length > 200) errors.description = 'Description is too long (max 200)';
+  fail(errors);
+  return data;
+}
+
+export function createCategory(body) {
+  const d = validateCategory(body);
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO repair_categories (name, description, is_active) VALUES (?, ?, ?)')
+    .run(d.name, d.description, d.is_active);
+  return getCategory(lastInsertRowid);
+}
+
+export function updateCategory(id, body) {
+  const existing = getCategory(id);
+  const d = validateCategory(body, existing);
+  db.prepare('UPDATE repair_categories SET name = ?, description = ?, is_active = ? WHERE id = ?').run(d.name, d.description, d.is_active, id);
+  return getCategory(id);
+}
+
+export function deleteCategory(id) {
+  const category = getCategory(id);
+  if (category.wo_count) throw new HttpError(409, 'Category is used in work order history. Deactivate the category instead');
+  db.prepare('DELETE FROM repair_categories WHERE id = ?').run(id);
+}
+
 /* ---------- Repair steps ---------- */
 // Work orders copy the active steps when they are created, so editing the master never changes work order history.
 

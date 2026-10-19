@@ -11,6 +11,7 @@ export const PERMISSIONS = [
   { key: 'master.employee', group: 'master', label: 'Manage employees and user accounts' },
   { key: 'master.role', group: 'master', label: 'Manage roles' },
   { key: 'master.step', group: 'master', label: 'Manage repair steps' },
+  { key: 'master.category', group: 'master', label: 'Manage repair categories' },
 ];
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);

@@ -114,6 +114,7 @@ export function WorkOrderFormPage() {
           <Field label={t('category')} error={errors.category_id}>
             <Select value={form.category_id} onChange={set('category_id')}>
               <option value="">{t('select_category')}</option>
+              {wo?.category_id && categories.data && !categories.data.some((c) => c.id === wo.category_id) && <option value={wo.category_id}>{wo.category}</option>}
               {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>

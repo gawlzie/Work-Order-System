@@ -52,8 +52,10 @@ CREATE TABLE IF NOT EXISTS units (
 );
 
 CREATE TABLE IF NOT EXISTS repair_categories (
-  id   INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL UNIQUE,
+  description TEXT,
+  is_active   INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS work_orders (
@@ -156,6 +158,9 @@ if (!unitCols.includes('serial_number')) db.exec('ALTER TABLE units ADD COLUMN s
 if (!unitCols.includes('year')) db.exec('ALTER TABLE units ADD COLUMN year INTEGER');
 if (!unitCols.includes('is_active')) db.exec('ALTER TABLE units ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
 if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE work_orders ADD COLUMN approval_remarks TEXT');
+const categoryCols = columns('repair_categories');
+if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');
+if (!categoryCols.includes('is_active')) db.exec('ALTER TABLE repair_categories ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 
