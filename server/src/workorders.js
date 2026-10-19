@@ -115,11 +115,16 @@ function buildFilters(q) {
     ['driver_id', 'wo.driver_id'],
     ['mechanic_id', 'wo.mechanic_id'],
     ['category_id', 'wo.category_id'],
+    ['created_by', 'wo.created_by'],
   ]) {
     if (q[key]) {
       const values = String(q[key]).split(',');
-      where.push(`${col} IN (${values.map(() => '?').join(',')})`);
-      params.push(...values);
+      // `none` matches work orders with no value yet, e.g. mechanic_id=none for unassigned jobs.
+      const ids = values.filter((v) => v !== 'none');
+      const parts = ids.length ? [`${col} IN (${ids.map(() => '?').join(',')})`] : [];
+      if (ids.length < values.length) parts.push(`${col} IS NULL`);
+      where.push(`(${parts.join(' OR ')})`);
+      params.push(...ids);
     }
   }
   if (q.created_start) {

@@ -6,11 +6,14 @@ import { App } from './App';
 import { ToastProvider } from './components/toast';
 import { AuthProvider } from './lib/auth';
 import { I18nProvider } from './lib/i18n';
+import { setupPwa } from './lib/pwa';
 import './index.css';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 10_000 } },
 });
+
+setupPwa();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -18,7 +18,9 @@ API and database. No SSO or external API is needed.
 | **Master Data: Units** | Add, edit, delete and deactivate units (code, number, type, brand, model, serial number, year). Shows each unit's active WO. Units with WO history can only be deactivated, and a unit with an active WO cannot be deactivated. Inactive units cannot be picked for new WOs |
 | **Master Data: Employees** | Add, edit, delete and deactivate employees and give them a role. The optional **user account** section creates a login (username + password), resets the password, or removes the account. You cannot deactivate, change the role of, remove the account of, or delete your own account. Employees with WO history can only be deactivated |
 | **Master Data: Roles** | Add, edit and delete roles and pick their permissions (WO create/edit/delete/approve/progress, "can be selected as driver / PIC mechanic", manage units/employees/roles). Built-in roles keep their code and cannot be deleted. Admin always keeps every access permission. Roles in use cannot be deleted |
-| **App page, Profile** | Landing page for the Android mechanic app; profile page with password change |
+| **Mechanic web app** (`/m`) | Browser version of the mechanic app for phones, tablets and PCs (no Android needed). Tabs: *Active* (my jobs), *Available* (approved, unassigned: tap **Take job and start** to become PIC), *Requests* (my WOs waiting for approval or rejected) and *Done*. The job screen shows the current step with a live timer, the sub-step checklist, remarks and big Start / Finish buttons, plus all steps and additional work. Mechanics can raise a WO (they are preset as PIC; it goes to admin approval). Lists refresh every 30 s; an offline banner disables actions without a connection. Users who progress steps but cannot approve land here after login |
+| **Installable (PWA)** | Web manifest + service worker: "Install app" in Chrome / Edge / Samsung Internet, or Share → Add to Home Screen on iPhone. It caches only the app shell, never `/api` data. Needs HTTPS (or localhost) in production |
+| **App page, Profile** | Landing page for the mechanic app (Android + **Open in browser** / **Install app**, with the shareable `/m` URL); profile page with password change |
 | **UX** | English / Bahasa Indonesia, light/dark theme, collapsible sidebar. Fully responsive web: on phones and tablets the tables become card lists, the menu is a slide-in drawer, dialogs open as bottom sheets and secondary buttons collapse to icons; printing still uses the full table |
 
 ## Tech stack
@@ -66,7 +68,7 @@ All routes are under `/api` and need `Authorization: Bearer <token>`, except log
 ```
 POST   /auth/login                 GET  /auth/profile        POST /auth/change-password
 GET    /dashboard?start_date&end_date
-GET    /work-orders?search&status&approval_status&channel_source&unit_id&mechanic_id&category_id
+GET    /work-orders?search&status&approval_status&channel_source&unit_id&mechanic_id&category_id&created_by
                     &created_start&created_end&sort_by&sort_order&page&limit
 GET    /work-orders/export         (CSV, same filters)
 GET    /work-orders/:id            POST /work-orders          PUT /work-orders/:id     DELETE /work-orders/:id
@@ -79,5 +81,6 @@ GET/POST /units       GET/PUT/DELETE /units/:id       GET /units/types          
 GET/POST /employees   GET/PUT/DELETE /employees/:id                             (permission master.employee)
 GET/POST /roles       GET/PUT/DELETE /roles/:id       GET /roles/permissions    (permission master.role)
   list params: search, page, limit, sort_by, sort_order, status=active|inactive (+ unit_type, role_id, account=yes|no)
+  list filters take comma lists; mechanic_id=none (or created_by=none) matches unassigned work orders
   employee body: employee fields + has_account, username, password (blank password keeps the current one)
 ```

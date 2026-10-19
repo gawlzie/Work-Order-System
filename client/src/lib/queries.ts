@@ -16,13 +16,16 @@ export interface WoListParams {
   unit_id?: string;
   mechanic_id?: string;
   category_id?: string;
+  created_by?: string;
 }
 
-export const useWorkOrders = (params: WoListParams) =>
+/** Pass `refetchInterval` (ms) to keep a list fresh, e.g. the mechanic job list. */
+export const useWorkOrders = (params: WoListParams, refetchInterval?: number) =>
   useQuery({
     queryKey: ['work-orders', params],
     queryFn: () => api<Paged<WorkOrder>>(`/work-orders${qs({ ...params })}`),
     placeholderData: (prev) => prev,
+    refetchInterval,
   });
 
 export const useWorkOrder = (id: string | undefined) =>

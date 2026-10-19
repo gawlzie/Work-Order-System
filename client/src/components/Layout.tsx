@@ -5,6 +5,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
+import { useTheme } from '../lib/theme';
 import type { Permission } from '../lib/types';
 import { useBodyLock } from './ui';
 
@@ -15,20 +16,9 @@ const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; 
   { to: '/master/employee', key: 'employees', icon: Users, group: 'master_data', permission: 'master.employee' },
   { to: '/master/role', key: 'roles', icon: ShieldCheck, group: 'master_data', permission: 'master.role' },
   { to: '/app/work-order', key: 'application', icon: Smartphone },
+  { to: '/m', key: 'mechanic_app', icon: Wrench, permission: 'wo.progress' },
 ];
 
-function useTheme() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    try {
-      localStorage.setItem('wos-theme', dark ? 'dark' : 'light');
-    } catch {
-      /* ignore */
-    }
-  }, [dark]);
-  return [dark, setDark] as const;
-}
 
 export function Layout() {
   const { t, lang, setLang } = useI18n();

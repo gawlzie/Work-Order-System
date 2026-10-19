@@ -1,6 +1,8 @@
-import { CheckCircle2, ClipboardList, Smartphone, Timer, Wrench } from 'lucide-react';
-import { Card, PageHeader } from '../components/ui';
+import { CheckCircle2, ClipboardList, ExternalLink, Globe, Smartphone, Timer, Wrench } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Card, PageHeader } from '../components/ui';
 import { useI18n } from '../lib/i18n';
+import { InstallAppButton } from './mechanic/AccountPage';
 
 export function AppDownloadPage() {
   const { t } = useI18n();
@@ -8,16 +10,24 @@ export function AppDownloadPage() {
     { icon: ClipboardList, text: t('app_info_1') },
     { icon: Timer, text: t('app_info_2') },
     { icon: CheckCircle2, text: t('app_info_3') },
+    { icon: Globe, text: t('app_info_4') },
   ];
+  const navigate = useNavigate();
+  const webAppUrl = `${window.location.origin}/m`;
   return (
     <div>
       <PageHeader title={t('application')} />
       <Card className="overflow-hidden">
         <div className="grid items-center gap-8 p-6 sm:p-10 lg:grid-cols-2">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              <Smartphone className="size-3.5" /> Android
-            </span>
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                <Smartphone className="size-3.5" /> Android
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                <Globe className="size-3.5" /> Browser · iOS · PC
+              </span>
+            </div>
             <h2 className="mt-4 text-2xl font-semibold sm:text-3xl">{t('app_title')}</h2>
             <ul className="mt-6 space-y-4">
               {points.map((p) => (
@@ -29,6 +39,15 @@ export function AppDownloadPage() {
                 </li>
               ))}
             </ul>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Button className="w-full sm:w-auto" onClick={() => navigate('/m')}>
+                <ExternalLink className="size-4" /> {t('open_web_app')}
+              </Button>
+              <InstallAppButton className="sm:w-auto" />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              URL: <span className="font-mono break-all text-foreground select-all">{webAppUrl}</span>
+            </p>
           </div>
           <div className="flex justify-center">
             <div className="relative h-[420px] w-[210px] rounded-[2.2rem] border-8 border-foreground/90 bg-background shadow-2xl">

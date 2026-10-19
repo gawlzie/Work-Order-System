@@ -8,6 +8,11 @@ import { DashboardPage } from './pages/Dashboard';
 import { EmployeeMasterPage } from './pages/master/EmployeeMaster';
 import { RoleMasterPage } from './pages/master/RoleMaster';
 import { UnitMasterPage } from './pages/master/UnitMaster';
+import { AccountPage } from './pages/mechanic/AccountPage';
+import { JobPage } from './pages/mechanic/JobPage';
+import { JobsPage } from './pages/mechanic/JobsPage';
+import { MechanicLayout } from './pages/mechanic/MechanicLayout';
+import { NewJobPage } from './pages/mechanic/NewJobPage';
 import { LoginPage } from './pages/Login';
 import { NotFoundPage } from './pages/NotFound';
 import { ProfilePage } from './pages/Profile';
@@ -28,15 +33,31 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return user ? children : <Navigate to="/login" replace state={{ from: location.pathname }} />;
 }
 
-function RequireRole({ allowed, children }: { allowed: boolean; children: ReactNode }) {
-  return allowed ? children : <Navigate to="/transaction/work-order" replace />;
+function RequireRole({ allowed, children, fallback = '/transaction/work-order' }: { allowed: boolean; children: ReactNode; fallback?: string }) {
+  return allowed ? children : <Navigate to={fallback} replace />;
 }
 
 export function App() {
   const { can } = useAuth();
+  // Field users (progress steps but do not approve) start in the mechanic web app; admins start on the dashboard.
+  const home = can('wo.progress') && !can('wo.approve') ? '/m' : '/dashboard/work-order';
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/m"
+        element={
+          <RequireAuth>
+            <MechanicLayout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<JobsPage />} />
+        <Route path="wo/:id" element={<JobPage />} />
+        <Route path="new" element={<RequireRole allowed={can('wo.create')} fallback="/m"><NewJobPage /></RequireRole>} />
+        <Route path="account" element={<AccountPage />} />
+        <Route path="*" element={<Navigate to="/m" replace />} />
+      </Route>
       <Route
         element={
           <RequireAuth>
@@ -44,7 +65,7 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Navigate to="/dashboard/work-order" replace />} />
+        <Route path="/" element={<Navigate to={home} replace />} />
         <Route path="/dashboard/work-order" element={<DashboardPage />} />
         <Route path="/transaction/work-order">
           <Route index element={<WorkOrderListPage />} />
