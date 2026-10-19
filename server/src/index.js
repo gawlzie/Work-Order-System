@@ -12,7 +12,7 @@ import {
 import { PERMISSIONS } from './permissions.js';
 import { seed } from './seed.js';
 import {
-  APPROVAL, CHANNEL, HttpError, addAdditionalWork, createWorkOrder, dashboard, deleteWorkOrder,
+  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, createWorkOrder, dashboard, deleteWorkOrder,
   getWorkOrder, listWorkOrders, progressStep, setApproval, updateWorkOrder,
 } from './workorders.js';
 
@@ -136,6 +136,9 @@ app.post('/api/work-orders/:id/approval', requirePermission('wo.approve'), wrap(
 
 app.post('/api/work-orders/:id/steps/:stepId/:action(start|finish)', requirePermission('wo.progress'), wrap((req) =>
   progressStep(req.params.id, Number(req.params.stepId), req.params.action, req.user, req.body?.remarks)));
+
+app.post('/api/work-orders/:id/steps/:stepId(\\d+)/sub-steps', requirePermission('wo.progress'), wrap((req) =>
+  addSubStep(req.params.id, Number(req.params.stepId), req.body?.name)));
 
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));

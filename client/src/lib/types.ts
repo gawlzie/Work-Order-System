@@ -95,6 +95,7 @@ export interface StepTemplate {
   name: string;
   description: string | null;
   is_waiting: number;
+  allow_add_sub: number;
   is_active: number;
   sub_steps: { id: number; name: string }[];
 }
@@ -140,6 +141,8 @@ export interface Step {
   step_name: string;
   is_waiting: number;
   is_additional: number;
+  /** Mechanics may add their own sub-steps to this step in the app (e.g. Repair Process). */
+  allow_add_sub: number;
   pic_name: string | null;
   started_at: string | null;
   finished_at: string | null;

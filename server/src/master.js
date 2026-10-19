@@ -331,7 +331,7 @@ export function getStepTemplate(id) {
   return step;
 }
 
-/** Body: name, description, is_waiting, is_active and sub_steps (array of names). */
+/** Body: name, description, is_waiting, allow_add_sub, is_active and sub_steps (array of names). */
 function validateStep(body, existing) {
   const errors = {};
   const subs = (Array.isArray(body.sub_steps) ? body.sub_steps : []).map((v) => str(v && typeof v === 'object' ? v.name : v)).filter(Boolean);
@@ -339,6 +339,7 @@ function validateStep(body, existing) {
     name: str(body.name),
     description: optional(body.description),
     is_waiting: flag(body.is_waiting, existing?.is_waiting ?? 0),
+    allow_add_sub: flag(body.allow_add_sub, existing?.allow_add_sub ?? 0),
     is_active: flag(body.is_active, existing?.is_active ?? 1),
     subs,
   };
@@ -366,8 +367,8 @@ export function createStepTemplate(body) {
   const id = tx(() => {
     const { max } = db.prepare('SELECT MAX(sort_order) AS max FROM step_templates WHERE parent_id IS NULL').get();
     const { lastInsertRowid } = db
-      .prepare('INSERT INTO step_templates (parent_id, sort_order, name, description, is_waiting, is_active) VALUES (NULL, ?, ?, ?, ?, ?)')
-      .run((max ?? 0) + 1, d.name, d.description, d.is_waiting, d.is_active);
+      .prepare('INSERT INTO step_templates (parent_id, sort_order, name, description, is_waiting, allow_add_sub, is_active) VALUES (NULL, ?, ?, ?, ?, ?, ?)')
+      .run((max ?? 0) + 1, d.name, d.description, d.is_waiting, d.allow_add_sub, d.is_active);
     writeSubSteps(lastInsertRowid, d.subs);
     return lastInsertRowid;
   });
@@ -378,8 +379,8 @@ export function updateStepTemplate(id, body) {
   const existing = getStepTemplate(id);
   const d = validateStep(body, existing);
   tx(() => {
-    db.prepare('UPDATE step_templates SET name = ?, description = ?, is_waiting = ?, is_active = ? WHERE id = ?')
-      .run(d.name, d.description, d.is_waiting, d.is_active, id);
+    db.prepare('UPDATE step_templates SET name = ?, description = ?, is_waiting = ?, allow_add_sub = ?, is_active = ? WHERE id = ?')
+      .run(d.name, d.description, d.is_waiting, d.allow_add_sub, d.is_active, id);
     writeSubSteps(id, d.subs);
   });
   return getStepTemplate(id);

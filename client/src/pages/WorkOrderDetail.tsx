@@ -114,7 +114,10 @@ export function WorkOrderDetailPage() {
                   {step.sub_steps.map((sub) => (
                     <li key={sub.id} className="flex flex-wrap items-center gap-2 text-sm">
                       {sub.finished_at ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : sub.started_at ? <Loader className="size-4 shrink-0 text-yellow-500" /> : <Circle className="size-4 shrink-0 text-muted-foreground/50" />}
-                      <span className="min-w-0 flex-1 break-words">{step.step_no}.{sub.step_no} {sub.step_name}</span>
+                      <span className="min-w-0 flex-1 break-words">
+                        {step.step_no}.{sub.step_no} {sub.step_name}
+                        {!!sub.is_additional && <span className="ml-1.5 text-xs text-primary">· {t('added_in_app')}</span>}
+                      </span>
                       <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(durationBetween(sub.started_at, sub.finished_at))}</span>
                       <span className="no-print">{stepActions(sub, step)}</span>
                     </li>

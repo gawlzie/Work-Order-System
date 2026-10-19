@@ -6,8 +6,24 @@ export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAIT
 export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', APPROVE_BY_SYSTEM: 'APPROVE_BY_SYSTEM', REJECT: 'REJECT' };
 export const CHANNEL = { WEB: 'WEB', MOBILE: 'MOBILE', WHATSAPP: 'WHATSAPP' };
 
-/** Default repair flow, loaded into the step master when it is empty. */
+/**
+ * Default repair flow, loaded into the step master when it is empty.
+ * `waiting`: the WO shows WAITING while the step runs. `addSub`: mechanics may add their own sub-steps in the app.
+ */
 export const DEFAULT_STEPS = [
+  { name: 'Unit Breakdown', subs: [] },
+  { name: 'Service Request', subs: [] },
+  { name: 'Inspection Activity', subs: [] },
+  { name: 'Inspection Report Readiness', subs: [] },
+  { name: 'Spareparts Request', subs: [] },
+  { name: 'Supply Spareparts', waiting: true, subs: [] },
+  { name: 'Repair Process', addSub: true, subs: [] },
+  { name: 'Ground Test', subs: [] },
+  { name: 'RFU (Ready For Use)', subs: [] },
+];
+
+/** The 6-step flow earlier versions installed; an untouched copy of it is upgraded to DEFAULT_STEPS. */
+const LEGACY_DEFAULT_STEPS = [
   { name: 'Unit Check-In', subs: ['Visual inspection', 'Record HM / KM'] },
   { name: 'Troubleshooting', subs: ['Identify fault', 'Determine repair category'] },
   { name: 'Waiting Part', waiting: true, subs: [] },
@@ -36,31 +52,47 @@ export function nextWoNumber(date = new Date()) {
   return `${prefix}${String(seq).padStart(4, '0')}`;
 }
 
-/** Fills an empty step master with DEFAULT_STEPS (first start, or seed reset). */
+/** Comparable form of a step list: names, flags and sub-steps in order. */
+const signature = (steps) => JSON.stringify(steps.map((s) => [s.name, !!s.waiting, !!s.addSub, s.subs]));
+
+/**
+ * Fills an empty step master with DEFAULT_STEPS (first start, or seed reset). A master that still holds the
+ * untouched legacy defaults is replaced too; a master someone has edited is never overwritten.
+ * Work orders keep their own copy of the steps, so this never changes existing work orders.
+ */
 export function ensureStepTemplates() {
-  if (db.prepare('SELECT 1 FROM step_templates LIMIT 1').get()) return;
-  const insert = db.prepare('INSERT INTO step_templates (parent_id, sort_order, name, is_waiting) VALUES (?, ?, ?, ?)');
-  tx(() => DEFAULT_STEPS.forEach((step, i) => {
-    const { lastInsertRowid } = insert.run(null, i + 1, step.name, step.waiting ? 1 : 0);
-    step.subs.forEach((sub, j) => insert.run(lastInsertRowid, j + 1, sub, 0));
-  }));
+  const rows = db.prepare('SELECT * FROM step_templates ORDER BY sort_order, id').all();
+  if (rows.length) {
+    const top = rows.filter((r) => r.parent_id === null);
+    const current = top.map((r) => ({ name: r.name, waiting: r.is_waiting, addSub: r.allow_add_sub, subs: rows.filter((c) => c.parent_id === r.id).map((c) => c.name) }));
+    const untouched = top.every((r) => r.is_active && !r.description) && signature(current) === signature(LEGACY_DEFAULT_STEPS);
+    if (!untouched) return;
+  }
+  const insert = db.prepare('INSERT INTO step_templates (parent_id, sort_order, name, is_waiting, allow_add_sub) VALUES (?, ?, ?, ?, ?)');
+  tx(() => {
+    db.exec('DELETE FROM step_templates');
+    DEFAULT_STEPS.forEach((step, i) => {
+      const { lastInsertRowid } = insert.run(null, i + 1, step.name, step.waiting ? 1 : 0, step.addSub ? 1 : 0);
+      step.subs.forEach((sub, j) => insert.run(lastInsertRowid, j + 1, sub, 0, 0));
+    });
+  });
 }
 
-/** Active steps of the step master in the { name, waiting, subs } shape insertSteps takes. */
+/** Active steps of the step master in the { name, waiting, addSub, subs } shape insertSteps takes. */
 export function activeStepTemplate() {
   const rows = db.prepare('SELECT * FROM step_templates ORDER BY sort_order, id').all();
   return rows
     .filter((r) => r.parent_id === null && r.is_active)
-    .map((r) => ({ name: r.name, waiting: !!r.is_waiting, subs: rows.filter((c) => c.parent_id === r.id).map((c) => c.name) }));
+    .map((r) => ({ name: r.name, waiting: !!r.is_waiting, addSub: !!r.allow_add_sub, subs: rows.filter((c) => c.parent_id === r.id).map((c) => c.name) }));
 }
 
 export function insertSteps(woUuid, template = activeStepTemplate()) {
   const insert = db.prepare(
-    'INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_waiting) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_waiting, allow_add_sub) VALUES (?, ?, ?, ?, ?, ?)',
   );
   template.forEach((step, i) => {
-    const { lastInsertRowid } = insert.run(woUuid, null, i + 1, step.name, step.waiting ? 1 : 0);
-    step.subs.forEach((sub, j) => insert.run(woUuid, lastInsertRowid, j + 1, sub, 0));
+    const { lastInsertRowid } = insert.run(woUuid, null, i + 1, step.name, step.waiting ? 1 : 0, step.addSub ? 1 : 0);
+    step.subs.forEach((sub, j) => insert.run(woUuid, lastInsertRowid, j + 1, sub, 0, 0));
   });
 }
 
@@ -343,6 +375,23 @@ export function progressStep(woUuid, stepId, action, user, remarks) {
     }
     recomputeStatus(woUuid);
   });
+  return getWorkOrder(woUuid);
+}
+
+/** Mechanic adds a sub-step to this work order only, on steps flagged allow_add_sub (e.g. Repair Process). */
+export function addSubStep(woUuid, stepId, name) {
+  const wo = getWorkOrder(woUuid);
+  if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved first');
+  const step = getStep(woUuid, stepId);
+  if (step.parent_id !== null || !step.allow_add_sub) throw new HttpError(409, 'Sub-steps cannot be added to this step');
+  if (step.finished_at) throw new HttpError(409, 'Step is already finished');
+  const title = String(name ?? '').trim();
+  if (title.length < 2 || title.length > 60) throw new HttpError(422, 'Sub-step name must be 2-60 characters');
+  if (db.prepare('SELECT 1 FROM wo_steps WHERE parent_id = ? AND step_name = ? COLLATE NOCASE').get(step.id, title))
+    throw new HttpError(422, 'This sub-step already exists');
+  const { max } = db.prepare('SELECT MAX(step_no) AS max FROM wo_steps WHERE parent_id = ?').get(step.id);
+  db.prepare('INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_additional) VALUES (?, ?, ?, ?, 1)').run(
+    woUuid, step.id, (max ?? 0) + 1, title);
   return getWorkOrder(woUuid);
 }
 
