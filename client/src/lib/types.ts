@@ -121,6 +121,8 @@ export interface WorkOrder {
   status: WoStatus;
   approval_status: ApprovalStatus;
   reject_reason: string | null;
+  /** Optional note the approver adds when approving, e.g. instructions for the mechanic. */
+  approval_remarks: string | null;
   channel_source: Channel;
   created_by_name: string | null;
   created_at: string;

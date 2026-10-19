@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, Pencil, Play, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Play, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
@@ -165,6 +165,13 @@ export function WorkOrderDetailPage() {
         <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
           <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
           <p><span className="font-medium">{t('rejected_note')}:</span> {wo.reject_reason}</p>
+        </div>
+      )}
+
+      {wo.approval_remarks && (
+        <div className="mb-4 rounded-lg flex items-start gap-3 border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
+          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <p className="min-w-0 break-words whitespace-pre-wrap"><span className="font-medium">{t('approval_remarks')}:</span> {wo.approval_remarks}</p>
         </div>
       )}
 

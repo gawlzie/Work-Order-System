@@ -71,7 +71,7 @@ export function WorkOrderListPage() {
   const action = useMutation({
     mutationFn: async (d: NonNullable<Dialog>) => {
       if (d.kind === 'delete') return api(`/work-orders/${d.wo.wo_uuid}`, { method: 'DELETE' });
-      return api(`/work-orders/${d.wo.wo_uuid}/approval`, { method: 'POST', body: { action: d.kind === 'approve' ? 'APPROVE' : 'REJECT', reason } });
+      return api(`/work-orders/${d.wo.wo_uuid}/approval`, { method: 'POST', body: d.kind === 'approve' ? { action: 'APPROVE', remarks: reason } : { action: 'REJECT', reason } });
     },
     onSuccess: (_, d) => {
       toast('success', t(d.kind === 'delete' ? 'deleted' : d.kind === 'approve' ? 'approved' : 'rejected'), d.wo.wo_number);
@@ -347,6 +347,12 @@ export function WorkOrderListPage() {
           </Field>
         )}
         {dialog && dialog.kind !== 'reject' && <p className="text-sm">{dialog.wo.problem}</p>}
+        {dialog?.kind === 'approve' && (
+          <Field label={t('approval_remarks')} className="mt-4">
+            <Textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('approval_remarks_placeholder')} maxLength={500} className="min-h-20" />
+            <span className="self-end text-xs text-muted-foreground">{reason.length}/500</span>
+          </Field>
+        )}
       </Modal>
     </div>
   );

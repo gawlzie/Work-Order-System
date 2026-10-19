@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, Play, Plus, RefreshCcw, Timer, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Play, Plus, RefreshCcw, Timer, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
@@ -122,6 +122,12 @@ export function JobPage() {
         <div className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
           <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
           <p><span className="font-medium">{t('rejected_note')}:</span> {wo.reject_reason}</p>
+        </div>
+      )}
+      {wo.approval_remarks && (
+        <div className="rounded-xl flex items-start gap-3 border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
+          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <p className="min-w-0 break-words whitespace-pre-wrap"><span className="font-medium">{t('approval_remarks')}:</span> {wo.approval_remarks}</p>
         </div>
       )}
       {approved && !can('wo.progress') && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">{t('m_view_only')}</p>}

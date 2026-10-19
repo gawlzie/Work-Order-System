@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   status           TEXT NOT NULL DEFAULT 'OPEN',
   approval_status  TEXT NOT NULL DEFAULT 'WAITING',
   reject_reason    TEXT,
+  approval_remarks TEXT,
   channel_source   TEXT NOT NULL DEFAULT 'WEB',
   created_by       INTEGER REFERENCES employees(id),
   created_at       TEXT NOT NULL,
@@ -152,6 +153,7 @@ const unitCols = columns('units');
 if (!unitCols.includes('serial_number')) db.exec('ALTER TABLE units ADD COLUMN serial_number TEXT');
 if (!unitCols.includes('year')) db.exec('ALTER TABLE units ADD COLUMN year INTEGER');
 if (!unitCols.includes('is_active')) db.exec('ALTER TABLE units ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE work_orders ADD COLUMN approval_remarks TEXT');
 
 /** SQL condition: the role aliased `r` holds the permission bound to the next `?`. */
 export const roleHas = (alias = 'r') => `EXISTS (SELECT 1 FROM json_each(${alias}.permissions) WHERE value = ?)`;

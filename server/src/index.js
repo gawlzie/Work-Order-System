@@ -97,7 +97,7 @@ app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
   ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['problem', 'Problem'], ['status', 'Status'],
-  ['approval_status', 'Approval Status'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
+  ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (minutes)'],
 ];
 const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -130,8 +130,8 @@ app.delete('/api/work-orders/:id', requirePermission('wo.delete'), wrap((req) =>
 }));
 
 app.post('/api/work-orders/:id/approval', requirePermission('wo.approve'), wrap((req) => {
-  const { action, reason } = req.body ?? {};
-  return setApproval(req.params.id, action === 'REJECT' ? APPROVAL.REJECT : action === 'APPROVE' ? APPROVAL.APPROVE : action, reason);
+  const { action, reason, remarks } = req.body ?? {};
+  return setApproval(req.params.id, action === 'REJECT' ? APPROVAL.REJECT : action === 'APPROVE' ? APPROVAL.APPROVE : action, { reason, remarks });
 }));
 
 app.post('/api/work-orders/:id/steps/:stepId/:action(start|finish)', requirePermission('wo.progress'), wrap((req) =>

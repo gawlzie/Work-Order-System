@@ -277,17 +277,21 @@ export function deleteWorkOrder(woUuid) {
   db.prepare('DELETE FROM work_orders WHERE wo_uuid = ?').run(woUuid);
 }
 
-export function setApproval(woUuid, action, reason) {
+/** Reject needs a reason; approve takes optional remarks (e.g. instructions for the mechanic). */
+export function setApproval(woUuid, action, { reason, remarks } = {}) {
   const wo = getWorkOrder(woUuid);
   if (wo.approval_status !== APPROVAL.WAITING) throw new HttpError(409, 'This work order is not waiting for approval');
   if (action === APPROVAL.REJECT) {
     const text = String(reason ?? '').trim();
     if (text.length < 3) throw new HttpError(422, 'A reject reason is required');
-    db.prepare('UPDATE work_orders SET approval_status = ?, reject_reason = ?, updated_at = ? WHERE wo_uuid = ?').run(
+    if (text.length > 500) throw new HttpError(422, 'Reject reason is too long (max 500)');
+    db.prepare('UPDATE work_orders SET approval_status = ?, reject_reason = ?, approval_remarks = NULL, updated_at = ? WHERE wo_uuid = ?').run(
       APPROVAL.REJECT, text, now(), woUuid);
   } else if (action === APPROVAL.APPROVE) {
-    db.prepare('UPDATE work_orders SET approval_status = ?, reject_reason = NULL, updated_at = ? WHERE wo_uuid = ?').run(
-      APPROVAL.APPROVE, now(), woUuid);
+    const note = String(remarks ?? '').trim() || null;
+    if (note && note.length > 500) throw new HttpError(422, 'Approval remarks are too long (max 500)');
+    db.prepare('UPDATE work_orders SET approval_status = ?, reject_reason = NULL, approval_remarks = ?, updated_at = ? WHERE wo_uuid = ?').run(
+      APPROVAL.APPROVE, note, now(), woUuid);
   } else {
     throw new HttpError(422, 'Unknown approval action');
   }

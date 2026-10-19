@@ -11,7 +11,7 @@ API and database. No SSO or external API is needed.
 | **Login / roles** | Permission-based roles. Built-in: Admin Plant (full access), Mechanic (create WO + progress steps), Driver (view only); more can be added in Master Data |
 | **Dashboard** | Open / On Progress / Waiting / Finish counters, total WOs, pending approvals, average and total repair time, WOs per category, list with status tabs and a date range |
 | **Work Order list** | Search, filters (status, approval, channel source, unit, PIC mechanic, category, date range), sortable columns, pagination, CSV export, print |
-| **Approval** | WOs raised by mechanics (mobile) or WhatsApp wait for approval. Admin approves or rejects them with a reason. WOs created on the web are approved by the system |
+| **Approval** | WOs raised by mechanics (mobile) or WhatsApp wait for approval. Admin approves them with optional **remarks** (e.g. instructions for the mechanic, shown on the WO detail and in the mechanic app) or rejects them with a required reason. WOs created on the web are approved by the system |
 | **Create / Update** | Unit (dump truck), driver, PIC mechanic, repair category, problem description, with validation and a confirmation dialog. Only one active WO is allowed per unit |
 | **Detail** | Unit/driver/PIC info and a step timeline with sub-steps (PIC, start, finish, duration, remarks). Steps are started and finished in order. Additional work can be added. Printable |
 | **Status logic** | `OPEN` → `ON_PROGRESS` → `WAITING` (while the *Waiting Part* step runs) → `FINISH` (when all steps are done), derived automatically from the steps |
@@ -73,7 +73,7 @@ GET    /work-orders?search&status&approval_status&channel_source&unit_id&mechani
                     &created_start&created_end&sort_by&sort_order&page&limit
 GET    /work-orders/export         (CSV, same filters)
 GET    /work-orders/:id            POST /work-orders          PUT /work-orders/:id     DELETE /work-orders/:id
-POST   /work-orders/:id/approval   { action: APPROVE | REJECT, reason }
+POST   /work-orders/:id/approval   { action: APPROVE, remarks? } | { action: REJECT, reason }
 POST   /work-orders/:id/steps/:stepId/start|finish   { remarks }
 POST   /work-orders/:id/additional-work              { name }
 GET    /master/units?all=1  /master/employees?role=driver|mechanic  /master/roles  /master/repair-categories   (dropdown lookups)
