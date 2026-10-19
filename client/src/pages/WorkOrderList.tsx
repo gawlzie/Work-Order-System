@@ -7,7 +7,7 @@ import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { DateRange } from '../components/DateRange';
 import { Pagination } from '../components/Pagination';
 import { useToast } from '../components/toast';
-import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from '../components/ui';
+import { BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Textarea } from '../components/ui';
 import { api, download, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatDateTime, formatDuration } from '../lib/format';
@@ -110,6 +110,35 @@ export function WorkOrderListPage() {
 
   const activeFilters = FILTER_KEYS.filter((k) => sp.get(k)).length;
   const rows = list.data?.data ?? [];
+  const rowNo = (i: number) => ((params.page ?? 1) - 1) * (params.limit ?? 10) + i + 1;
+
+  const rowActions = (wo: WorkOrder) => (
+    <div className="flex justify-end gap-1">
+      {can('wo.approve') && wo.approval_status === 'WAITING' && (
+        <>
+          <Button size="icon" variant="ghost" title={t('approve')} aria-label={t('approve')} onClick={() => setDialog({ kind: 'approve', wo })} className="text-emerald-600">
+            <Check className="size-4" />
+          </Button>
+          <Button size="icon" variant="ghost" title={t('reject')} aria-label={t('reject')} onClick={() => setDialog({ kind: 'reject', wo })} className="text-destructive">
+            <X className="size-4" />
+          </Button>
+        </>
+      )}
+      <Button size="icon" variant="ghost" title={t('details')} aria-label={t('details')} onClick={() => navigate(`/transaction/work-order/details/${wo.wo_uuid}`)}>
+        <Eye className="size-4" />
+      </Button>
+      {can('wo.update') && wo.status !== 'FINISH' && (
+        <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
+          <Pencil className="size-4" />
+        </Button>
+      )}
+      {can('wo.delete') && wo.status === 'OPEN' && (
+        <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} onClick={() => setDialog({ kind: 'delete', wo })} className="text-destructive">
+          <Trash2 className="size-4" />
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <div>
@@ -118,17 +147,17 @@ export function WorkOrderListPage() {
         subtitle={t('wo_subtitle')}
         actions={
           <>
-            <Button variant="outline" onClick={() => list.refetch()}>
-              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> {t('reload')}
+            <Button variant="outline" onClick={() => list.refetch()} title={t('reload')}>
+              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
-            <Button variant="outline" onClick={() => window.print()}>
-              <Printer className="size-4" /> {t('print')}
+            <Button variant="outline" onClick={() => window.print()} title={t('print')}>
+              <Printer className="size-4" /> <BtnLabel>{t('print')}</BtnLabel>
             </Button>
-            <Button variant="outline" onClick={exportCsv} loading={exporting}>
-              {!exporting && <Download className="size-4" />} {t('export')}
+            <Button variant="outline" onClick={exportCsv} loading={exporting} title={t('export')}>
+              {!exporting && <Download className="size-4" />} <BtnLabel>{t('export')}</BtnLabel>
             </Button>
             {can('wo.create') && (
-              <Button onClick={() => navigate('/transaction/work-order/create')}>
+              <Button className="max-sm:ml-auto" onClick={() => navigate('/transaction/work-order/create')}>
                 <Plus className="size-4" /> {t('create')}
               </Button>
             )}
@@ -142,17 +171,19 @@ export function WorkOrderListPage() {
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder={t('search')} className="pl-9" />
           </div>
-          <Select value={params.status} onChange={(e) => update({ status: e.target.value })} className="sm:w-44" aria-label={t('status')}>
-            <option value="">{t('all_status')}</option>
-            <option value="OPEN">{t('status_open')}</option>
-            <option value="ON_PROGRESS">{t('status_on_progress')}</option>
-            <option value="WAITING">{t('status_waiting')}</option>
-            <option value="FINISH">{t('status_finish')}</option>
-          </Select>
-          <Button variant={showFilters ? 'primary' : 'outline'} onClick={() => setShowFilters((s) => !s)}>
-            <Filter className="size-4" /> {t('filters')}
-            {activeFilters > 0 && <span className="rounded-full bg-white/25 px-1.5 text-xs">{activeFilters}</span>}
-          </Button>
+          <div className="flex gap-3">
+            <Select value={params.status} onChange={(e) => update({ status: e.target.value })} className="min-w-0 flex-1 sm:w-44 sm:flex-none" aria-label={t('status')}>
+              <option value="">{t('all_status')}</option>
+              <option value="OPEN">{t('status_open')}</option>
+              <option value="ON_PROGRESS">{t('status_on_progress')}</option>
+              <option value="WAITING">{t('status_waiting')}</option>
+              <option value="FINISH">{t('status_finish')}</option>
+            </Select>
+            <Button variant={showFilters ? 'primary' : 'outline'} onClick={() => setShowFilters((s) => !s)} aria-expanded={showFilters}>
+              <Filter className="size-4" /> {t('filters')}
+              {activeFilters > 0 && <span className={clsx('rounded-full px-1.5 text-xs', showFilters ? 'bg-white/25' : 'bg-primary text-primary-foreground')}>{activeFilters}</span>}
+            </Button>
+          </div>
         </div>
 
         {showFilters && (
@@ -196,14 +227,45 @@ export function WorkOrderListPage() {
               </Select>
             </Field>
             <div className="flex items-end">
-              <Button variant="ghost" onClick={() => { setSearchText(''); setSp(new URLSearchParams(), { replace: true }); }}>
+              <Button variant="ghost" className="max-sm:w-full" onClick={() => { setSearchText(''); setSp(new URLSearchParams(), { replace: true }); }}>
                 <X className="size-4" /> {t('reset')}
               </Button>
             </div>
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {/* Phones and tablets: one card per work order. The table is kept for desktop and for printing. */}
+        <ul className="divide-y divide-border lg:hidden print:hidden">
+          {rows.map((wo, i) => (
+            <li key={wo.wo_uuid} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link to={`/transaction/work-order/details/${wo.wo_uuid}`} className="font-medium text-primary hover:underline">
+                    <span className="mr-1.5 text-xs font-normal text-muted-foreground">#{rowNo(i)}</span>
+                    {wo.wo_number}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(wo.created_at)}</p>
+                </div>
+                <StatusBadge status={wo.status} />
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3 md:grid-cols-6">
+                <MetaItem label={t('unit')}>{wo.unit_number}</MetaItem>
+                <MetaItem label={t('driver')}>{wo.driver_name}</MetaItem>
+                <MetaItem label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</MetaItem>
+                <MetaItem label={t('category')}>{wo.category ?? '-'}</MetaItem>
+                <MetaItem label={t('step_information')}>{wo.step_information}</MetaItem>
+                <MetaItem label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></MetaItem>
+              </dl>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <ApprovalBadge status={wo.approval_status} />
+                <ChannelBadge channel={wo.channel_source} />
+                <div className="-mr-2 ml-auto">{rowActions(wo)}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden overflow-x-auto lg:block print:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
@@ -225,7 +287,7 @@ export function WorkOrderListPage() {
             <tbody>
               {rows.map((wo, i) => (
                 <tr key={wo.wo_uuid} className="border-t border-border hover:bg-muted/40">
-                  <td className="px-4 py-3 text-muted-foreground">{((params.page ?? 1) - 1) * (params.limit ?? 10) + i + 1}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{rowNo(i)}</td>
                   <td className="px-4 py-3 font-medium whitespace-nowrap">
                     <Link to={`/transaction/work-order/details/${wo.wo_uuid}`} className="text-primary hover:underline">{wo.wo_number}</Link>
                   </td>
@@ -239,41 +301,15 @@ export function WorkOrderListPage() {
                   <td className="px-4 py-3 whitespace-nowrap">{wo.step_information}</td>
                   <td className="px-4 py-3 whitespace-nowrap tabular-nums">{formatDuration(wo.total_time)}</td>
                   <td className="px-4 py-3"><ChannelBadge channel={wo.channel_source} /></td>
-                  <td className="no-print px-4 py-2">
-                    <div className="flex justify-end gap-1">
-                      {can('wo.approve') && wo.approval_status === 'WAITING' && (
-                        <>
-                          <Button size="icon" variant="ghost" title={t('approve')} onClick={() => setDialog({ kind: 'approve', wo })} className="text-emerald-600">
-                            <Check className="size-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" title={t('reject')} onClick={() => setDialog({ kind: 'reject', wo })} className="text-destructive">
-                            <X className="size-4" />
-                          </Button>
-                        </>
-                      )}
-                      <Button size="icon" variant="ghost" title={t('details')} onClick={() => navigate(`/transaction/work-order/details/${wo.wo_uuid}`)}>
-                        <Eye className="size-4" />
-                      </Button>
-                      {can('wo.update') && wo.status !== 'FINISH' && (
-                        <Button size="icon" variant="ghost" title={t('edit')} onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
-                          <Pencil className="size-4" />
-                        </Button>
-                      )}
-                      {can('wo.delete') && wo.status === 'OPEN' && (
-                        <Button size="icon" variant="ghost" title={t('delete')} onClick={() => setDialog({ kind: 'delete', wo })} className="text-destructive">
-                          <Trash2 className="size-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
+                  <td className="no-print px-4 py-2">{rowActions(wo)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
-          {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
-          {list.data && !rows.length && <EmptyState title={t('no_data')} description={t('no_data_desc')} />}
         </div>
+        {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
+        {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
+        {list.data && !rows.length && <EmptyState title={t('no_data')} description={t('no_data_desc')} />}
         {list.data && list.data.meta.total > 0 && (
           <Pagination
             page={list.data.meta.page}

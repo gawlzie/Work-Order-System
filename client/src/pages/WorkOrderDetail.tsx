@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { useToast } from '../components/toast';
-import { Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Textarea } from '../components/ui';
+import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Textarea } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
@@ -91,14 +91,17 @@ export function WorkOrderDetailPage() {
   const renderSteps = (steps: Step[]) => (
     <ol className="divide-y divide-border">
       {steps.map((step) => (
-        <li key={step.id} className={clsx('p-4', step.started_at && !step.finished_at && 'bg-yellow-500/5')}>
-          <div className="flex flex-wrap items-start gap-3">
+        <li key={step.id} className={clsx('p-3 sm:p-4', step.started_at && !step.finished_at && 'bg-yellow-500/5')}>
+          <div className="flex items-start gap-3">
             <div className="pt-0.5">{stateIcon(step)}</div>
             <div className="min-w-0 flex-1">
-              <p className="font-medium">
-                {step.step_no}. {step.step_name}
-                {!!step.is_waiting && <span className="ml-2 text-xs font-normal text-orange-500">(Waiting)</span>}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-medium break-words">
+                  {step.step_no}. {step.step_name}
+                  {!!step.is_waiting && <span className="ml-2 text-xs font-normal text-orange-500">(Waiting)</span>}
+                </p>
+                <div className="no-print shrink-0">{stepActions(step)}</div>
+              </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
                 <div><span className="block">{t('pic')}</span><span className="text-foreground">{step.pic_name ?? '-'}</span></div>
                 <div><span className="block">{t('start')}</span><span className="text-foreground">{formatDateTime(step.started_at)}</span></div>
@@ -110,8 +113,8 @@ export function WorkOrderDetailPage() {
                 <ul className="mt-3 space-y-1.5 border-l-2 border-border pl-4">
                   {step.sub_steps.map((sub) => (
                     <li key={sub.id} className="flex flex-wrap items-center gap-2 text-sm">
-                      {sub.finished_at ? <CheckCircle2 className="size-4 text-emerald-500" /> : sub.started_at ? <Loader className="size-4 text-yellow-500" /> : <Circle className="size-4 text-muted-foreground/50" />}
-                      <span className="flex-1">{step.step_no}.{sub.step_no} {sub.step_name}</span>
+                      {sub.finished_at ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : sub.started_at ? <Loader className="size-4 shrink-0 text-yellow-500" /> : <Circle className="size-4 shrink-0 text-muted-foreground/50" />}
+                      <span className="min-w-0 flex-1 break-words">{step.step_no}.{sub.step_no} {sub.step_name}</span>
                       <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(durationBetween(sub.started_at, sub.finished_at))}</span>
                       <span className="no-print">{stepActions(sub, step)}</span>
                     </li>
@@ -119,7 +122,6 @@ export function WorkOrderDetailPage() {
                 </ul>
               )}
             </div>
-            <div className="no-print">{stepActions(step)}</div>
           </div>
         </li>
       ))}
@@ -138,14 +140,14 @@ export function WorkOrderDetailPage() {
         subtitle={t('detail_subtitle')}
         actions={
           <>
-            <Button variant="outline" onClick={() => refetch()}>
-              <RefreshCcw className={clsx('size-4', isFetching && 'animate-spin')} /> {t('reload')}
+            <Button variant="outline" onClick={() => refetch()} title={t('reload')}>
+              <RefreshCcw className={clsx('size-4', isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
-            <Button variant="outline" onClick={() => window.print()}>
-              <Printer className="size-4" /> {t('print')}
+            <Button variant="outline" onClick={() => window.print()} title={t('print')}>
+              <Printer className="size-4" /> <BtnLabel>{t('print')}</BtnLabel>
             </Button>
             {can('wo.update') && wo.status !== 'FINISH' && (
-              <Button onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
+              <Button className="max-sm:ml-auto" onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
                 <Pencil className="size-4" /> {t('edit')}
               </Button>
             )}
@@ -166,7 +168,7 @@ export function WorkOrderDetailPage() {
         </div>
       )}
 
-      <Card className="print-area p-5">
+      <Card className="print-area p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <StatusBadge status={wo.status} />
           <ApprovalBadge status={wo.approval_status} />
@@ -210,8 +212,8 @@ export function WorkOrderDetailPage() {
             onSubmit={(e) => { e.preventDefault(); if (extra.trim().length >= 3) addExtra.mutate(); }}
           >
             <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={t('add_additional_work')} maxLength={120} />
-            <Button type="submit" variant="outline" loading={addExtra.isPending} disabled={extra.trim().length < 3}>
-              <Plus className="size-4" /> {t('create')}
+            <Button type="submit" variant="outline" loading={addExtra.isPending} disabled={extra.trim().length < 3} title={t('create')}>
+              <Plus className="size-4" /> <BtnLabel>{t('create')}</BtnLabel>
             </Button>
           </form>
         )}

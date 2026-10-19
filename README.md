@@ -19,7 +19,7 @@ API and database. No SSO or external API is needed.
 | **Master Data: Employees** | Add, edit, delete and deactivate employees and give them a role. The optional **user account** section creates a login (username + password), resets the password, or removes the account. You cannot deactivate, change the role of, remove the account of, or delete your own account. Employees with WO history can only be deactivated |
 | **Master Data: Roles** | Add, edit and delete roles and pick their permissions (WO create/edit/delete/approve/progress, "can be selected as driver / PIC mechanic", manage units/employees/roles). Built-in roles keep their code and cannot be deleted. Admin always keeps every access permission. Roles in use cannot be deleted |
 | **App page, Profile** | Landing page for the Android mechanic app; profile page with password change |
-| **UX** | English / Bahasa Indonesia, light/dark theme, responsive layout with a collapsible sidebar |
+| **UX** | English / Bahasa Indonesia, light/dark theme, collapsible sidebar. Fully responsive web: on phones and tablets the tables become card lists, the menu is a slide-in drawer, dialogs open as bottom sheets and secondary buttons collapse to icons; printing still uses the full table |
 
 ## Tech stack
 

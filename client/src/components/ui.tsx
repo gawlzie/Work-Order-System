@@ -40,8 +40,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = 'Button';
 
+// 16px text on phones stops iOS Safari from zooming in when a field is focused.
 const fieldBase =
-  'w-full rounded-lg border border-border bg-card px-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60';
+  'w-full rounded-lg border border-border bg-card px-3 text-base outline-none sm:text-sm transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   ({ className, invalid, ...props }, ref) => (
@@ -122,6 +123,31 @@ export function EmptyState({ title, description, action }: { title: string; desc
   );
 }
 
+/** Stops the page behind an overlay (modal, mobile menu) from scrolling while it is open. */
+export function useBodyLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [locked]);
+}
+
+/** Label / value pair used by the card layout that replaces tables on small screens. */
+export function MetaItem({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={clsx('min-w-0', className)}>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+/** Button text that collapses to an icon-only button (still read by screen readers) on phones. */
+export const BtnLabel = ({ children }: { children: ReactNode }) => <span className="max-sm:sr-only">{children}</span>;
+
 export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: { open: boolean; onClose: () => void; title: string; description?: string; children?: ReactNode; footer?: ReactNode; size?: 'md' | 'lg' }) {
   useEffect(() => {
     if (!open) return;
@@ -129,11 +155,19 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+  useBodyLock(open);
   if (!open) return null;
+  // Bottom sheet on phones, centered dialog from `sm` up.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={onClose} role="dialog" aria-modal="true">
-      <div className={clsx('flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-xl border border-border bg-card shadow-xl', size === 'lg' ? 'max-w-2xl' : 'max-w-md')} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-end justify-center bg-black/50 sm:items-center sm:p-4" onMouseDown={onClose} role="dialog" aria-modal="true">
+      <div
+        className={clsx(
+          'flex max-h-[92dvh] w-full animate-sheet-up flex-col rounded-t-2xl border border-border bg-card shadow-xl sm:max-h-[calc(100dvh-2rem)] sm:animate-none sm:rounded-xl',
+          size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-md',
+        )}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
           <div>
             <h2 className="text-lg font-semibold">{title}</h2>
             {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
@@ -142,8 +176,10 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             <X className="size-4" />
           </button>
         </div>
-        {children && <div className="overflow-y-auto p-5">{children}</div>}
-        {footer && <div className="flex justify-end gap-2 border-t border-border p-4">{footer}</div>}
+        {children && <div className="overflow-y-auto p-4 sm:p-5">{children}</div>}
+        {footer && (
+          <div className="flex flex-col-reverse gap-2 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))] *:w-full sm:flex-row sm:justify-end sm:pb-4 sm:*:w-auto">{footer}</div>
+        )}
       </div>
     </div>
   );
@@ -151,12 +187,12 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-xl font-semibold sm:text-2xl">{title}</h1>
+    <div className="mb-4 flex flex-col gap-3 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold break-words sm:text-2xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
-      {actions && <div className="no-print flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="no-print flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { StatusBadge } from '../components/badges';
 import { DateRange } from '../components/DateRange';
 import { Pagination } from '../components/Pagination';
-import { Button, Card, EmptyState, PageHeader, Skeleton } from '../components/ui';
+import { BtnLabel, Button, Card, EmptyState, MetaItem, PageHeader, Skeleton } from '../components/ui';
 import { formatDateTime, formatDuration, toDateInput } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useDashboard, useWorkOrders } from '../lib/queries';
@@ -47,9 +47,9 @@ export function DashboardPage() {
         subtitle={t('dashboard_subtitle')}
         actions={
           <>
-            <DateRange start={start} end={end} onChange={(a, b) => { setStart(a); setEnd(b); setPage(1); }} />
-            <Button variant="outline" onClick={() => { stats.refetch(); list.refetch(); }}>
-              <RefreshCcw className="size-4" /> {t('reload')}
+            <DateRange start={start} end={end} onChange={(a, b) => { setStart(a); setEnd(b); setPage(1); }} className="flex-1 sm:flex-none" />
+            <Button variant="outline" onClick={() => { stats.refetch(); list.refetch(); }} title={t('reload')}>
+              <RefreshCcw className="size-4" /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
           </>
         }
@@ -60,8 +60,8 @@ export function DashboardPage() {
           <button key={c.key} onClick={() => { setStatus(status === c.filter ? '' : c.filter); setPage(1); }} className="text-left">
             <Card className={clsx('p-4 transition hover:border-primary/50 sm:p-5', status === c.filter && 'ring-2 ring-primary')}>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{t(c.key)}</p>
-                <span className={clsx('flex size-9 items-center justify-center rounded-lg', c.color)}>
+                <p className="min-w-0 truncate text-sm text-muted-foreground">{t(c.key)}</p>
+                <span className={clsx('flex size-9 shrink-0 items-center justify-center rounded-lg', c.color)}>
                   <c.icon className="size-5" />
                 </span>
               </div>
@@ -86,12 +86,12 @@ export function DashboardPage() {
             </div>
           ))}
         </Card>
-        <Card className="p-5 lg:col-span-2">
+        <Card className="p-4 sm:p-5 lg:col-span-2">
           <h2 className="font-semibold">{t('by_category')}</h2>
           <div className="mt-4 space-y-2.5">
             {s?.by_category.length ? (
               s.by_category.map((c) => (
-                <div key={c.name} className="grid grid-cols-[minmax(0,9rem)_1fr_2rem] items-center gap-3 text-sm">
+                <div key={c.name} className="grid grid-cols-[minmax(0,7rem)_1fr_2rem] items-center gap-3 text-sm sm:grid-cols-[minmax(0,9rem)_1fr_2rem]">
                   <span className="truncate text-muted-foreground">{c.name}</span>
                   <div className="h-2.5 rounded-full bg-muted">
                     <div className="h-full rounded-full bg-sidebar-accent" style={{ width: `${(c.count / maxCat) * 100}%` }} />
@@ -123,7 +123,28 @@ export function DashboardPage() {
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <ul className="divide-y divide-border lg:hidden">
+          {list.data?.data.map((wo) => (
+            <li key={wo.wo_uuid}>
+              <Link to={`/transaction/work-order/details/${wo.wo_uuid}`} className="block p-4 active:bg-muted/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-primary">{wo.wo_number}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(wo.created_at)}</p>
+                  </div>
+                  <StatusBadge status={wo.status} />
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                  <MetaItem label={t('unit')}>{wo.unit_number}</MetaItem>
+                  <MetaItem label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</MetaItem>
+                  <MetaItem label={t('step_information')}>{wo.step_information}</MetaItem>
+                  <MetaItem label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></MetaItem>
+                </dl>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto lg:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
@@ -149,9 +170,9 @@ export function DashboardPage() {
               ))}
             </tbody>
           </table>
-          {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
-          {list.data && !list.data.data.length && <EmptyState title={t('no_data')} description={t('no_data_desc')} />}
         </div>
+        {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
+        {list.data && !list.data.data.length && <EmptyState title={t('no_data')} description={t('no_data_desc')} />}
         {list.data && list.data.meta.total > 0 && (
           <Pagination page={page} totalPages={list.data.meta.total_pages} total={list.data.meta.total} limit={limit} onPage={setPage} onLimit={(l) => { setLimit(l); setPage(1); }} />
         )}

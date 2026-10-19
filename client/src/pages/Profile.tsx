@@ -42,7 +42,7 @@ export function ProfilePage() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title={t('profile')} subtitle={t('profile_subtitle')} />
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="flex flex-col items-center gap-4 border-b border-border pb-6 sm:flex-row">
           <span className="flex size-16 items-center justify-center rounded-full bg-sidebar-accent text-xl font-semibold text-white">{initials(user.full_name)}</span>
           <div className="text-center sm:text-left">

@@ -86,7 +86,7 @@ export function WorkOrderFormPage() {
       </Button>
       <PageHeader title={isEdit ? `${t('update_wo')} · ${existing.data?.wo_number ?? ''}` : t('create_wo')} subtitle={t('form_subtitle')} />
 
-      <Card className="p-5 sm:p-6">
+      <Card className="p-4 sm:p-6">
         <form onSubmit={submit} className="grid gap-5 sm:grid-cols-2" noValidate>
           <Field label={`${t('unit')} (Dump Truck)`} required error={errors.unit_id}>
             <Select value={form.unit_id} onChange={set('unit_id')} invalid={!!errors.unit_id}>
@@ -121,7 +121,7 @@ export function WorkOrderFormPage() {
             <Textarea value={form.problem} onChange={set('problem')} placeholder={t('problem_placeholder')} maxLength={1000} invalid={!!errors.problem} />
             <span className="self-end text-xs text-muted-foreground">{form.problem.length}/1000</span>
           </Field>
-          <div className="flex justify-end gap-2 sm:col-span-2">
+          <div className="flex flex-col-reverse gap-2 *:w-full sm:col-span-2 sm:flex-row sm:justify-end sm:*:w-auto">
             <Button type="button" variant="outline" onClick={() => navigate(-1)}>{t('cancel')}</Button>
             <Button type="submit">{isEdit ? t('update') : t('submit')}</Button>
           </div>

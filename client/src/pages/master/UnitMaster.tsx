@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { ActiveBadge, DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
 import { useToast } from '../../components/toast';
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
+import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { usePaged, useUnitTypes } from '../../lib/queries';
@@ -31,10 +31,10 @@ export function UnitMasterPage() {
         subtitle={t('unit_subtitle')}
         actions={
           <>
-            <Button variant="outline" onClick={() => list.refetch()}>
-              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> {t('reload')}
+            <Button variant="outline" onClick={() => list.refetch()} title={t('reload')}>
+              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
-            <Button onClick={() => setEditing('new')}>
+            <Button className="max-sm:ml-auto" onClick={() => setEditing('new')}>
               <Plus className="size-4" /> {t('add_unit')}
             </Button>
           </>
@@ -44,21 +44,51 @@ export function UnitMasterPage() {
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
           <SearchBox state={state} placeholder={t('search_unit')} />
-          <Select value={params.unit_type} onChange={(e) => update({ unit_type: e.target.value })} className="sm:w-44" aria-label={t('unit_type')}>
-            <option value="">{t('all_types')}</option>
-            {types.data?.map((ty) => <option key={ty} value={ty}>{ty}</option>)}
-          </Select>
-          <Select value={params.status} onChange={(e) => update({ status: e.target.value })} className="sm:w-40" aria-label={t('status')}>
-            <option value="">{t('all_status')}</option>
-            <option value="active">{t('active')}</option>
-            <option value="inactive">{t('inactive')}</option>
-          </Select>
+          <div className="grid grid-cols-2 gap-3 sm:flex">
+            <Select value={params.unit_type} onChange={(e) => update({ unit_type: e.target.value })} className="sm:w-44" aria-label={t('unit_type')}>
+              <option value="">{t('all_types')}</option>
+              {types.data?.map((ty) => <option key={ty} value={ty}>{ty}</option>)}
+            </Select>
+            <Select value={params.status} onChange={(e) => update({ status: e.target.value })} className="sm:w-40" aria-label={t('status')}>
+              <option value="">{t('all_status')}</option>
+              <option value="active">{t('active')}</option>
+              <option value="inactive">{t('inactive')}</option>
+            </Select>
+          </div>
           {(params.search || params.status || params.unit_type) && (
             <Button variant="ghost" onClick={state.reset}><X className="size-4" /> {t('reset')}</Button>
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <ul className="divide-y divide-border lg:hidden">
+          {rows.map((u) => (
+            <li key={u.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium">{u.unit_code} <span className="font-normal text-muted-foreground">· {u.unit_number}</span></p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{u.unit_type}</p>
+                </div>
+                <ActiveBadge active={u.is_active} />
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                <MetaItem label={t('brand')}>{[u.brand, u.model].filter(Boolean).join(' ') || '-'}</MetaItem>
+                <MetaItem label={t('year')}><span className="tabular-nums">{u.year ?? '-'}</span></MetaItem>
+                <MetaItem label={t('serial_number')}>{u.serial_number ?? '-'}</MetaItem>
+                <MetaItem label={t('active_wo')}>
+                  {u.active_wo ? <Link to={`/transaction/work-order?search=${encodeURIComponent(u.active_wo)}`} className="text-primary hover:underline">{u.active_wo}</Link> : '-'}
+                </MetaItem>
+              </dl>
+              <div className="mt-2 -mr-2 flex justify-end gap-1">
+                <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(u)}><Pencil className="size-4" /></Button>
+                <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={u.wo_count > 0} onClick={() => setDeleting(u)}>
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden overflow-x-auto lg:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
@@ -102,10 +132,10 @@ export function UnitMasterPage() {
               ))}
             </tbody>
           </table>
-          {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
-          {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
-          {list.data && !rows.length && <EmptyState title={t('no_data')} />}
         </div>
+        {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
+        {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
+        {list.data && !rows.length && <EmptyState title={t('no_data')} />}
         {list.data && list.data.meta.total > 0 && (
           <Pagination
             page={list.data.meta.page}

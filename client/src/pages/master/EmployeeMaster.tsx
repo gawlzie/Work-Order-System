@@ -5,7 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { ActiveBadge, DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
 import { useToast } from '../../components/toast';
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
+import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
@@ -32,10 +32,10 @@ export function EmployeeMasterPage() {
         subtitle={t('employee_subtitle')}
         actions={
           <>
-            <Button variant="outline" onClick={() => list.refetch()}>
-              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> {t('reload')}
+            <Button variant="outline" onClick={() => list.refetch()} title={t('reload')}>
+              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
-            <Button onClick={() => setEditing('new')}>
+            <Button className="max-sm:ml-auto" onClick={() => setEditing('new')}>
               <Plus className="size-4" /> {t('add_employee')}
             </Button>
           </>
@@ -66,7 +66,39 @@ export function EmployeeMasterPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <ul className="divide-y divide-border lg:hidden">
+          {rows.map((e) => (
+            <li key={e.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{e.full_name}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{e.employee_id}{e.email && ` · ${e.email}`}</p>
+                </div>
+                <ActiveBadge active={e.is_active} />
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                <MetaItem label={t('role')}><Badge variant="default">{e.role_name}</Badge></MetaItem>
+                <MetaItem label={t('user_account')}>
+                  {e.has_account ? (
+                    <span className="inline-flex items-center gap-1.5"><KeyRound className="size-3.5 shrink-0 text-emerald-600" /> {e.username}</span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">{t('no_account')}</span>
+                  )}
+                </MetaItem>
+                <MetaItem label={t('phone')}>{e.phone ? <a href={`tel:${e.phone}`} className="text-primary">{e.phone}</a> : '-'}</MetaItem>
+                <MetaItem label={t('site')}>{e.site}</MetaItem>
+              </dl>
+              <div className="mt-2 -mr-2 flex justify-end gap-1">
+                <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(e)}><Pencil className="size-4" /></Button>
+                <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={e.id === user?.id} onClick={() => setDeleting(e)}>
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden overflow-x-auto lg:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
@@ -113,10 +145,10 @@ export function EmployeeMasterPage() {
               ))}
             </tbody>
           </table>
-          {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
-          {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
-          {list.data && !rows.length && <EmptyState title={t('no_data')} />}
         </div>
+        {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3, 4].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
+        {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
+        {list.data && !rows.length && <EmptyState title={t('no_data')} />}
         {list.data && list.data.meta.total > 0 && (
           <Pagination
             page={list.data.meta.page}

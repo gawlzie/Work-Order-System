@@ -5,7 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
 import { useToast } from '../../components/toast';
-import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Skeleton, Textarea } from '../../components/ui';
+import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Skeleton, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n, type TKey } from '../../lib/i18n';
@@ -32,10 +32,10 @@ export function RoleMasterPage() {
         subtitle={t('role_subtitle')}
         actions={
           <>
-            <Button variant="outline" onClick={() => list.refetch()}>
-              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> {t('reload')}
+            <Button variant="outline" onClick={() => list.refetch()} title={t('reload')}>
+              <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
-            <Button onClick={() => setEditing('new')}>
+            <Button className="max-sm:ml-auto" onClick={() => setEditing('new')}>
               <Plus className="size-4" /> {t('add_role')}
             </Button>
           </>
@@ -48,7 +48,34 @@ export function RoleMasterPage() {
           {params.search && <Button variant="ghost" onClick={state.reset}><X className="size-4" /> {t('reset')}</Button>}
         </div>
 
-        <div className="overflow-x-auto">
+        <ul className="divide-y divide-border lg:hidden">
+          {rows.map((r) => (
+            <li key={r.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium">{r.name}</p>
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">{r.code}</p>
+                </div>
+                {!!r.is_system && <Badge variant="gray"><Lock className="mr-1 size-3" />{t('built_in')}</Badge>}
+              </div>
+              {r.description && <p className="mt-2 text-xs text-muted-foreground">{r.description}</p>}
+              <div className="mt-3 flex flex-wrap gap-1">
+                {r.permissions.map((p) => <Badge key={p} variant="default" className="font-normal">{t(permLabel(p))}</Badge>)}
+              </div>
+              <div className="mt-2 -mr-2 flex items-center justify-between gap-1">
+                <span className="text-xs text-muted-foreground">{t('employees')}: <span className="font-medium text-foreground tabular-nums">{r.employee_count}</span></span>
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(r)}><Pencil className="size-4" /></Button>
+                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={!!r.is_system || r.employee_count > 0} onClick={() => setDeleting(r)}>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden overflow-x-auto lg:block">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
@@ -91,10 +118,10 @@ export function RoleMasterPage() {
               ))}
             </tbody>
           </table>
-          {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
-          {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
-          {list.data && !rows.length && <EmptyState title={t('no_data')} />}
         </div>
+        {list.isLoading && <div className="space-y-2 p-4">{[1, 2, 3].map((n) => <Skeleton key={n} className="h-10" />)}</div>}
+        {list.isError && <EmptyState title={(list.error as Error).message} action={<Button variant="outline" onClick={() => list.refetch()}>{t('reload')}</Button>} />}
+        {list.data && !rows.length && <EmptyState title={t('no_data')} />}
         {list.data && list.data.meta.total > 0 && (
           <Pagination
             page={list.data.meta.page}
