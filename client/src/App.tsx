@@ -9,6 +9,7 @@ import { EmployeeMasterPage } from './pages/master/EmployeeMaster';
 import { RoleMasterPage } from './pages/master/RoleMaster';
 import { StepMasterPage } from './pages/master/StepMaster';
 import { CategoryMasterPage } from './pages/master/CategoryMaster';
+import { JobCodeMasterPage } from './pages/master/JobCodeMaster';
 import { UnitMasterPage } from './pages/master/UnitMaster';
 import { AccountPage } from './pages/mechanic/AccountPage';
 import { JobPage } from './pages/mechanic/JobPage';
@@ -80,6 +81,7 @@ export function App() {
         <Route path="/master/role" element={<RequireRole allowed={can('master.role')}><RoleMasterPage /></RequireRole>} />
         <Route path="/master/step" element={<RequireRole allowed={can('master.step')}><StepMasterPage /></RequireRole>} />
         <Route path="/master/category" element={<RequireRole allowed={can('master.category')}><CategoryMasterPage /></RequireRole>} />
+        <Route path="/master/job-code" element={<RequireRole allowed={can('master.job')}><JobCodeMasterPage /></RequireRole>} />
         <Route path="/app/work-order" element={<AppDownloadPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<NotFoundPage />} />

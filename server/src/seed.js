@@ -23,6 +23,22 @@ const EMPLOYEES = [
   ['ITI-2008', 'Yusuf Maulana', 'driver', null],
 ];
 
+const JOB_CODES = [
+  ['ENG-01', 'Engine overhaul (top)', 'Engine', 960],
+  ['ENG-02', 'Replace fuel injector', 'Engine', 180],
+  ['TRM-01', 'Replace clutch disc', 'Transmission', 360],
+  ['HYD-01', 'Replace hydraulic hose', 'Hydraulic', 90],
+  ['HYD-02', 'Overhaul hoist cylinder', 'Hydraulic', 480],
+  ['ELC-01', 'Replace alternator', 'Electrical', 120],
+  ['ELC-02', 'Repair lighting harness', 'Electrical', 150],
+  ['BRK-01', 'Replace brake lining', 'Brake System', 240],
+  ['TYR-01', 'Replace tyre', 'Tyre', 60],
+  ['SUS-01', 'Replace leaf spring', 'Suspension', 300],
+  ['COL-01', 'Replace radiator', 'Cooling System', 240],
+  ['BDY-01', 'Repair dump body', 'Body & Cabin', 420],
+  ['PM-250', 'Preventive maintenance 250 HM', 'Preventive Maintenance', 180],
+];
+
 const CATEGORIES = ['Engine', 'Transmission', 'Hydraulic', 'Electrical', 'Brake System', 'Tyre', 'Suspension', 'Cooling System', 'Body & Cabin', 'Preventive Maintenance'];
 
 const PROBLEMS = [
@@ -50,7 +66,7 @@ const minutes = (n) => n * 60_000;
 
 export function seed({ reset = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
+    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM job_codes; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
     db.exec("DELETE FROM sqlite_sequence WHERE name != 'roles'");
     ensureSystemRoles({ reset: true });
   }
@@ -75,6 +91,10 @@ export function seed({ reset = false } = {}) {
 
     const insCat = db.prepare('INSERT INTO repair_categories (name) VALUES (?)');
     CATEGORIES.forEach((c) => insCat.run(c));
+
+    // A few standard jobs per category (minutes), so a fresh database has example job codes.
+    const insJob = db.prepare('INSERT INTO job_codes (job_code, job_name, category_id, standard_duration) VALUES (?, ?, (SELECT id FROM repair_categories WHERE name = ?), ?)');
+    for (const [code, name, category, minutes] of JOB_CODES) insJob.run(code, name, category, minutes);
   });
 
   const emp = (role) =>

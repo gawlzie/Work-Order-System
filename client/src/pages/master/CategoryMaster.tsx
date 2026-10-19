@@ -8,33 +8,30 @@ import { Pagination } from '../../components/Pagination';
 import { useToast } from '../../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Skeleton, Switch, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
-import { formatDuration } from '../../lib/format';
+import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
 import { usePaged } from '../../lib/queries';
 import type { MasterCategory } from '../../lib/types';
 
 const FILTERS = ['status'] as const;
 
-const duration = (minutes: number | null) => (minutes ? formatDuration(minutes * 60) : '-');
-
-/** Link to the work order list filtered on one category. */
-function WoCount({ c }: { c: MasterCategory }) {
-  if (!c.wo_count) return <span className="text-muted-foreground tabular-nums">0</span>;
-  return (
-    <Link to={`/transaction/work-order?category_id=${c.id}`} className="text-primary tabular-nums hover:underline">
-      {c.wo_count}
-    </Link>
-  );
+/** A count that links to a filtered list when it is not zero. */
+function CountLink({ n, to }: { n: number; to: string | null }) {
+  if (!n || !to) return <span className={clsx('tabular-nums', !n && 'text-muted-foreground')}>{n}</span>;
+  return <Link to={to} className="text-primary tabular-nums hover:underline">{n}</Link>;
 }
 
 export function CategoryMasterPage() {
   const { t } = useI18n();
+  const { can } = useAuth();
   const state = useListState(FILTERS, 'name');
   const { params, update } = state;
   const list = usePaged<MasterCategory>('categories', params);
   const [editing, setEditing] = useState<MasterCategory | 'new' | null>(null);
   const [deleting, setDeleting] = useState<MasterCategory | null>(null);
   const rows = list.data?.data ?? [];
+  const woLink = (c: MasterCategory) => `/transaction/work-order?category_id=${c.id}`;
+  const jobLink = (c: MasterCategory) => (can('master.job') ? `/master/job-code?category_id=${c.id}` : null);
 
   return (
     <div>
@@ -72,20 +69,19 @@ export function CategoryMasterPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium">{c.name}</p>
-                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">{c.job_code ?? '-'}</p>
                   {c.description && <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p>}
                 </div>
                 <ActiveBadge active={c.is_active} />
               </div>
               <div className="mt-2 -mr-2 flex items-center justify-between gap-1">
                 <span className="text-xs text-muted-foreground">
-                  {t('standard_duration')}: <span className="font-medium text-foreground tabular-nums">{duration(c.standard_duration)}</span>
+                  {t('job_codes')}: <CountLink n={c.job_count} to={jobLink(c)} />
                   <span className="mx-1.5">·</span>
-                  {t('wo_used')}: <WoCount c={c} />
+                  {t('wo_used')}: <CountLink n={c.wo_count} to={woLink(c)} />
                 </span>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(c)}><Pencil className="size-4" /></Button>
-                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={c.wo_count > 0} onClick={() => setDeleting(c)}>
+                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={c.wo_count > 0 || c.job_count > 0} onClick={() => setDeleting(c)}>
                     <Trash2 className="size-4" />
                   </Button>
                 </div>
@@ -99,10 +95,9 @@ export function CategoryMasterPage() {
             <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
                 <Th>{t('no')}</Th>
-                <Th><SortHeader field="job_code" label="job_code" state={state} /></Th>
                 <Th><SortHeader field="name" label="category_name" state={state} /></Th>
                 <Th>{t('description')}</Th>
-                <Th><SortHeader field="standard_duration" label="standard_duration" state={state} /></Th>
+                <Th><SortHeader field="job_count" label="job_codes" state={state} /></Th>
                 <Th><SortHeader field="wo_count" label="wo_used" state={state} /></Th>
                 <Th>{t('status')}</Th>
                 <Th className="text-right">{t('action')}</Th>
@@ -112,16 +107,15 @@ export function CategoryMasterPage() {
               {rows.map((c, i) => (
                 <tr key={c.id} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-3 text-muted-foreground">{(params.page - 1) * params.limit + i + 1}</td>
-                  <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{c.job_code ?? '-'}</td>
                   <td className="px-4 py-3 font-medium whitespace-nowrap">{c.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.description ?? '-'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap tabular-nums">{duration(c.standard_duration)}</td>
-                  <td className="px-4 py-3"><WoCount c={c} /></td>
+                  <td className="px-4 py-3"><CountLink n={c.job_count} to={jobLink(c)} /></td>
+                  <td className="px-4 py-3"><CountLink n={c.wo_count} to={woLink(c)} /></td>
                   <td className="px-4 py-3"><ActiveBadge active={c.is_active} /></td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" title={t('edit')} onClick={() => setEditing(c)}><Pencil className="size-4" /></Button>
-                      <Button size="icon" variant="ghost" title={t('delete')} className="text-destructive" disabled={c.wo_count > 0} onClick={() => setDeleting(c)}>
+                      <Button size="icon" variant="ghost" title={t('delete')} className="text-destructive" disabled={c.wo_count > 0 || c.job_count > 0} onClick={() => setDeleting(c)}>
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
@@ -158,24 +152,17 @@ function CategoryForm({ category, onClose }: { category: MasterCategory | null; 
   const qc = useQueryClient();
   const [form, setForm] = useState({
     name: category?.name ?? '',
-    job_code: category?.job_code ?? '',
     description: category?.description ?? '',
-    hours: category?.standard_duration ? String(Math.floor(category.standard_duration / 60)) : '',
-    minutes: category?.standard_duration ? String(category.standard_duration % 60) : '',
     is_active: category ? !!category.is_active : true,
   });
-  const totalMinutes = (Number(form.hours) || 0) * 60 + (Number(form.minutes) || 0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const save = useMutation({
-    mutationFn: () =>
-      api<MasterCategory>(category ? `/categories/${category.id}` : '/categories', {
-        method: category ? 'PUT' : 'POST',
-        body: { name: form.name, job_code: form.job_code, description: form.description, standard_duration: totalMinutes || '', is_active: form.is_active },
-      }),
+    mutationFn: () => api<MasterCategory>(category ? `/categories/${category.id}` : '/categories', { method: category ? 'PUT' : 'POST', body: form }),
     onSuccess: (saved) => {
       toast('success', t('data_saved'), saved.name);
       qc.invalidateQueries({ queryKey: ['categories'] });
+      qc.invalidateQueries({ queryKey: ['job-codes'] });
       onClose();
     },
     onError: (err) => {
@@ -188,9 +175,6 @@ function CategoryForm({ category, onClose }: { category: MasterCategory | null; 
     e.preventDefault();
     const next: Record<string, string> = {};
     if (form.name.trim().length < 2) next.name = 'Category name must be 2-50 characters';
-    if (form.job_code.trim() && !/^[A-Za-z0-9][A-Za-z0-9._-]{1,19}$/.test(form.job_code.trim())) next.job_code = 'Job code must be 2-20 characters: A-Z, 0-9, . _ -';
-    if (Number(form.minutes) > 59) next.standard_duration = 'Minutes must be 0-59';
-    else if (totalMinutes > 60000) next.standard_duration = 'Standard duration must be between 1 minute and 1000 hours';
     setErrors(next);
     if (!Object.keys(next).length) save.mutate();
   };
@@ -208,20 +192,6 @@ function CategoryForm({ category, onClose }: { category: MasterCategory | null; 
       }
     >
       <form id="category-form" onSubmit={submit} className="space-y-4" noValidate>
-        <Field label={t('job_code')} error={errors.job_code}>
-          <Input
-            value={form.job_code}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, job_code: e.target.value.toUpperCase().replace(/\s+/g, '-') }));
-              setErrors((er) => ({ ...er, job_code: '' }));
-            }}
-            placeholder="HYD-01"
-            maxLength={20}
-            invalid={!!errors.job_code}
-            className="font-mono uppercase"
-            autoFocus
-          />
-        </Field>
         <Field label={t('category_name')} required error={errors.name}>
           <Input
             value={form.name}
@@ -232,26 +202,18 @@ function CategoryForm({ category, onClose }: { category: MasterCategory | null; 
             placeholder="Hydraulic"
             maxLength={50}
             invalid={!!errors.name}
+            autoFocus
           />
         </Field>
         <Field label={t('description')} error={errors.description}>
           <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} maxLength={200} className="min-h-20" />
         </Field>
-        <div>
-          <p className="text-sm font-medium">{t('standard_duration')}</p>
-          <p className="mb-1.5 text-xs text-muted-foreground">{t('standard_duration_hint')}</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t('hours')}>
-              <Input type="number" inputMode="numeric" min={0} max={1000} value={form.hours} onChange={(e) => { setForm((f) => ({ ...f, hours: e.target.value })); setErrors((er) => ({ ...er, standard_duration: '' })); }} invalid={!!errors.standard_duration} placeholder="0" />
-            </Field>
-            <Field label={t('minutes')}>
-              <Input type="number" inputMode="numeric" min={0} max={59} value={form.minutes} onChange={(e) => { setForm((f) => ({ ...f, minutes: e.target.value })); setErrors((er) => ({ ...er, standard_duration: '' })); }} invalid={!!errors.standard_duration} placeholder="0" />
-            </Field>
-          </div>
-          {errors.standard_duration && <p className="mt-1 text-xs text-destructive">{errors.standard_duration}</p>}
-        </div>
         <Switch checked={form.is_active} onChange={(v) => setForm((f) => ({ ...f, is_active: v }))} label={t('active')} description={t('category_active_hint')} />
-        {!!category?.wo_count && <p className="text-xs text-muted-foreground">{t('wo_used')}: {category.wo_count}</p>}
+        {category && (category.wo_count > 0 || category.job_count > 0) && (
+          <p className="text-xs text-muted-foreground">
+            {t('job_codes')}: {category.job_count} · {t('wo_used')}: {category.wo_count}
+          </p>
+        )}
       </form>
     </Modal>
   );

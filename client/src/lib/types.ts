@@ -10,7 +10,8 @@ export type Permission =
   | 'master.employee'
   | 'master.role'
   | 'master.step'
-  | 'master.category';
+  | 'master.category'
+  | 'master.job';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
@@ -108,11 +109,22 @@ export interface Category {
 }
 
 export interface MasterCategory extends Category {
-  job_code: string | null;
   description: string | null;
-  /** Planned repair time in minutes. */
-  standard_duration: number | null;
   wo_count: number;
+  job_count: number;
+}
+
+/** Standard repair job within a category. */
+export interface MasterJobCode {
+  id: number;
+  job_code: string;
+  job_name: string;
+  category_id: number;
+  category_name: string;
+  category_active: number;
+  /** Planned repair time in minutes. */
+  standard_duration: number;
+  is_active: number;
 }
 
 export interface WorkOrder {

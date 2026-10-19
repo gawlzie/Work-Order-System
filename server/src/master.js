@@ -314,17 +314,18 @@ export const unitTypes = () => db.prepare('SELECT DISTINCT unit_type FROM units 
 /* ---------- Repair categories ---------- */
 
 const CATEGORY_COLUMNS = `c.*,
-  (SELECT COUNT(*) FROM work_orders w WHERE w.category_id = c.id) AS wo_count`;
+  (SELECT COUNT(*) FROM work_orders w WHERE w.category_id = c.id) AS wo_count,
+  (SELECT COUNT(*) FROM job_codes j WHERE j.category_id = c.id) AS job_count`;
 
 export function listCategories(q = {}) {
   const s = `%${str(q.search)}%`;
-  const where = ["(c.name LIKE ? OR IFNULL(c.job_code, '') LIKE ? OR IFNULL(c.description, '') LIKE ?)"];
+  const where = ["(c.name LIKE ? OR IFNULL(c.description, '') LIKE ?)"];
   if (q.status === 'active' || q.status === 'inactive') where.push(`c.is_active = ${q.status === 'active' ? 1 : 0}`);
   return pagedQuery({
     select: CATEGORY_COLUMNS,
     from: `FROM repair_categories c WHERE ${where.join(' AND ')}`,
-    params: [s, s, s],
-    order: orderBy(q, { name: 'c.name', job_code: 'c.job_code', standard_duration: 'c.standard_duration', wo_count: 'wo_count' }, 'name'),
+    params: [s, s],
+    order: orderBy(q, { name: 'c.name', job_count: 'job_count', wo_count: 'wo_count' }, 'name'),
     q,
   });
 }
@@ -335,23 +336,15 @@ export function getCategory(id) {
   return row;
 }
 
-/** Body: name, job_code, description, standard_duration (minutes), is_active. Job code and duration are optional. */
 function validateCategory(body, existing) {
   const errors = {};
-  const durationRaw = str(body.standard_duration);
   const data = {
     name: str(body.name),
-    job_code: optional(body.job_code)?.toUpperCase() ?? null,
     description: optional(body.description),
-    standard_duration: durationRaw ? Number(durationRaw) : null,
     is_active: flag(body.is_active, existing?.is_active ?? 1),
   };
   if (data.name.length < 2 || data.name.length > 50) errors.name = 'Category name must be 2-50 characters';
   else if (taken('repair_categories', 'name', data.name, existing?.id)) errors.name = 'Category name is already used';
-  if (data.job_code && !/^[A-Z0-9][A-Z0-9._-]{1,19}$/.test(data.job_code)) errors.job_code = 'Job code must be 2-20 characters: A-Z, 0-9, . _ -';
-  else if (data.job_code && taken('repair_categories', 'job_code', data.job_code, existing?.id)) errors.job_code = 'Job code is already used';
-  if (data.standard_duration !== null && !(Number.isInteger(data.standard_duration) && data.standard_duration >= 1 && data.standard_duration <= 60000))
-    errors.standard_duration = 'Standard duration must be between 1 minute and 1000 hours';
   if (data.description && data.description.length > 200) errors.description = 'Description is too long (max 200)';
   fail(errors);
   return data;
@@ -360,23 +353,94 @@ function validateCategory(body, existing) {
 export function createCategory(body) {
   const d = validateCategory(body);
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO repair_categories (name, job_code, description, standard_duration, is_active) VALUES (?, ?, ?, ?, ?)')
-    .run(d.name, d.job_code, d.description, d.standard_duration, d.is_active);
+    .prepare('INSERT INTO repair_categories (name, description, is_active) VALUES (?, ?, ?)')
+    .run(d.name, d.description, d.is_active);
   return getCategory(lastInsertRowid);
 }
 
 export function updateCategory(id, body) {
   const existing = getCategory(id);
   const d = validateCategory(body, existing);
-  db.prepare('UPDATE repair_categories SET name = ?, job_code = ?, description = ?, standard_duration = ?, is_active = ? WHERE id = ?')
-    .run(d.name, d.job_code, d.description, d.standard_duration, d.is_active, id);
+  db.prepare('UPDATE repair_categories SET name = ?, description = ?, is_active = ? WHERE id = ?').run(d.name, d.description, d.is_active, id);
   return getCategory(id);
 }
 
 export function deleteCategory(id) {
   const category = getCategory(id);
   if (category.wo_count) throw new HttpError(409, 'Category is used in work order history. Deactivate the category instead');
+  if (category.job_count) throw new HttpError(409, `Category has ${category.job_count} job code(s). Delete them or move them to another category first`);
   db.prepare('DELETE FROM repair_categories WHERE id = ?').run(id);
+}
+
+/* ---------- Job codes ---------- */
+
+const JOB_COLUMNS = 'j.*, c.name AS category_name, c.is_active AS category_active';
+
+export function listJobCodes(q = {}) {
+  const s = `%${str(q.search)}%`;
+  const where = ['(j.job_code LIKE ? OR j.job_name LIKE ?)'];
+  const params = [s, s];
+  if (q.category_id) {
+    where.push('j.category_id = ?');
+    params.push(Number(q.category_id));
+  }
+  if (q.status === 'active' || q.status === 'inactive') where.push(`j.is_active = ${q.status === 'active' ? 1 : 0}`);
+  return pagedQuery({
+    select: JOB_COLUMNS,
+    from: `FROM job_codes j JOIN repair_categories c ON c.id = j.category_id WHERE ${where.join(' AND ')}`,
+    params,
+    order: orderBy(q, { job_code: 'j.job_code', job_name: 'j.job_name', category: 'c.name', standard_duration: 'j.standard_duration' }, 'job_code'),
+    q,
+  });
+}
+
+export function getJobCode(id) {
+  const row = db.prepare(`SELECT ${JOB_COLUMNS} FROM job_codes j JOIN repair_categories c ON c.id = j.category_id WHERE j.id = ?`).get(id);
+  if (!row) throw new HttpError(404, 'Job code not found');
+  return row;
+}
+
+/** Body: job_code, job_name, category_id, standard_duration (minutes), is_active. */
+function validateJobCode(body, existing) {
+  const errors = {};
+  const data = {
+    job_code: str(body.job_code).toUpperCase(),
+    job_name: str(body.job_name),
+    category_id: Number(body.category_id),
+    standard_duration: Number(str(body.standard_duration)),
+    is_active: flag(body.is_active, existing?.is_active ?? 1),
+  };
+  if (!/^[A-Z0-9][A-Z0-9._-]{1,19}$/.test(data.job_code)) errors.job_code = 'Job code must be 2-20 characters: A-Z, 0-9, . _ -';
+  else if (taken('job_codes', 'job_code', data.job_code, existing?.id)) errors.job_code = 'Job code is already used';
+  if (data.job_name.length < 2 || data.job_name.length > 100) errors.job_name = 'Job name must be 2-100 characters';
+  // A job code may keep a category that was deactivated since; new choices must be active.
+  if (!data.category_id || !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(data.category_id, existing?.category_id ?? 0))
+    errors.category_id = 'Category is required (active categories only)';
+  if (!(Number.isInteger(data.standard_duration) && data.standard_duration >= 1 && data.standard_duration <= 60000))
+    errors.standard_duration = 'Standard duration must be between 1 minute and 1000 hours';
+  fail(errors);
+  return data;
+}
+
+export function createJobCode(body) {
+  const d = validateJobCode(body);
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO job_codes (job_code, job_name, category_id, standard_duration, is_active) VALUES (?, ?, ?, ?, ?)')
+    .run(d.job_code, d.job_name, d.category_id, d.standard_duration, d.is_active);
+  return getJobCode(lastInsertRowid);
+}
+
+export function updateJobCode(id, body) {
+  const existing = getJobCode(id);
+  const d = validateJobCode(body, existing);
+  db.prepare('UPDATE job_codes SET job_code = ?, job_name = ?, category_id = ?, standard_duration = ?, is_active = ? WHERE id = ?')
+    .run(d.job_code, d.job_name, d.category_id, d.standard_duration, d.is_active, id);
+  return getJobCode(id);
+}
+
+export function deleteJobCode(id) {
+  getJobCode(id);
+  db.prepare('DELETE FROM job_codes WHERE id = ?').run(id);
 }
 
 /* ---------- Repair steps ---------- */

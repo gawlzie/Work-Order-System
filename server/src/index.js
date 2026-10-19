@@ -8,6 +8,7 @@ import {
   assignableEmployees, createEmployee, createRole, createUnit, deleteEmployee, deleteRole, deleteUnit, getEmployee, getRole,
   getUnit, listEmployees, listRoles, listUnits, unitTypes, updateEmployee, updateRole, updateUnit,
   createCategory, deleteCategory, getCategory, listCategories, updateCategory,
+  createJobCode, deleteJobCode, getJobCode, listJobCodes, updateJobCode,
   createStepTemplate, deleteStepTemplate, getStepTemplate, listStepTemplates, moveStepTemplate, updateStepTemplate,
 } from './master.js';
 import { PERMISSIONS } from './permissions.js';
@@ -93,6 +94,7 @@ crud('employees', 'master.employee', { list: listEmployees, get: getEmployee, cr
 app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTypes()));
 crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
 crud('categories', 'master.category', { list: listCategories, get: getCategory, create: createCategory, update: updateCategory, remove: deleteCategory });
+crud('job-codes', 'master.job', { list: listJobCodes, get: getJobCode, create: createJobCode, update: updateJobCode, remove: deleteJobCode });
 app.post('/api/steps/:id(\\d+)/move', requirePermission('master.step'), wrap((req) => moveStepTemplate(Number(req.params.id), req.body?.direction)));
 crud('steps', 'master.step', { list: listStepTemplates, get: getStepTemplate, create: createStepTemplate, update: updateStepTemplate, remove: deleteStepTemplate });
 
