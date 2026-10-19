@@ -6,8 +6,8 @@ export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAIT
 export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', APPROVE_BY_SYSTEM: 'APPROVE_BY_SYSTEM', REJECT: 'REJECT' };
 export const CHANNEL = { WEB: 'WEB', MOBILE: 'MOBILE', WHATSAPP: 'WHATSAPP' };
 
-/** Standard repair flow every new work order starts with. */
-export const STEP_TEMPLATE = [
+/** Default repair flow, loaded into the step master when it is empty. */
+export const DEFAULT_STEPS = [
   { name: 'Unit Check-In', subs: ['Visual inspection', 'Record HM / KM'] },
   { name: 'Troubleshooting', subs: ['Identify fault', 'Determine repair category'] },
   { name: 'Waiting Part', waiting: true, subs: [] },
@@ -36,7 +36,25 @@ export function nextWoNumber(date = new Date()) {
   return `${prefix}${String(seq).padStart(4, '0')}`;
 }
 
-export function insertSteps(woUuid, template = STEP_TEMPLATE) {
+/** Fills an empty step master with DEFAULT_STEPS (first start, or seed reset). */
+export function ensureStepTemplates() {
+  if (db.prepare('SELECT 1 FROM step_templates LIMIT 1').get()) return;
+  const insert = db.prepare('INSERT INTO step_templates (parent_id, sort_order, name, is_waiting) VALUES (?, ?, ?, ?)');
+  tx(() => DEFAULT_STEPS.forEach((step, i) => {
+    const { lastInsertRowid } = insert.run(null, i + 1, step.name, step.waiting ? 1 : 0);
+    step.subs.forEach((sub, j) => insert.run(lastInsertRowid, j + 1, sub, 0));
+  }));
+}
+
+/** Active steps of the step master in the { name, waiting, subs } shape insertSteps takes. */
+export function activeStepTemplate() {
+  const rows = db.prepare('SELECT * FROM step_templates ORDER BY sort_order, id').all();
+  return rows
+    .filter((r) => r.parent_id === null && r.is_active)
+    .map((r) => ({ name: r.name, waiting: !!r.is_waiting, subs: rows.filter((c) => c.parent_id === r.id).map((c) => c.name) }));
+}
+
+export function insertSteps(woUuid, template = activeStepTemplate()) {
   const insert = db.prepare(
     'INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_waiting) VALUES (?, ?, ?, ?, ?)',
   );

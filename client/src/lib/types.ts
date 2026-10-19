@@ -8,7 +8,8 @@ export type Permission =
   | 'wo.as_mechanic'
   | 'master.unit'
   | 'master.employee'
-  | 'master.role';
+  | 'master.role'
+  | 'master.step';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'APPROVE_BY_SYSTEM' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
@@ -85,6 +86,17 @@ export interface MasterEmployee {
 export interface MasterUnit extends Unit {
   wo_count: number;
   active_wo: string | null;
+}
+
+/** Step master entry; work orders copy the active ones when they are created. */
+export interface StepTemplate {
+  id: number;
+  sort_order: number;
+  name: string;
+  description: string | null;
+  is_waiting: number;
+  is_active: number;
+  sub_steps: { id: number; name: string }[];
 }
 
 export interface Category {

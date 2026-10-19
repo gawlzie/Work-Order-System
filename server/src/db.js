@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SYSTEM_ROLES } from './permissions.js';
+import { ADMIN_PERMISSIONS, SYSTEM_ROLES } from './permissions.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = process.env.WOS_DB || join(here, '..', 'data', 'wos.db');
@@ -90,6 +90,17 @@ CREATE TABLE IF NOT EXISTS wo_steps (
   remarks       TEXT
 );
 
+/* Master list of repair steps; new work orders copy the active ones into wo_steps. */
+CREATE TABLE IF NOT EXISTS step_templates (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  parent_id   INTEGER REFERENCES step_templates(id) ON DELETE CASCADE,
+  sort_order  INTEGER NOT NULL,
+  name        TEXT NOT NULL,
+  description TEXT,
+  is_waiting  INTEGER NOT NULL DEFAULT 0,
+  is_active   INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_wo ON wo_steps(wo_uuid);
 `);
@@ -114,6 +125,11 @@ export function ensureSystemRoles({ reset = false } = {}) {
      ON CONFLICT(code) DO ${reset ? 'UPDATE SET name = excluded.name, description = excluded.description, permissions = excluded.permissions, is_system = 1' : 'NOTHING'}`,
   );
   for (const r of SYSTEM_ROLES) upsert.run(r.code, r.name, r.description, JSON.stringify(r.permissions));
+  // Admin keeps every access permission, including ones added in later versions (e.g. master.step).
+  const admin = db.prepare("SELECT permissions FROM roles WHERE code = 'admin'").get();
+  const current = JSON.parse(admin.permissions);
+  const missing = ADMIN_PERMISSIONS.filter((p) => !current.includes(p));
+  if (missing.length) db.prepare("UPDATE roles SET permissions = ? WHERE code = 'admin'").run(JSON.stringify([...current, ...missing]));
 }
 ensureSystemRoles();
 

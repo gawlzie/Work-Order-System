@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { ClipboardList, LayoutDashboard, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, ListOrdered, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
@@ -15,6 +15,7 @@ const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; 
   { to: '/master/unit', key: 'units', icon: Truck, group: 'master_data', permission: 'master.unit' },
   { to: '/master/employee', key: 'employees', icon: Users, group: 'master_data', permission: 'master.employee' },
   { to: '/master/role', key: 'roles', icon: ShieldCheck, group: 'master_data', permission: 'master.role' },
+  { to: '/master/step', key: 'repair_steps', icon: ListOrdered, group: 'master_data', permission: 'master.step' },
   { to: '/app/work-order', key: 'application', icon: Smartphone },
   { to: '/m', key: 'mechanic_app', icon: Wrench, permission: 'wo.progress' },
 ];

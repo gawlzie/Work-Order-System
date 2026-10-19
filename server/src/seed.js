@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { db, ensureSystemRoles, tx } from './db.js';
 import { hashPassword } from './auth.js';
-import { insertSteps, recomputeStatus } from './workorders.js';
+import { ensureStepTemplates, insertSteps, recomputeStatus } from './workorders.js';
 
 const COMPANY = 'Inline Technology International';
 const SITE = 'Site Kalimantan - Pit A';
@@ -50,12 +50,12 @@ const minutes = (n) => n * 60_000;
 
 export function seed({ reset = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0;');
+    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
     db.exec("DELETE FROM sqlite_sequence WHERE name != 'roles'");
     ensureSystemRoles({ reset: true });
-  } else if (db.prepare('SELECT COUNT(*) AS n FROM employees').get().n > 0) {
-    return false;
   }
+  ensureStepTemplates();
+  if (!reset && db.prepare('SELECT COUNT(*) AS n FROM employees').get().n > 0) return false;
 
   tx(() => {
     const insEmp = db.prepare(

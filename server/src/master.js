@@ -1,5 +1,5 @@
 import { hashPassword } from './auth.js';
-import { db, roleHas } from './db.js';
+import { db, roleHas, tx } from './db.js';
 import { ADMIN_PERMISSIONS, PERMISSION_KEYS } from './permissions.js';
 import { HttpError } from './workorders.js';
 
@@ -309,3 +309,98 @@ export function deleteUnit(id) {
 }
 
 export const unitTypes = () => db.prepare('SELECT DISTINCT unit_type FROM units ORDER BY unit_type').all().map((r) => r.unit_type);
+
+/* ---------- Repair steps ---------- */
+// Work orders copy the active steps when they are created, so editing the master never changes work order history.
+
+const activeSteps = () => db.prepare('SELECT COUNT(*) AS n FROM step_templates WHERE parent_id IS NULL AND is_active = 1').get().n;
+
+/** Every top-level step in run order with its sub-steps. The list is short and ordered, so it is not paged. */
+export function listStepTemplates(q = {}) {
+  const rows = db.prepare('SELECT * FROM step_templates ORDER BY sort_order, id').all();
+  const s = str(q.search).toLowerCase();
+  return rows
+    .filter((r) => r.parent_id === null)
+    .map((r) => ({ ...r, sub_steps: rows.filter((c) => c.parent_id === r.id).map(({ id, name }) => ({ id, name })) }))
+    .filter((r) => !s || r.name.toLowerCase().includes(s) || r.sub_steps.some((c) => c.name.toLowerCase().includes(s)));
+}
+
+export function getStepTemplate(id) {
+  const step = listStepTemplates().find((r) => r.id === Number(id));
+  if (!step) throw new HttpError(404, 'Step not found');
+  return step;
+}
+
+/** Body: name, description, is_waiting, is_active and sub_steps (array of names). */
+function validateStep(body, existing) {
+  const errors = {};
+  const subs = (Array.isArray(body.sub_steps) ? body.sub_steps : []).map((v) => str(v && typeof v === 'object' ? v.name : v)).filter(Boolean);
+  const data = {
+    name: str(body.name),
+    description: optional(body.description),
+    is_waiting: flag(body.is_waiting, existing?.is_waiting ?? 0),
+    is_active: flag(body.is_active, existing?.is_active ?? 1),
+    subs,
+  };
+  if (data.name.length < 2 || data.name.length > 60) errors.name = 'Step name must be 2-60 characters';
+  else if (db.prepare('SELECT 1 FROM step_templates WHERE parent_id IS NULL AND name = ? COLLATE NOCASE AND id != ?').get(data.name, existing?.id ?? 0))
+    errors.name = 'Step name is already used';
+  if (data.description && data.description.length > 200) errors.description = 'Description is too long (max 200)';
+  if (subs.length > 15) errors.sub_steps = 'A step can have at most 15 sub-steps';
+  else if (subs.some((n) => n.length < 2 || n.length > 60)) errors.sub_steps = 'Each sub-step must be 2-60 characters';
+  else if (new Set(subs.map((n) => n.toLowerCase())).size !== subs.length) errors.sub_steps = 'Sub-step names must be unique';
+  if (existing?.is_active && !data.is_active && activeSteps() === 1) errors.is_active = 'At least one step must stay active';
+  else if (!existing && !data.is_active && activeSteps() === 0) errors.is_active = 'At least one step must stay active';
+  fail(errors);
+  return data;
+}
+
+function writeSubSteps(parentId, names) {
+  db.prepare('DELETE FROM step_templates WHERE parent_id = ?').run(parentId);
+  const insert = db.prepare('INSERT INTO step_templates (parent_id, sort_order, name) VALUES (?, ?, ?)');
+  names.forEach((name, i) => insert.run(parentId, i + 1, name));
+}
+
+export function createStepTemplate(body) {
+  const d = validateStep(body);
+  const id = tx(() => {
+    const { max } = db.prepare('SELECT MAX(sort_order) AS max FROM step_templates WHERE parent_id IS NULL').get();
+    const { lastInsertRowid } = db
+      .prepare('INSERT INTO step_templates (parent_id, sort_order, name, description, is_waiting, is_active) VALUES (NULL, ?, ?, ?, ?, ?)')
+      .run((max ?? 0) + 1, d.name, d.description, d.is_waiting, d.is_active);
+    writeSubSteps(lastInsertRowid, d.subs);
+    return lastInsertRowid;
+  });
+  return getStepTemplate(id);
+}
+
+export function updateStepTemplate(id, body) {
+  const existing = getStepTemplate(id);
+  const d = validateStep(body, existing);
+  tx(() => {
+    db.prepare('UPDATE step_templates SET name = ?, description = ?, is_waiting = ?, is_active = ? WHERE id = ?')
+      .run(d.name, d.description, d.is_waiting, d.is_active, id);
+    writeSubSteps(id, d.subs);
+  });
+  return getStepTemplate(id);
+}
+
+export function deleteStepTemplate(id) {
+  const step = getStepTemplate(id);
+  if (step.is_active && activeSteps() === 1) throw new HttpError(409, 'At least one step must stay active');
+  db.prepare('DELETE FROM step_templates WHERE id = ?').run(id);
+}
+
+/** Moves a step one place up or down in the run order and returns the reordered list. */
+export function moveStepTemplate(id, direction) {
+  if (direction !== 'up' && direction !== 'down') throw new HttpError(422, 'Direction must be up or down');
+  const steps = listStepTemplates();
+  const from = steps.findIndex((s) => s.id === id);
+  if (from < 0) throw new HttpError(404, 'Step not found');
+  const to = direction === 'up' ? from - 1 : from + 1;
+  if (to < 0 || to >= steps.length) return steps;
+  [steps[from], steps[to]] = [steps[to], steps[from]];
+  const setOrder = db.prepare('UPDATE step_templates SET sort_order = ? WHERE id = ?');
+  tx(() => steps.forEach((s, i) => setOrder.run(i + 1, s.id)));
+  return listStepTemplates();
+}

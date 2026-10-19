@@ -7,6 +7,7 @@ import { hasPermission, hashPassword, issueToken, publicUser, requireAuth, requi
 import {
   assignableEmployees, createEmployee, createRole, createUnit, deleteEmployee, deleteRole, deleteUnit, getEmployee, getRole,
   getUnit, listEmployees, listRoles, listUnits, unitTypes, updateEmployee, updateRole, updateUnit,
+  createStepTemplate, deleteStepTemplate, getStepTemplate, listStepTemplates, moveStepTemplate, updateStepTemplate,
 } from './master.js';
 import { PERMISSIONS } from './permissions.js';
 import { seed } from './seed.js';
@@ -85,6 +86,8 @@ crud('roles', 'master.role', { list: listRoles, get: getRole, create: createRole
 crud('employees', 'master.employee', { list: listEmployees, get: getEmployee, create: createEmployee, update: updateEmployee, remove: deleteEmployee });
 app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTypes()));
 crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
+app.post('/api/steps/:id(\\d+)/move', requirePermission('master.step'), wrap((req) => moveStepTemplate(Number(req.params.id), req.body?.direction)));
+crud('steps', 'master.step', { list: listStepTemplates, get: getStepTemplate, create: createStepTemplate, update: updateStepTemplate, remove: deleteStepTemplate });
 
 /* ---------- Work orders ---------- */
 app.get('/api/dashboard', wrap((req) => dashboard(req.query)));
