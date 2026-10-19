@@ -60,6 +60,32 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/** Upload one file as the raw request body; the server reads its name from X-File-Name. */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name),
+      Authorization: `Bearer ${tokenStore.get()}`,
+    },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) onUnauthorized();
+    throw new ApiError(res.status, data.message ?? res.statusText, data.errors);
+  }
+  return data as T;
+}
+
+/** Fetch a protected file and return an object URL for it (revoke it when done). */
+export async function blobUrl(path: string) {
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${tokenStore.get()}` } });
+  if (!res.ok) throw new ApiError(res.status, (await res.json().catch(() => ({}))).message ?? 'File could not be loaded');
+  return URL.createObjectURL(await res.blob());
+}
+
 /** Download a server-generated file (e.g. CSV export) using the auth token. */
 export async function download(path: string, fallbackName: string) {
   const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${tokenStore.get()}` } });

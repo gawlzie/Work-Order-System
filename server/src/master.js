@@ -212,8 +212,9 @@ export function deleteEmployee(id, user) {
   if (Number(id) === user.id) throw new HttpError(409, 'You cannot delete your own account');
   const { n } = db.prepare(
     `SELECT (SELECT COUNT(*) FROM work_orders WHERE driver_id = ? OR mechanic_id = ? OR created_by = ?)
-          + (SELECT COUNT(*) FROM wo_steps WHERE pic_id = ?) AS n`,
-  ).get(id, id, id, id);
+          + (SELECT COUNT(*) FROM wo_steps WHERE pic_id = ?)
+          + (SELECT COUNT(*) FROM wo_proofs WHERE uploaded_by = ?) AS n`,
+  ).get(id, id, id, id, id);
   if (n) throw new HttpError(409, 'Employee is used in work order history. Deactivate the employee instead');
   db.prepare('DELETE FROM employees WHERE id = ?').run(id);
 }

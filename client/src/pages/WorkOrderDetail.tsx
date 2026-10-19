@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageS
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
+import { ProofSection } from '../components/ProofSection';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Textarea } from '../components/ui';
 import { api } from '../lib/api';
@@ -227,6 +228,8 @@ export function WorkOrderDetailPage() {
           </form>
         )}
       </Card>
+
+      <ProofSection wo={wo} />
 
       <Modal
         open={!!finishing}

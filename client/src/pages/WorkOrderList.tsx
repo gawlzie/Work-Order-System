@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Download, Eye, Filter, Pencil, Plus, Printer, RefreshCcw, Search, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Download, Eye, Filter, Paperclip, Pencil, Plus, Printer, RefreshCcw, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
@@ -247,6 +247,11 @@ export function WorkOrderListPage() {
                   <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(wo.created_at)}</p>
                 </div>
                 <StatusBadge status={wo.status} />
+                {wo.proof_count > 0 && (
+                  <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-xs text-muted-foreground" title={t('proof_title')}>
+                    <Paperclip className="size-3.5" />{wo.proof_count}
+                  </span>
+                )}
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3 md:grid-cols-6">
                 <MetaItem label={t('unit')}>{wo.unit_number}</MetaItem>
@@ -296,7 +301,11 @@ export function WorkOrderListPage() {
                   <td className="px-4 py-3 whitespace-nowrap">{wo.driver_name}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.mechanic_name ?? '-'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.category ?? '-'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={wo.status} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={wo.status} />{wo.proof_count > 0 && (
+                      <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-xs text-muted-foreground" title={t('proof_title')}>
+                        <Paperclip className="size-3.5" />{wo.proof_count}
+                      </span>
+                    )}</td>
                   <td className="px-4 py-3"><ApprovalBadge status={wo.approval_status} /></td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.step_information}</td>
                   <td className="px-4 py-3 whitespace-nowrap tabular-nums">{formatDuration(wo.total_time)}</td>

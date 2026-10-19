@@ -156,7 +156,8 @@ const LIST_SELECT = `
             ORDER BY s.step_no LIMIT 1) AS current_step,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NULL
-            ORDER BY s.step_no LIMIT 1) AS next_step
+            ORDER BY s.step_no LIMIT 1) AS next_step,
+         (SELECT COUNT(*) FROM wo_proofs p WHERE p.wo_uuid = wo.wo_uuid) AS proof_count
   FROM work_orders wo
   JOIN units u ON u.id = wo.unit_id
   JOIN employees d ON d.id = wo.driver_id
@@ -240,6 +241,12 @@ export function listWorkOrders(q = {}) {
   };
 }
 
+const PROOF_SELECT = `SELECT p.id, p.file_name, p.mime_type, p.size, p.uploaded_at, e.full_name AS uploaded_by_name
+  FROM wo_proofs p LEFT JOIN employees e ON e.id = p.uploaded_by`;
+
+/** Proof-of-completion files of a work order, oldest first. */
+export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uuid = ? ORDER BY p.uploaded_at, p.id`).all(woUuid);
+
 export function getWorkOrder(woUuid) {
   const row = db.prepare(`${LIST_SELECT} WHERE wo.wo_uuid = ?`).get(woUuid);
   if (!row) throw new HttpError(404, 'Work order not found');
@@ -256,6 +263,7 @@ export function getWorkOrder(woUuid) {
     ...decorate(row),
     steps: withSubs.filter((s) => !s.is_additional),
     additional_work: withSubs.filter((s) => s.is_additional),
+    proofs: listProofs(woUuid),
   };
 }
 

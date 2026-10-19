@@ -11,6 +11,7 @@ import {
   createStepTemplate, deleteStepTemplate, getStepTemplate, listStepTemplates, moveStepTemplate, updateStepTemplate,
 } from './master.js';
 import { PERMISSIONS } from './permissions.js';
+import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.js';
 import { seed } from './seed.js';
 import {
   APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, createWorkOrder, dashboard, deleteWorkOrder,
@@ -104,7 +105,7 @@ const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
   ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
-  ['total_time', 'Total Time (minutes)'],
+  ['total_time', 'Total Time (minutes)'], ['proof_count', 'Proof Files'],
 ];
 const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
@@ -146,6 +147,26 @@ app.post('/api/work-orders/:id/steps/:stepId/:action(start|finish)', requirePerm
 app.post('/api/work-orders/:id/steps/:stepId(\\d+)/sub-steps', requirePermission('wo.progress'), wrap((req) =>
   addSubStep(req.params.id, Number(req.params.stepId), req.body?.name)));
 
+/* ---------- Proof of completion (finished work orders) ---------- */
+app.get('/api/work-orders/:id/proofs/:proofId(\\d+)', wrap((req, res) => {
+  const file = getProofFile(req.params.id, Number(req.params.proofId));
+  res.setHeader('Content-Type', file.mime_type);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`);
+  res.sendFile(file.path, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ message: 'Proof file not found' });
+  });
+}));
+
+// The file is the raw request body; its name comes in the X-File-Name header (URI-encoded).
+app.post('/api/work-orders/:id/proofs', requirePermission('wo.approve'), express.raw({ type: () => true, limit: MAX_PROOF_BYTES }), wrap((req, res) => {
+  res.status(201);
+  return addProof(req.params.id, { body: req.body, fileName: req.get('X-File-Name') }, req.user);
+}));
+
+app.delete('/api/work-orders/:id/proofs/:proofId(\\d+)', requirePermission('wo.approve'), wrap((req) =>
+  deleteProof(req.params.id, Number(req.params.proofId))));
+
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));
 
@@ -160,6 +181,7 @@ if (existsSync(clientDist)) {
 
 app.use((err, req, res, next) => {
   if (err instanceof HttpError) return res.status(err.status).json({ message: err.message, errors: err.errors });
+  if (err.type === 'entity.too.large') return res.status(413).json({ message: 'File is too large (max 10 MB)' });
   console.error(err);
   res.status(500).json({ message: 'Internal server error' });
 });

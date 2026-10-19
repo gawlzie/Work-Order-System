@@ -106,6 +106,19 @@ CREATE TABLE IF NOT EXISTS step_templates (
   is_active   INTEGER NOT NULL DEFAULT 1
 );
 
+/* Proof-of-completion files (PDF / photo) for finished work orders; the files live in data/uploads/<wo_uuid>/. */
+CREATE TABLE IF NOT EXISTS wo_proofs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  wo_uuid     TEXT NOT NULL REFERENCES work_orders(wo_uuid) ON DELETE CASCADE,
+  file_name   TEXT NOT NULL,
+  stored_name TEXT NOT NULL,
+  mime_type   TEXT NOT NULL,
+  size        INTEGER NOT NULL,
+  uploaded_by INTEGER REFERENCES employees(id),
+  uploaded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_proofs_wo ON wo_proofs(wo_uuid);
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_wo ON wo_steps(wo_uuid);
 `);

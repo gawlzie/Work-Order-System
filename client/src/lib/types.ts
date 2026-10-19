@@ -139,6 +139,8 @@ export interface WorkOrder {
   finished_at: string | null;
   step_information: string;
   total_time: number;
+  /** Number of proof-of-completion files. */
+  proof_count: number;
 }
 
 export interface Step {
@@ -157,9 +159,20 @@ export interface Step {
   sub_steps: Step[];
 }
 
+/** Proof-of-completion file (PDF or image) of a finished work order. */
+export interface Proof {
+  id: number;
+  file_name: string;
+  mime_type: string;
+  size: number;
+  uploaded_at: string;
+  uploaded_by_name: string | null;
+}
+
 export interface WorkOrderDetail extends WorkOrder {
   steps: Step[];
   additional_work: Step[];
+  proofs: Proof[];
 }
 
 export interface Paged<T> {

@@ -14,6 +14,7 @@ API and database. No SSO or external API is needed.
 | **Approval** | WOs raised by mechanics (mobile) or WhatsApp wait for approval. Admin approves them with optional **remarks** (e.g. instructions for the mechanic, shown on the WO detail and in the mechanic app) or rejects them with a required reason. WOs created on the web are approved by the system |
 | **Create / Update** | Unit (dump truck), driver, PIC mechanic, repair category, problem description, with validation and a confirmation dialog. Only one active WO is allowed per unit |
 | **Detail** | Unit/driver/PIC info and a step timeline with sub-steps (PIC, start, finish, duration, remarks). Steps are started and finished in order. Additional work can be added. Printable |
+| **Proof of completion** | When a WO is **Finish**, users who may approve WOs (Admin) upload PDF or photos (JPG, PNG, WebP; max 10 MB each, 10 per WO) as proof on the WO detail page, by drag and drop or file picker. The file content is checked, not just its name. Everyone who can open the WO can view the proofs (image thumbnails, open in a new tab); the admin can delete them. The WO list shows a paperclip with the number of proof files, and the CSV export has a *Proof Files* column. Files are stored in `server/data/uploads/<wo>/` |
 | **Status logic** | Derived automatically from the steps: **Open** = just created, no step started yet; **On Progress** = a mechanic has taken a step and it is running; **Waiting** = between steps, some steps are done but no mechanic has taken the next one yet (Step Information shows *Next: ...*); **Finish** = all steps finished by the mechanic. Stored statuses are re-checked against these rules on every start (only the status changes). The dashboard cards and status badges show these meanings |
 | **Master Data: Units** | Add, edit, delete and deactivate units (code, number, type, brand, model, serial number, year). Shows each unit's active WO. Units with WO history can only be deactivated, and a unit with an active WO cannot be deactivated. Inactive units cannot be picked for new WOs |
 | **Master Data: Employees** | Add, edit, delete and deactivate employees and give them a role. The optional **user account** section creates a login (username + password), resets the password, or removes the account. You cannot deactivate, change the role of, remove the account of, or delete your own account. Employees with WO history can only be deactivated |
@@ -62,7 +63,7 @@ An existing database from before the role master is migrated automatically on st
 | Name | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `4000` | API / web port |
-| `WOS_DB` | `server/data/wos.db` | SQLite file path |
+| `WOS_DB` | `server/data/wos.db` | SQLite file path; proof uploads are stored in an `uploads/` folder next to it |
 | `WOS_SECRET` | random, saved in `server/data/secret.key` | Token signing secret |
 
 ## API overview
@@ -80,6 +81,8 @@ POST   /work-orders/:id/approval   { action: APPROVE, remarks? } | { action: REJ
 POST   /work-orders/:id/steps/:stepId/start|finish   { remarks }
 POST   /work-orders/:id/steps/:stepId/sub-steps      { name }   (steps with "mechanic can add sub-steps", while not finished)
 POST   /work-orders/:id/additional-work              { name }
+POST   /work-orders/:id/proofs        raw file body, Content-Type + X-File-Name header (permission wo.approve; WO must be FINISH)
+GET    /work-orders/:id/proofs/:proofId              (file download)    DELETE /work-orders/:id/proofs/:proofId (wo.approve)
 GET    /master/units?all=1  /master/employees?role=driver|mechanic  /master/roles  /master/repair-categories?all=1   (dropdown lookups)
 
 GET/POST /units       GET/PUT/DELETE /units/:id       GET /units/types          (permission master.unit)
