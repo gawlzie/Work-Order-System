@@ -108,7 +108,10 @@ export interface Category {
 }
 
 export interface MasterCategory extends Category {
+  job_code: string | null;
   description: string | null;
+  /** Planned repair time in minutes. */
+  standard_duration: number | null;
   wo_count: number;
 }
 

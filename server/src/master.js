@@ -318,13 +318,13 @@ const CATEGORY_COLUMNS = `c.*,
 
 export function listCategories(q = {}) {
   const s = `%${str(q.search)}%`;
-  const where = ["(c.name LIKE ? OR IFNULL(c.description, '') LIKE ?)"];
+  const where = ["(c.name LIKE ? OR IFNULL(c.job_code, '') LIKE ? OR IFNULL(c.description, '') LIKE ?)"];
   if (q.status === 'active' || q.status === 'inactive') where.push(`c.is_active = ${q.status === 'active' ? 1 : 0}`);
   return pagedQuery({
     select: CATEGORY_COLUMNS,
     from: `FROM repair_categories c WHERE ${where.join(' AND ')}`,
-    params: [s, s],
-    order: orderBy(q, { name: 'c.name', wo_count: 'wo_count' }, 'name'),
+    params: [s, s, s],
+    order: orderBy(q, { name: 'c.name', job_code: 'c.job_code', standard_duration: 'c.standard_duration', wo_count: 'wo_count' }, 'name'),
     q,
   });
 }
@@ -335,15 +335,23 @@ export function getCategory(id) {
   return row;
 }
 
+/** Body: name, job_code, description, standard_duration (minutes), is_active. Job code and duration are optional. */
 function validateCategory(body, existing) {
   const errors = {};
+  const durationRaw = str(body.standard_duration);
   const data = {
     name: str(body.name),
+    job_code: optional(body.job_code)?.toUpperCase() ?? null,
     description: optional(body.description),
+    standard_duration: durationRaw ? Number(durationRaw) : null,
     is_active: flag(body.is_active, existing?.is_active ?? 1),
   };
   if (data.name.length < 2 || data.name.length > 50) errors.name = 'Category name must be 2-50 characters';
   else if (taken('repair_categories', 'name', data.name, existing?.id)) errors.name = 'Category name is already used';
+  if (data.job_code && !/^[A-Z0-9][A-Z0-9._-]{1,19}$/.test(data.job_code)) errors.job_code = 'Job code must be 2-20 characters: A-Z, 0-9, . _ -';
+  else if (data.job_code && taken('repair_categories', 'job_code', data.job_code, existing?.id)) errors.job_code = 'Job code is already used';
+  if (data.standard_duration !== null && !(Number.isInteger(data.standard_duration) && data.standard_duration >= 1 && data.standard_duration <= 60000))
+    errors.standard_duration = 'Standard duration must be between 1 minute and 1000 hours';
   if (data.description && data.description.length > 200) errors.description = 'Description is too long (max 200)';
   fail(errors);
   return data;
@@ -352,15 +360,16 @@ function validateCategory(body, existing) {
 export function createCategory(body) {
   const d = validateCategory(body);
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO repair_categories (name, description, is_active) VALUES (?, ?, ?)')
-    .run(d.name, d.description, d.is_active);
+    .prepare('INSERT INTO repair_categories (name, job_code, description, standard_duration, is_active) VALUES (?, ?, ?, ?, ?)')
+    .run(d.name, d.job_code, d.description, d.standard_duration, d.is_active);
   return getCategory(lastInsertRowid);
 }
 
 export function updateCategory(id, body) {
   const existing = getCategory(id);
   const d = validateCategory(body, existing);
-  db.prepare('UPDATE repair_categories SET name = ?, description = ?, is_active = ? WHERE id = ?').run(d.name, d.description, d.is_active, id);
+  db.prepare('UPDATE repair_categories SET name = ?, job_code = ?, description = ?, standard_duration = ?, is_active = ? WHERE id = ?')
+    .run(d.name, d.job_code, d.description, d.standard_duration, d.is_active, id);
   return getCategory(id);
 }
 

@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS units (
 CREATE TABLE IF NOT EXISTS repair_categories (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL UNIQUE,
+  job_code    TEXT,
   description TEXT,
+  standard_duration INTEGER, -- planned repair time in minutes
   is_active   INTEGER NOT NULL DEFAULT 1
 );
 
@@ -174,6 +176,9 @@ if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE w
 const categoryCols = columns('repair_categories');
 if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');
 if (!categoryCols.includes('is_active')) db.exec('ALTER TABLE repair_categories ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+if (!categoryCols.includes('job_code')) db.exec('ALTER TABLE repair_categories ADD COLUMN job_code TEXT');
+if (!categoryCols.includes('standard_duration')) db.exec('ALTER TABLE repair_categories ADD COLUMN standard_duration INTEGER');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_category_job_code ON repair_categories(job_code COLLATE NOCASE) WHERE job_code IS NOT NULL');
 // "Approved by system" no longer exists: work orders that had it count as approved.
 db.exec("UPDATE work_orders SET approval_status = 'APPROVE' WHERE approval_status = 'APPROVE_BY_SYSTEM'");
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
