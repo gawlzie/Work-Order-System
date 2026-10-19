@@ -151,10 +151,10 @@ const LIST_SELECT = `
   SELECT wo.*, u.unit_number, u.unit_code, u.unit_type,
          d.full_name AS driver_name, m.full_name AS mechanic_name,
          c.name AS category, cb.full_name AS created_by_name,
-         (SELECT s.step_name FROM wo_steps s
+         (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NOT NULL AND s.finished_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS current_step,
-         (SELECT s.step_name FROM wo_steps s
+         (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS next_step
   FROM work_orders wo
