@@ -94,9 +94,9 @@ const badgeVariants = {
 };
 export type BadgeVariant = keyof typeof badgeVariants;
 
-export function Badge({ variant = 'default', className, children }: { variant?: BadgeVariant; className?: string; children: ReactNode }) {
+export function Badge({ variant = 'default', className, children, title }: { variant?: BadgeVariant; className?: string; children: ReactNode; title?: string }) {
   return (
-    <span className={clsx('inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap', badgeVariants[variant], className)}>
+    <span title={title} className={clsx('inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap', badgeVariants[variant], className)}>
       {children}
     </span>
   );

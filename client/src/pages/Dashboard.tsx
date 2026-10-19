@@ -33,10 +33,10 @@ export function DashboardPage() {
   const s = stats.data;
 
   const statusCards = [
-    { key: 'status_open' as TKey, value: s?.open, icon: CircleDot, color: 'text-blue-500 bg-blue-500/10', filter: 'OPEN' },
-    { key: 'status_on_progress' as TKey, value: s?.on_progress, icon: Wrench, color: 'text-yellow-600 bg-yellow-500/10', filter: 'ON_PROGRESS' },
-    { key: 'status_waiting' as TKey, value: s?.waiting, icon: Hourglass, color: 'text-orange-500 bg-orange-500/10', filter: 'WAITING' },
-    { key: 'status_finish' as TKey, value: s?.finish, icon: CircleCheck, color: 'text-emerald-600 bg-emerald-500/10', filter: 'FINISH' },
+    { key: 'status_open' as TKey, desc: 'status_open_desc' as TKey, value: s?.open, icon: CircleDot, color: 'text-blue-500 bg-blue-500/10', filter: 'OPEN' },
+    { key: 'status_on_progress' as TKey, desc: 'status_on_progress_desc' as TKey, value: s?.on_progress, icon: Wrench, color: 'text-yellow-600 bg-yellow-500/10', filter: 'ON_PROGRESS' },
+    { key: 'status_waiting' as TKey, desc: 'status_waiting_desc' as TKey, value: s?.waiting, icon: Hourglass, color: 'text-orange-500 bg-orange-500/10', filter: 'WAITING' },
+    { key: 'status_finish' as TKey, desc: 'status_finish_desc' as TKey, value: s?.finish, icon: CircleCheck, color: 'text-emerald-600 bg-emerald-500/10', filter: 'FINISH' },
   ];
   const maxCat = Math.max(1, ...(s?.by_category.map((c) => c.count) ?? [1]));
 
@@ -57,8 +57,8 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {statusCards.map((c) => (
-          <button key={c.key} onClick={() => { setStatus(status === c.filter ? '' : c.filter); setPage(1); }} className="text-left">
-            <Card className={clsx('p-4 transition hover:border-primary/50 sm:p-5', status === c.filter && 'ring-2 ring-primary')}>
+          <button key={c.key} onClick={() => { setStatus(status === c.filter ? '' : c.filter); setPage(1); }} className="h-full text-left">
+            <Card className={clsx('h-full p-4 transition hover:border-primary/50 sm:p-5', status === c.filter && 'ring-2 ring-primary')}>
               <div className="flex items-center justify-between">
                 <p className="min-w-0 truncate text-sm text-muted-foreground">{t(c.key)}</p>
                 <span className={clsx('flex size-9 shrink-0 items-center justify-center rounded-lg', c.color)}>
@@ -66,6 +66,7 @@ export function DashboardPage() {
                 </span>
               </div>
               {stats.isLoading ? <Skeleton className="mt-3 h-8 w-16" /> : <p className="mt-2 text-3xl font-semibold tabular-nums">{c.value ?? 0}</p>}
+              <p className="mt-1 text-xs leading-snug text-muted-foreground">{t(c.desc)}</p>
             </Card>
           </button>
         ))}

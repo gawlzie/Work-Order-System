@@ -85,7 +85,6 @@ export function StepMasterPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className={clsx('font-medium break-words', !s.is_active && 'text-muted-foreground')}>{s.name}</p>
-                      {!!s.is_waiting && <Badge variant="orange">{t('waiting_step')}</Badge>}
                       {!!s.allow_add_sub && <Badge variant="default">{t('allow_add_sub_badge')}</Badge>}
                       {!s.is_active && <Badge variant="gray">{t('inactive')}</Badge>}
                     </div>
@@ -137,7 +136,6 @@ function StepForm({ step, lastActive, onClose }: { step: StepTemplate | null; la
   const [form, setForm] = useState({
     name: step?.name ?? '',
     description: step?.description ?? '',
-    is_waiting: !!step?.is_waiting,
     allow_add_sub: !!step?.allow_add_sub,
     is_active: step ? !!step.is_active : true,
   });
@@ -249,7 +247,6 @@ function StepForm({ step, lastActive, onClose }: { step: StepTemplate | null; la
         </div>
 
         <div className="space-y-4 rounded-lg border border-border p-4">
-          <Switch checked={form.is_waiting} onChange={(v) => setForm((f) => ({ ...f, is_waiting: v }))} label={t('waiting_step')} description={t('waiting_step_hint')} />
           <Switch checked={form.allow_add_sub} onChange={(v) => setForm((f) => ({ ...f, allow_add_sub: v }))} label={t('allow_add_sub')} description={t('allow_add_sub_hint')} />
           <Switch checked={form.is_active} onChange={(v) => setForm((f) => ({ ...f, is_active: v }))} label={t('active')} description={t('step_active_hint')} disabled={lastActive} />
           {errors.is_active && <p className="text-xs text-destructive">{errors.is_active}</p>}

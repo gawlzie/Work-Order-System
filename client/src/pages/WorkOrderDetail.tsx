@@ -98,7 +98,6 @@ export function WorkOrderDetailPage() {
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium break-words">
                   {step.step_no}. {step.step_name}
-                  {!!step.is_waiting && <span className="ml-2 text-xs font-normal text-orange-500">(Waiting)</span>}
                 </p>
                 <div className="no-print shrink-0">{stepActions(step)}</div>
               </div>

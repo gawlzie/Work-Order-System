@@ -143,9 +143,11 @@ export function seed({ reset = false } = {}) {
       if (progress > 0) {
         const steps = db.prepare('SELECT * FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL ORDER BY step_no').all(uuid);
         const doneCount = Math.round(progress * steps.length);
+        // Some work orders sit between steps: the last step is done and nobody has taken the next one yet (WAITING).
+        const betweenSteps = doneCount > 0 && doneCount < steps.length && rand() < 0.4;
         let cursor = created.getTime() + minutes(30 + rand() * 60);
         steps.forEach((step, idx) => {
-          if (idx > doneCount) return;
+          if (idx > doneCount || (idx === doneCount && betweenSteps)) return;
           const duration = step.is_waiting ? minutes(60 + rand() * 600) : minutes(20 + rand() * 120);
           const start = cursor;
           const inProgress = idx === doneCount;

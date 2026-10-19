@@ -13,10 +13,12 @@ import { PERMISSIONS } from './permissions.js';
 import { seed } from './seed.js';
 import {
   APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, createWorkOrder, dashboard, deleteWorkOrder,
-  getWorkOrder, listWorkOrders, progressStep, setApproval, updateWorkOrder,
+  getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 
 seed();
+const resynced = syncStatuses();
+if (resynced) console.log(`Updated the status of ${resynced} work order(s) to the current status rules`);
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));

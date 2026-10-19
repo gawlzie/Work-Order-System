@@ -155,7 +155,6 @@ export function JobPage() {
               </div>
               <p className="mt-1 text-lg font-semibold">
                 {current.step_no}. {current.step_name}
-                {!!current.is_waiting && <span className="ml-2 text-sm font-normal text-orange-500">(Waiting)</span>}
               </p>
               {current.started_at && (
                 <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">

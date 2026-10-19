@@ -8,7 +8,7 @@ export const CHANNEL = { WEB: 'WEB', MOBILE: 'MOBILE', WHATSAPP: 'WHATSAPP' };
 
 /**
  * Default repair flow, loaded into the step master when it is empty.
- * `waiting`: the WO shows WAITING while the step runs. `addSub`: mechanics may add their own sub-steps in the app.
+ * `addSub`: mechanics may add their own sub-steps in the app.
  */
 export const DEFAULT_STEPS = [
   { name: 'Unit Breakdown', subs: [] },
@@ -16,7 +16,7 @@ export const DEFAULT_STEPS = [
   { name: 'Inspection Activity', subs: [] },
   { name: 'Inspection Report Readiness', subs: [] },
   { name: 'Spareparts Request', subs: [] },
-  { name: 'Supply Spareparts', waiting: true, subs: [] },
+  { name: 'Supply Spareparts', subs: [] },
   { name: 'Repair Process', addSub: true, subs: [] },
   { name: 'Ground Test', subs: [] },
   { name: 'RFU (Ready For Use)', subs: [] },
@@ -96,25 +96,29 @@ export function insertSteps(woUuid, template = activeStepTemplate()) {
   });
 }
 
+/**
+ * Work order status from its top-level steps:
+ * OPEN        no step started yet (just created)
+ * ON_PROGRESS a mechanic has taken a step and it is running
+ * WAITING     some steps are done but nobody has taken the next one yet (between steps)
+ * FINISH      every step is finished
+ */
+export function deriveStatus(steps) {
+  if (steps.length && steps.every((s) => s.finished_at)) return STATUS.FINISH;
+  if (steps.some((s) => s.started_at && !s.finished_at)) return STATUS.ON_PROGRESS;
+  if (steps.some((s) => s.started_at)) return STATUS.WAITING;
+  return STATUS.OPEN;
+}
+
+const topSteps = (woUuid) =>
+  db.prepare('SELECT * FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL ORDER BY step_no').all(woUuid);
+
 /** Derive status, started_at and finished_at of a work order from its top-level steps. */
 export function recomputeStatus(woUuid) {
-  const steps = db
-    .prepare('SELECT * FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL ORDER BY step_no')
-    .all(woUuid);
-  const started = steps.filter((s) => s.started_at);
-  let status = STATUS.OPEN;
-  let startedAt = null;
-  let finishedAt = null;
-  if (started.length) {
-    startedAt = started.map((s) => s.started_at).sort()[0];
-    const current = steps.find((s) => s.started_at && !s.finished_at);
-    if (steps.every((s) => s.finished_at)) {
-      status = STATUS.FINISH;
-      finishedAt = steps.map((s) => s.finished_at).sort().at(-1);
-    } else {
-      status = current?.is_waiting ? STATUS.WAITING : STATUS.ON_PROGRESS;
-    }
-  }
+  const steps = topSteps(woUuid);
+  const status = deriveStatus(steps);
+  const startedAt = steps.map((s) => s.started_at).filter(Boolean).sort()[0] ?? null;
+  const finishedAt = status === STATUS.FINISH ? steps.map((s) => s.finished_at).sort().at(-1) : null;
   db.prepare('UPDATE work_orders SET status = ?, started_at = ?, finished_at = ?, updated_at = ? WHERE wo_uuid = ?').run(
     status,
     startedAt,
@@ -124,13 +128,35 @@ export function recomputeStatus(woUuid) {
   );
 }
 
+/**
+ * Re-applies the status rules to every stored work order, e.g. after the rules changed.
+ * Only the status column is touched (no timestamps), so it is safe to run on every start.
+ */
+export function syncStatuses() {
+  const update = db.prepare('UPDATE work_orders SET status = ? WHERE wo_uuid = ?');
+  let changed = 0;
+  tx(() => {
+    for (const { wo_uuid, status } of db.prepare('SELECT wo_uuid, status FROM work_orders').all()) {
+      const next = deriveStatus(topSteps(wo_uuid));
+      if (next !== status) {
+        update.run(next, wo_uuid);
+        changed++;
+      }
+    }
+  });
+  return changed;
+}
+
 const LIST_SELECT = `
   SELECT wo.*, u.unit_number, u.unit_code, u.unit_type,
          d.full_name AS driver_name, m.full_name AS mechanic_name,
          c.name AS category, cb.full_name AS created_by_name,
          (SELECT s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NOT NULL AND s.finished_at IS NULL
-            ORDER BY s.step_no LIMIT 1) AS current_step
+            ORDER BY s.step_no LIMIT 1) AS current_step,
+         (SELECT s.step_name FROM wo_steps s
+            WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NULL
+            ORDER BY s.step_no LIMIT 1) AS next_step
   FROM work_orders wo
   JOIN units u ON u.id = wo.unit_id
   JOIN employees d ON d.id = wo.driver_id
@@ -142,8 +168,12 @@ function decorate(row) {
   const end = row.finished_at ? new Date(row.finished_at) : new Date();
   const totalSec = row.started_at ? Math.max(0, Math.round((end - new Date(row.started_at)) / 1000)) : 0;
   let stepInfo = row.current_step;
-  if (!stepInfo) stepInfo = row.status === STATUS.FINISH ? 'Completed' : 'Not started';
-  const { current_step, ...rest } = row;
+  if (!stepInfo) {
+    if (row.status === STATUS.FINISH) stepInfo = 'Completed';
+    else if (row.status === STATUS.WAITING) stepInfo = `Next: ${row.next_step ?? '-'}`;
+    else stepInfo = 'Not started';
+  }
+  const { current_step, next_step, ...rest } = row;
   return { ...rest, step_information: stepInfo, total_time: totalSec };
 }
 
