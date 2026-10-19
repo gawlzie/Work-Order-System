@@ -46,7 +46,7 @@ export function WorkOrderFormPage() {
     mutationFn: () =>
       api<WorkOrderDetail>(isEdit ? `/work-orders/${id}` : '/work-orders', { method: isEdit ? 'PUT' : 'POST', body: form }),
     onSuccess: (wo) => {
-      toast('success', t('saved'), wo.wo_number);
+      toast('success', t('saved'), wo.approval_status === 'WAITING' ? `${wo.wo_number} · ${t('wo_created_waiting')}` : wo.wo_number);
       qc.invalidateQueries({ queryKey: ['work-orders'] });
       qc.invalidateQueries({ queryKey: ['work-order', wo.wo_uuid] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });

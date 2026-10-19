@@ -33,7 +33,7 @@ export function NewJobPage() {
   const save = useMutation({
     mutationFn: () => api<WorkOrderDetail>('/work-orders', { method: 'POST', body: form }),
     onSuccess: (wo) => {
-      toast('success', wo.wo_number, wo.approval_status === 'WAITING' ? t('m_sent_for_approval') : t('saved'));
+      toast('success', wo.wo_number, t('m_sent_for_approval'));
       qc.invalidateQueries({ queryKey: ['work-orders'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       navigate(`/m/wo/${wo.wo_uuid}`, { replace: true });

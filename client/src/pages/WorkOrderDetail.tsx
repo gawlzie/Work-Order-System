@@ -3,6 +3,7 @@ import { clsx } from 'clsx';
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Play, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ApprovalDialog } from '../components/ApprovalDialog';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { ProofSection } from '../components/ProofSection';
 import { useToast } from '../components/toast';
@@ -34,6 +35,7 @@ export function WorkOrderDetailPage() {
   const [finishing, setFinishing] = useState<Step | null>(null);
   const [remarks, setRemarks] = useState('');
   const [extra, setExtra] = useState('');
+  const [approval, setApproval] = useState<'approve' | 'reject' | null>(null);
 
   const onDone = (data: WorkOrderDetail) => {
     qc.setQueryData(['work-order', id], data);
@@ -64,7 +66,7 @@ export function WorkOrderDetailPage() {
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
 
-  const approved = wo.approval_status === 'APPROVE' || wo.approval_status === 'APPROVE_BY_SYSTEM';
+  const approved = wo.approval_status === 'APPROVE';
   const canProgress = can('wo.progress') && approved;
   const allTop = [...wo.steps, ...wo.additional_work];
   const nextTop = allTop.find((s) => !s.finished_at);
@@ -159,9 +161,17 @@ export function WorkOrderDetailPage() {
       />
 
       {wo.approval_status === 'WAITING' && (
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-yellow-600" />
-          <p>{t('must_approve')}</p>
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm sm:flex-row sm:items-center">
+          <div className="flex flex-1 items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-yellow-600" />
+            <p>{t('must_approve')}</p>
+          </div>
+          {can('wo.approve') && (
+            <div className="no-print flex gap-2 *:flex-1 sm:*:flex-none">
+              <Button variant="destructive" onClick={() => setApproval('reject')}><XCircle className="size-4" /> {t('reject')}</Button>
+              <Button variant="success" onClick={() => setApproval('approve')}><Check className="size-4" /> {t('approve')}</Button>
+            </div>
+          )}
         </div>
       )}
       {wo.approval_status === 'REJECT' && (
@@ -230,6 +240,8 @@ export function WorkOrderDetailPage() {
       </Card>
 
       <ProofSection wo={wo} />
+
+      {approval && <ApprovalDialog kind={approval} wo={wo} onClose={() => setApproval(null)} />}
 
       <Modal
         open={!!finishing}

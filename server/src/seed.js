@@ -116,12 +116,12 @@ export function seed({ reset = false } = {}) {
       const channel = pick(['WEB', 'WEB', 'MOBILE', 'WHATSAPP']);
       const mechanic = pick(mechanics);
 
-      let approval = channel === 'WEB' ? 'APPROVE_BY_SYSTEM' : 'APPROVE';
+      let approval = 'APPROVE';
       let rejectReason = null;
       let progress = 1; // fraction of the 6 steps done
       if (recent) {
         const r = rand();
-        if (channel !== 'WEB' && r < 0.25) approval = 'WAITING';
+        if (r < 0.25) approval = 'WAITING';
         else if (channel !== 'WEB' && r < 0.32) {
           approval = 'REJECT';
           rejectReason = 'Duplicate report, unit already handled in another work order';

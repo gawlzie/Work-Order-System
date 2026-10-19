@@ -11,7 +11,7 @@ import { useWorkOrders, type WoListParams } from '../../lib/queries';
 import type { Permission, WorkOrder } from '../../lib/types';
 
 const NOT_FINISHED = 'OPEN,ON_PROGRESS,WAITING';
-const APPROVED = 'APPROVE,APPROVE_BY_SYSTEM';
+const APPROVED = 'APPROVE';
 
 type TabId = 'active' | 'available' | 'requests' | 'done';
 
@@ -24,7 +24,7 @@ const TABS: { id: TabId; key: TKey; empty: TKey; permission?: Permission; params
 
 function JobCard({ wo }: { wo: WorkOrder }) {
   const { t } = useI18n();
-  const approved = wo.approval_status === 'APPROVE' || wo.approval_status === 'APPROVE_BY_SYSTEM';
+  const approved = wo.approval_status === 'APPROVE';
   return (
     <Link to={`/m/wo/${wo.wo_uuid}`} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition active:scale-[0.99] hover:border-primary/40">
       <div className="min-w-0 flex-1">

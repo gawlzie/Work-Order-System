@@ -92,7 +92,7 @@ export function JobPage() {
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/m')}>{t('m_jobs')}</Button>} />;
 
-  const approved = wo.approval_status === 'APPROVE' || wo.approval_status === 'APPROVE_BY_SYSTEM';
+  const approved = wo.approval_status === 'APPROVE';
   const canProgress = can('wo.progress') && approved && wo.status !== 'FINISH';
   const allTop = [...wo.steps, ...wo.additional_work];
   const current = allTop.find((s) => !s.finished_at);

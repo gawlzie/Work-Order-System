@@ -174,6 +174,8 @@ if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE w
 const categoryCols = columns('repair_categories');
 if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');
 if (!categoryCols.includes('is_active')) db.exec('ALTER TABLE repair_categories ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+// "Approved by system" no longer exists: work orders that had it count as approved.
+db.exec("UPDATE work_orders SET approval_status = 'APPROVE' WHERE approval_status = 'APPROVE_BY_SYSTEM'");
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 

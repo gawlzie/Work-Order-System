@@ -123,7 +123,7 @@ app.get('/api/work-orders/export', wrap((req, res) => {
 app.get('/api/work-orders/:id', wrap((req) => getWorkOrder(req.params.id)));
 
 app.post('/api/work-orders', requirePermission('wo.create'), wrap((req, res) => {
-  // Users who may approve work orders are trusted, so their own WOs are approved by the system.
+  // The channel records where the WO came from; every WO still needs approval.
   const channel = hasPermission(req.user, 'wo.approve') ? CHANNEL.WEB : CHANNEL.MOBILE;
   res.status(201);
   return createWorkOrder(req.body ?? {}, req.user, channel);

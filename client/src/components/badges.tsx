@@ -12,7 +12,6 @@ export const STATUS_META: Record<WoStatus, { variant: BadgeVariant; key: TKey; d
 export const APPROVAL_META: Record<ApprovalStatus, { variant: BadgeVariant; key: TKey }> = {
   WAITING: { variant: 'yellow', key: 'status_waiting' },
   APPROVE: { variant: 'green', key: 'approved_label' },
-  APPROVE_BY_SYSTEM: { variant: 'green', key: 'approved_system' },
   REJECT: { variant: 'destructive', key: 'rejected_label' },
 };
 

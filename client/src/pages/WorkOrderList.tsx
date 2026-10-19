@@ -3,11 +3,12 @@ import { clsx } from 'clsx';
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Download, Eye, Filter, Paperclip, Pencil, Plus, Printer, RefreshCcw, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ApprovalDialog } from '../components/ApprovalDialog';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { DateRange } from '../components/DateRange';
 import { Pagination } from '../components/Pagination';
 import { useToast } from '../components/toast';
-import { BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Textarea } from '../components/ui';
+import { BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton } from '../components/ui';
 import { api, download, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatDateTime, formatDuration } from '../lib/format';
@@ -29,7 +30,6 @@ export function WorkOrderListPage() {
   const [showFilters, setShowFilters] = useState(() => FILTER_KEYS.some((k) => sp.get(k)));
   const [searchText, setSearchText] = useState(sp.get('search') ?? '');
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [reason, setReason] = useState('');
   const [exporting, setExporting] = useState(false);
 
   const params: WoListParams = {
@@ -68,15 +68,11 @@ export function WorkOrderListPage() {
     qc.invalidateQueries({ queryKey: ['dashboard'] });
   };
 
-  const action = useMutation({
-    mutationFn: async (d: NonNullable<Dialog>) => {
-      if (d.kind === 'delete') return api(`/work-orders/${d.wo.wo_uuid}`, { method: 'DELETE' });
-      return api(`/work-orders/${d.wo.wo_uuid}/approval`, { method: 'POST', body: d.kind === 'approve' ? { action: 'APPROVE', remarks: reason } : { action: 'REJECT', reason } });
-    },
-    onSuccess: (_, d) => {
-      toast('success', t(d.kind === 'delete' ? 'deleted' : d.kind === 'approve' ? 'approved' : 'rejected'), d.wo.wo_number);
+  const remove = useMutation({
+    mutationFn: (wo: WorkOrder) => api(`/work-orders/${wo.wo_uuid}`, { method: 'DELETE' }),
+    onSuccess: (_, wo) => {
+      toast('success', t('deleted'), wo.wo_number);
       setDialog(null);
-      setReason('');
       invalidate();
     },
     onError: (err) => toast('error', (err as Error).message),
@@ -196,7 +192,6 @@ export function WorkOrderListPage() {
                 <option value="">{t('all')}</option>
                 <option value="WAITING">{t('status_waiting')}</option>
                 <option value="APPROVE">{t('approved_label')}</option>
-                <option value="APPROVE_BY_SYSTEM">{t('approved_system')}</option>
                 <option value="REJECT">{t('rejected_label')}</option>
               </Select>
             </Field>
@@ -332,37 +327,20 @@ export function WorkOrderListPage() {
       </Card>
 
       <Modal
-        open={!!dialog}
-        onClose={() => { setDialog(null); setReason(''); }}
-        title={dialog?.kind === 'approve' ? t('approve_title') : dialog?.kind === 'reject' ? t('reject_title') : t('confirm_title')}
-        description={`${dialog?.wo.wo_number} · ${dialog?.wo.unit_number} — ${dialog?.kind === 'approve' ? t('approve_subtitle') : dialog?.kind === 'reject' ? t('reject_subtitle') : t('confirm_delete')}`}
+        open={dialog?.kind === 'delete'}
+        onClose={() => setDialog(null)}
+        title={t('confirm_title')}
+        description={`${dialog?.wo.wo_number} · ${dialog?.wo.unit_number} — ${t('confirm_delete')}`}
         footer={
           <>
-            <Button variant="outline" onClick={() => { setDialog(null); setReason(''); }}>{t('cancel')}</Button>
-            <Button
-              variant={dialog?.kind === 'approve' ? 'success' : 'destructive'}
-              loading={action.isPending}
-              disabled={dialog?.kind === 'reject' && reason.trim().length < 3}
-              onClick={() => dialog && action.mutate(dialog)}
-            >
-              {dialog?.kind === 'approve' ? t('approve') : dialog?.kind === 'reject' ? t('reject') : t('delete')}
-            </Button>
+            <Button variant="outline" onClick={() => setDialog(null)}>{t('cancel')}</Button>
+            <Button variant="destructive" loading={remove.isPending} onClick={() => dialog && remove.mutate(dialog.wo)}>{t('delete')}</Button>
           </>
         }
       >
-        {dialog?.kind === 'reject' && (
-          <Field label={t('reject_reason')} required>
-            <Textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
-          </Field>
-        )}
-        {dialog && dialog.kind !== 'reject' && <p className="text-sm">{dialog.wo.problem}</p>}
-        {dialog?.kind === 'approve' && (
-          <Field label={t('approval_remarks')} className="mt-4">
-            <Textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('approval_remarks_placeholder')} maxLength={500} className="min-h-20" />
-            <span className="self-end text-xs text-muted-foreground">{reason.length}/500</span>
-          </Field>
-        )}
+        <p className="text-sm">{dialog?.wo.problem}</p>
       </Modal>
+      {dialog && dialog.kind !== 'delete' && <ApprovalDialog kind={dialog.kind} wo={dialog.wo} onClose={() => setDialog(null)} />}
     </div>
   );
 }

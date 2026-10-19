@@ -3,7 +3,7 @@ import { hasPermission } from './auth.js';
 import { db, roleHas, tx } from './db.js';
 
 export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAITING', FINISH: 'FINISH' };
-export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', APPROVE_BY_SYSTEM: 'APPROVE_BY_SYSTEM', REJECT: 'REJECT' };
+export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', REJECT: 'REJECT' };
 export const CHANNEL = { WEB: 'WEB', MOBILE: 'MOBILE', WHATSAPP: 'WHATSAPP' };
 
 /**
@@ -40,7 +40,7 @@ export class HttpError extends Error {
 }
 
 const now = () => new Date().toISOString();
-const isApproved = (wo) => wo.approval_status === APPROVAL.APPROVE || wo.approval_status === APPROVAL.APPROVE_BY_SYSTEM;
+const isApproved = (wo) => wo.approval_status === APPROVAL.APPROVE;
 
 export function nextWoNumber(date = new Date()) {
   const ym = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -315,8 +315,8 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
 
   const wo_uuid = randomUUID();
   const ts = now();
-  // Work orders raised by the plant admin on the web are trusted; field channels need approval.
-  const approval = channel === CHANNEL.WEB ? APPROVAL.APPROVE_BY_SYSTEM : APPROVAL.WAITING;
+  // Every work order, whoever raises it, waits until an approver approves or rejects it.
+  const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
       `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem,

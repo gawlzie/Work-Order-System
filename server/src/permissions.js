@@ -3,7 +3,7 @@ export const PERMISSIONS = [
   { key: 'wo.create', group: 'work_order', label: 'Create work order' },
   { key: 'wo.update', group: 'work_order', label: 'Edit work order' },
   { key: 'wo.delete', group: 'work_order', label: 'Delete work order' },
-  { key: 'wo.approve', group: 'work_order', label: 'Approve / reject work order (own WOs are auto-approved)' },
+  { key: 'wo.approve', group: 'work_order', label: 'Approve / reject work order' },
   { key: 'wo.progress', group: 'work_order', label: 'Start / finish steps, add additional work' },
   { key: 'wo.as_driver', group: 'assignment', label: 'Can be selected as driver' },
   { key: 'wo.as_mechanic', group: 'assignment', label: 'Can be selected as PIC mechanic' },

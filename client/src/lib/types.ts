@@ -12,7 +12,7 @@ export type Permission =
   | 'master.step'
   | 'master.category';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
-export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'APPROVE_BY_SYSTEM' | 'REJECT';
+export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
 
 export interface User {
