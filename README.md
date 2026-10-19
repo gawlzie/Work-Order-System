@@ -43,6 +43,8 @@ npm run build
 npm start                # http://localhost:4000
 ```
 
+Convert work orders that still have the old 6-step flow to the 9-step flow with `node src/sync-steps.js` (run in `server/` with the server stopped; `--dry-run` shows what would change). It writes a backup to `server/data/backups/` first and keeps every work order, its dates, total time, PIC, remarks, approval and additional work: Unit Check-In becomes Unit Breakdown + Service Request, Troubleshooting becomes Inspection Activity + Inspection Report Readiness, Waiting Part becomes Spareparts Request + Supply Spareparts (time split in half), Repair Execution becomes Repair Process (with its sub-steps), Test & Commissioning becomes Ground Test and Unit Release becomes RFU. The old checklists of the other steps are not carried over. Running it again changes nothing.
+
 Reset the demo data with `npm run seed`. The database is stored in `server/data/wos.db`.
 An existing database from before the role master is migrated automatically on start (employee roles become `role_id`, units get serial number / year / active columns).
 
