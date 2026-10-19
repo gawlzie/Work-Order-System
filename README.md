@@ -8,13 +8,16 @@ API and database. No SSO or external API is needed.
 
 | Area | What it does |
 | --- | --- |
-| **Login / roles** | Admin Plant (full access), Mechanic (create WO + progress steps), Driver (view only) |
+| **Login / roles** | Permission-based roles. Built-in: Admin Plant (full access), Mechanic (create WO + progress steps), Driver (view only); more can be added in Master Data |
 | **Dashboard** | Open / On Progress / Waiting / Finish counters, total WOs, pending approvals, average and total repair time, WOs per category, list with status tabs and a date range |
 | **Work Order list** | Search, filters (status, approval, channel source, unit, PIC mechanic, category, date range), sortable columns, pagination, CSV export, print |
 | **Approval** | WOs raised by mechanics (mobile) or WhatsApp wait for approval. Admin approves or rejects them with a reason. WOs created on the web are approved by the system |
 | **Create / Update** | Unit (dump truck), driver, PIC mechanic, repair category, problem description, with validation and a confirmation dialog. Only one active WO is allowed per unit |
 | **Detail** | Unit/driver/PIC info and a step timeline with sub-steps (PIC, start, finish, duration, remarks). Steps are started and finished in order. Additional work can be added. Printable |
 | **Status logic** | `OPEN` → `ON_PROGRESS` → `WAITING` (while the *Waiting Part* step runs) → `FINISH` (when all steps are done), derived automatically from the steps |
+| **Master Data: Units** | Add, edit, delete and deactivate units (code, number, type, brand, model, serial number, year). Shows each unit's active WO. Units with WO history can only be deactivated, and a unit with an active WO cannot be deactivated. Inactive units cannot be picked for new WOs |
+| **Master Data: Employees** | Add, edit, delete and deactivate employees and give them a role. The optional **user account** section creates a login (username + password), resets the password, or removes the account. You cannot deactivate, change the role of, remove the account of, or delete your own account. Employees with WO history can only be deactivated |
+| **Master Data: Roles** | Add, edit and delete roles and pick their permissions (WO create/edit/delete/approve/progress, "can be selected as driver / PIC mechanic", manage units/employees/roles). Built-in roles keep their code and cannot be deleted. Admin always keeps every access permission. Roles in use cannot be deleted |
 | **App page, Profile** | Landing page for the Android mechanic app; profile page with password change |
 | **UX** | English / Bahasa Indonesia, light/dark theme, responsive layout with a collapsible sidebar |
 
@@ -38,6 +41,7 @@ npm start                # http://localhost:4000
 ```
 
 Reset the demo data with `npm run seed`. The database is stored in `server/data/wos.db`.
+An existing database from before the role master is migrated automatically on start (employee roles become `role_id`, units get serial number / year / active columns).
 
 ### Demo accounts (password `password123`)
 
@@ -69,5 +73,11 @@ GET    /work-orders/:id            POST /work-orders          PUT /work-orders/:
 POST   /work-orders/:id/approval   { action: APPROVE | REJECT, reason }
 POST   /work-orders/:id/steps/:stepId/start|finish   { remarks }
 POST   /work-orders/:id/additional-work              { name }
-GET    /master/units  /master/employees?role=driver|mechanic  /master/repair-categories
+GET    /master/units?all=1  /master/employees?role=driver|mechanic  /master/roles  /master/repair-categories   (dropdown lookups)
+
+GET/POST /units       GET/PUT/DELETE /units/:id       GET /units/types          (permission master.unit)
+GET/POST /employees   GET/PUT/DELETE /employees/:id                             (permission master.employee)
+GET/POST /roles       GET/PUT/DELETE /roles/:id       GET /roles/permissions    (permission master.role)
+  list params: search, page, limit, sort_by, sort_order, status=active|inactive (+ unit_type, role_id, account=yes|no)
+  employee body: employee fields + has_account, username, password (blank password keeps the current one)
 ```

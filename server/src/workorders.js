@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { db, tx } from './db.js';
+import { hasPermission } from './auth.js';
+import { db, roleHas, tx } from './db.js';
 
 export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAITING', FINISH: 'FINISH' };
 export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', APPROVE_BY_SYSTEM: 'APPROVE_BY_SYSTEM', REJECT: 'REJECT' };
@@ -173,11 +174,16 @@ export function getWorkOrder(woUuid) {
   };
 }
 
-function assertRefs({ unit_id, driver_id, mechanic_id, category_id }) {
-  if (!db.prepare('SELECT 1 FROM units WHERE id = ?').get(unit_id)) throw new HttpError(422, 'Unit not found');
-  if (!db.prepare("SELECT 1 FROM employees WHERE id = ? AND role = 'driver'").get(driver_id))
-    throw new HttpError(422, 'Driver not found');
-  if (mechanic_id && !db.prepare("SELECT 1 FROM employees WHERE id = ? AND role = 'mechanic'").get(mechanic_id))
+const assignable = (employeeId, permission) =>
+  db.prepare(`SELECT 1 FROM employees e JOIN roles r ON r.id = e.role_id WHERE e.id = ? AND e.is_active = 1 AND ${roleHas()}`)
+    .get(employeeId, permission);
+
+/** Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records. */
+function assertRefs({ unit_id, driver_id, mechanic_id, category_id }, current = {}) {
+  if (!db.prepare('SELECT 1 FROM units WHERE id = ? AND (is_active = 1 OR id = ?)').get(unit_id, current.unit_id ?? null))
+    throw new HttpError(422, 'Unit not found or inactive');
+  if (driver_id !== current.driver_id && !assignable(driver_id, 'wo.as_driver')) throw new HttpError(422, 'Driver not found');
+  if (mechanic_id && mechanic_id !== current.mechanic_id && !assignable(mechanic_id, 'wo.as_mechanic'))
     throw new HttpError(422, 'Mechanic not found');
   if (category_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ?').get(category_id))
     throw new HttpError(422, 'Repair category not found');
@@ -234,7 +240,7 @@ export function updateWorkOrder(woUuid, body) {
   const wo = getWorkOrder(woUuid);
   if (wo.status === STATUS.FINISH) throw new HttpError(409, 'A finished work order cannot be edited');
   const data = validatePayload(body);
-  assertRefs(data);
+  assertRefs(data, wo);
   db.prepare(
     `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, category_id = ?, problem = ?, updated_at = ?
      WHERE wo_uuid = ?`,
@@ -277,7 +283,8 @@ export function progressStep(woUuid, stepId, action, user, remarks) {
   if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved before work can start');
   const step = getStep(woUuid, stepId);
   const ts = now();
-  const picId = user.role === 'mechanic' ? user.id : wo.mechanic_id;
+  const isMechanic = hasPermission(user, 'wo.as_mechanic');
+  const picId = isMechanic ? user.id : wo.mechanic_id;
 
   tx(() => {
     if (action === 'start') {
@@ -293,7 +300,7 @@ export function progressStep(woUuid, stepId, action, user, remarks) {
       }
       db.prepare('UPDATE wo_steps SET started_at = ?, pic_id = ? WHERE id = ?').run(ts, picId, step.id);
       if (!wo.mechanic_id && picId) db.prepare('UPDATE work_orders SET mechanic_id = ? WHERE wo_uuid = ?').run(picId, woUuid);
-      if (!wo.mobile_sync_time && user.role === 'mechanic')
+      if (!wo.mobile_sync_time && isMechanic)
         db.prepare('UPDATE work_orders SET mobile_sync_time = ? WHERE wo_uuid = ?').run(ts, woUuid);
     } else if (action === 'finish') {
       if (!step.started_at) throw new HttpError(409, 'Step has not started');

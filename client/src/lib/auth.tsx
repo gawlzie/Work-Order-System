@@ -1,25 +1,19 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, setUnauthorizedHandler, tokenStore } from './api';
-import type { User } from './types';
+import type { Permission, User } from './types';
 
 interface Auth {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  can: (action: 'create' | 'update' | 'delete' | 'approve' | 'progress') => boolean;
+  can: (permission: Permission) => boolean;
+  /** Re-reads the profile, e.g. after the user's own role permissions changed. */
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<Auth | null>(null);
-
-const PERMISSIONS: Record<string, User['role'][]> = {
-  create: ['admin', 'mechanic'],
-  update: ['admin'],
-  delete: ['admin'],
-  approve: ['admin'],
-  progress: ['admin', 'mechanic'],
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
@@ -48,9 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   };
 
-  const can: Auth['can'] = (action) => !!user && PERMISSIONS[action].includes(user.role);
+  const can: Auth['can'] = (permission) => !!user?.permissions.includes(permission);
+  const refresh = () => api<User>('/auth/profile').then(setUser);
 
-  return <Ctx.Provider value={{ user, loading, login, logout, can }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, logout, can, refresh }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

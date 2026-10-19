@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SYSTEM_ROLES } from './permissions.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = process.env.WOS_DB || join(here, '..', 'data', 'wos.db');
@@ -11,26 +12,43 @@ mkdirSync(dirname(DB_PATH), { recursive: true });
 export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS employees (
+const employeesDdl = (name) => `
+CREATE TABLE IF NOT EXISTS ${name} (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id   TEXT NOT NULL UNIQUE,
   full_name     TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('admin','mechanic','driver')),
+  role_id       INTEGER NOT NULL REFERENCES roles(id),
   company       TEXT NOT NULL,
   site          TEXT NOT NULL,
+  phone         TEXT,
+  email         TEXT,
   username      TEXT UNIQUE,
   password_hash TEXT,
   is_active     INTEGER NOT NULL DEFAULT 1
+);`;
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS roles (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code        TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  description TEXT,
+  permissions TEXT NOT NULL DEFAULT '[]',
+  is_system   INTEGER NOT NULL DEFAULT 0
 );
 
+${employeesDdl('employees')}
+
 CREATE TABLE IF NOT EXISTS units (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  unit_code   TEXT NOT NULL UNIQUE,
-  unit_number TEXT NOT NULL,
-  unit_type   TEXT NOT NULL,
-  brand       TEXT,
-  model       TEXT
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  unit_code     TEXT NOT NULL UNIQUE,
+  unit_number   TEXT NOT NULL,
+  unit_type     TEXT NOT NULL,
+  brand         TEXT,
+  model         TEXT,
+  serial_number TEXT,
+  year          INTEGER,
+  is_active     INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS repair_categories (
@@ -87,4 +105,46 @@ export function tx(fn) {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+
+/** Insert missing built-in roles; with reset, also restore their default name and permissions. */
+export function ensureSystemRoles({ reset = false } = {}) {
+  const upsert = db.prepare(
+    `INSERT INTO roles (code, name, description, permissions, is_system) VALUES (?, ?, ?, ?, 1)
+     ON CONFLICT(code) DO ${reset ? 'UPDATE SET name = excluded.name, description = excluded.description, permissions = excluded.permissions, is_system = 1' : 'NOTHING'}`,
+  );
+  for (const r of SYSTEM_ROLES) upsert.run(r.code, r.name, r.description, JSON.stringify(r.permissions));
+}
+ensureSystemRoles();
+
+const columns = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+
+// Databases created before the role master stored the role as a fixed text enum on employees.
+if (columns('employees').includes('role')) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  tx(() => {
+    db.exec(employeesDdl('employees_new'));
+    db.exec(`INSERT INTO employees_new (id, employee_id, full_name, role_id, company, site, username, password_hash, is_active)
+             SELECT e.id, e.employee_id, e.full_name, r.id, e.company, e.site, e.username, e.password_hash, e.is_active
+             FROM employees e JOIN roles r ON r.code = e.role`);
+    db.exec('DROP TABLE employees; ALTER TABLE employees_new RENAME TO employees;');
+  });
+  db.exec('PRAGMA foreign_keys = ON');
+}
+
+const unitCols = columns('units');
+if (!unitCols.includes('serial_number')) db.exec('ALTER TABLE units ADD COLUMN serial_number TEXT');
+if (!unitCols.includes('year')) db.exec('ALTER TABLE units ADD COLUMN year INTEGER');
+if (!unitCols.includes('is_active')) db.exec('ALTER TABLE units ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+
+/** SQL condition: the role aliased `r` holds the permission bound to the next `?`. */
+export const roleHas = (alias = 'r') => `EXISTS (SELECT 1 FROM json_each(${alias}.permissions) WHERE value = ?)`;
+
+/** Employee row joined with its role; permissions parsed into an array. */
+export function loadUser(where, ...params) {
+  const row = db
+    .prepare(`SELECT e.*, r.code AS role, r.name AS role_name, r.permissions
+              FROM employees e JOIN roles r ON r.id = e.role_id WHERE ${where}`)
+    .get(...params);
+  return row && { ...row, permissions: JSON.parse(row.permissions) };
 }

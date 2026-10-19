@@ -59,7 +59,7 @@ export function WorkOrderListPage() {
   }, [searchText]);
 
   const list = useWorkOrders(params);
-  const units = useUnits();
+  const units = useUnits(true);
   const mechanics = useEmployees('mechanic');
   const categories = useCategories();
 
@@ -127,7 +127,7 @@ export function WorkOrderListPage() {
             <Button variant="outline" onClick={exportCsv} loading={exporting}>
               {!exporting && <Download className="size-4" />} {t('export')}
             </Button>
-            {can('create') && (
+            {can('wo.create') && (
               <Button onClick={() => navigate('/transaction/work-order/create')}>
                 <Plus className="size-4" /> {t('create')}
               </Button>
@@ -241,7 +241,7 @@ export function WorkOrderListPage() {
                   <td className="px-4 py-3"><ChannelBadge channel={wo.channel_source} /></td>
                   <td className="no-print px-4 py-2">
                     <div className="flex justify-end gap-1">
-                      {can('approve') && wo.approval_status === 'WAITING' && (
+                      {can('wo.approve') && wo.approval_status === 'WAITING' && (
                         <>
                           <Button size="icon" variant="ghost" title={t('approve')} onClick={() => setDialog({ kind: 'approve', wo })} className="text-emerald-600">
                             <Check className="size-4" />
@@ -254,12 +254,12 @@ export function WorkOrderListPage() {
                       <Button size="icon" variant="ghost" title={t('details')} onClick={() => navigate(`/transaction/work-order/details/${wo.wo_uuid}`)}>
                         <Eye className="size-4" />
                       </Button>
-                      {can('update') && wo.status !== 'FINISH' && (
+                      {can('wo.update') && wo.status !== 'FINISH' && (
                         <Button size="icon" variant="ghost" title={t('edit')} onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
                           <Pencil className="size-4" />
                         </Button>
                       )}
-                      {can('delete') && wo.status === 'OPEN' && (
+                      {can('wo.delete') && wo.status === 'OPEN' && (
                         <Button size="icon" variant="ghost" title={t('delete')} onClick={() => setDialog({ kind: 'delete', wo })} className="text-destructive">
                           <Trash2 className="size-4" />
                         </Button>

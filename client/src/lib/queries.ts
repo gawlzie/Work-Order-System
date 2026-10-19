@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, qs } from './api';
-import type { Category, DashboardStats, Employee, Paged, Unit, WorkOrder, WorkOrderDetail } from './types';
+import type { Category, DashboardStats, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail } from './types';
 
 export interface WoListParams {
   search?: string;
@@ -38,10 +38,28 @@ export const useDashboard = (start: string, end: string) =>
     queryFn: () => api<DashboardStats>(`/dashboard${qs({ start_date: start, end_date: end })}`),
   });
 
-export const useUnits = () => useQuery({ queryKey: ['units'], queryFn: () => api<Unit[]>('/master/units'), staleTime: 300_000 });
+/** Units for dropdowns. Pass `all` to include inactive units (e.g. list filters). */
+export const useUnits = (all = false) =>
+  useQuery({ queryKey: ['units', all], queryFn: () => api<Unit[]>(`/master/units${all ? '?all=1' : ''}`), staleTime: 300_000 });
 
 export const useEmployees = (role: 'driver' | 'mechanic') =>
   useQuery({ queryKey: ['employees', role], queryFn: () => api<Employee[]>(`/master/employees?role=${role}`), staleTime: 300_000 });
 
 export const useCategories = () =>
   useQuery({ queryKey: ['categories'], queryFn: () => api<Category[]>('/master/repair-categories'), staleTime: 300_000 });
+
+export const useRoleOptions = () =>
+  useQuery({ queryKey: ['roles', 'options'], queryFn: () => api<RoleOption[]>('/master/roles'), staleTime: 300_000 });
+
+export const usePermissionDefs = () =>
+  useQuery({ queryKey: ['roles', 'permissions'], queryFn: () => api<PermissionDef[]>('/roles/permissions'), staleTime: Infinity });
+
+export const useUnitTypes = () => useQuery({ queryKey: ['units', 'types'], queryFn: () => api<string[]>('/units/types') });
+
+/** Paged master-data list, e.g. usePaged<MasterUnit>('units', params). Query key starts with the path for invalidation. */
+export const usePaged = <T,>(path: 'units' | 'employees' | 'roles', params: Record<string, unknown>) =>
+  useQuery({
+    queryKey: [path, 'list', params],
+    queryFn: () => api<Paged<T>>(`/${path}${qs(params)}`),
+    placeholderData: (prev) => prev,
+  });

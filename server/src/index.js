@@ -2,8 +2,13 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db } from './db.js';
-import { allowRoles, hashPassword, issueToken, publicUser, requireAuth, verifyPassword } from './auth.js';
+import { db, loadUser } from './db.js';
+import { hasPermission, hashPassword, issueToken, publicUser, requireAuth, requirePermission, verifyPassword } from './auth.js';
+import {
+  assignableEmployees, createEmployee, createRole, createUnit, deleteEmployee, deleteRole, deleteUnit, getEmployee, getRole,
+  getUnit, listEmployees, listRoles, listUnits, unitTypes, updateEmployee, updateRole, updateUnit,
+} from './master.js';
+import { PERMISSIONS } from './permissions.js';
 import { seed } from './seed.js';
 import {
   APPROVAL, CHANNEL, HttpError, addAdditionalWork, createWorkOrder, dashboard, deleteWorkOrder,
@@ -27,7 +32,7 @@ const wrap = (fn) => (req, res, next) => {
 /* ---------- Auth ---------- */
 app.post('/api/auth/login', wrap((req, res) => {
   const { username, password } = req.body ?? {};
-  const user = db.prepare('SELECT * FROM employees WHERE username = ? AND is_active = 1').get(String(username ?? '').trim().toLowerCase());
+  const user = loadUser('e.username = ? AND e.is_active = 1', String(username ?? '').trim().toLowerCase());
   if (!user || !verifyPassword(String(password ?? ''), user.password_hash)) {
     throw new HttpError(401, 'Invalid username or password');
   }
@@ -46,21 +51,40 @@ app.post('/api/auth/change-password', wrap((req) => {
   return { message: 'Password updated' };
 }));
 
-/* ---------- Master data ---------- */
+/* ---------- Master data lookups (dropdowns) ---------- */
 app.get('/api/master/units', wrap((req) => {
   const s = `%${req.query.search ?? ''}%`;
-  return db.prepare('SELECT * FROM units WHERE unit_number LIKE ? OR unit_code LIKE ? ORDER BY unit_code').all(s, s);
+  // Inactive units stay visible to filters (?all=1) but cannot be picked for new work orders.
+  return db.prepare(`SELECT * FROM units WHERE (unit_number LIKE ? OR unit_code LIKE ?) ${req.query.all ? '' : 'AND is_active = 1'} ORDER BY unit_code`).all(s, s);
 }));
 
-app.get('/api/master/employees', wrap((req) => {
-  const s = `%${req.query.search ?? ''}%`;
-  const role = req.query.role;
-  const sql = `SELECT id, employee_id, full_name, role FROM employees
-               WHERE is_active = 1 AND (full_name LIKE ? OR employee_id LIKE ?) ${role ? 'AND role = ?' : ''} ORDER BY full_name`;
-  return db.prepare(sql).all(...(role ? [s, s, role] : [s, s]));
-}));
+app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
+
+app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
 
 app.get('/api/master/repair-categories', wrap(() => db.prepare('SELECT * FROM repair_categories ORDER BY name').all()));
+
+/* ---------- Master data CRUD ---------- */
+const crud = (path, permission, { list, get, create, update, remove }) => {
+  const guard = requirePermission(permission);
+  app.get(`/api/${path}`, guard, wrap((req) => list(req.query)));
+  app.get(`/api/${path}/:id(\\d+)`, guard, wrap((req) => get(Number(req.params.id))));
+  app.post(`/api/${path}`, guard, wrap((req, res) => {
+    res.status(201);
+    return create(req.body ?? {}, req.user);
+  }));
+  app.put(`/api/${path}/:id(\\d+)`, guard, wrap((req) => update(Number(req.params.id), req.body ?? {}, req.user)));
+  app.delete(`/api/${path}/:id(\\d+)`, guard, wrap((req) => {
+    remove(Number(req.params.id), req.user);
+    return { message: 'Deleted' };
+  }));
+};
+
+app.get('/api/roles/permissions', requirePermission('master.role'), wrap(() => PERMISSIONS));
+crud('roles', 'master.role', { list: listRoles, get: getRole, create: createRole, update: updateRole, remove: deleteRole });
+crud('employees', 'master.employee', { list: listEmployees, get: getEmployee, create: createEmployee, update: updateEmployee, remove: deleteEmployee });
+app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTypes()));
+crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
 
 /* ---------- Work orders ---------- */
 app.get('/api/dashboard', wrap((req) => dashboard(req.query)));
@@ -88,28 +112,29 @@ app.get('/api/work-orders/export', wrap((req, res) => {
 
 app.get('/api/work-orders/:id', wrap((req) => getWorkOrder(req.params.id)));
 
-app.post('/api/work-orders', allowRoles('admin', 'mechanic'), wrap((req, res) => {
-  const channel = req.user.role === 'admin' ? CHANNEL.WEB : CHANNEL.MOBILE;
+app.post('/api/work-orders', requirePermission('wo.create'), wrap((req, res) => {
+  // Users who may approve work orders are trusted, so their own WOs are approved by the system.
+  const channel = hasPermission(req.user, 'wo.approve') ? CHANNEL.WEB : CHANNEL.MOBILE;
   res.status(201);
   return createWorkOrder(req.body ?? {}, req.user, channel);
 }));
 
-app.put('/api/work-orders/:id', allowRoles('admin'), wrap((req) => updateWorkOrder(req.params.id, req.body ?? {})));
+app.put('/api/work-orders/:id', requirePermission('wo.update'), wrap((req) => updateWorkOrder(req.params.id, req.body ?? {})));
 
-app.delete('/api/work-orders/:id', allowRoles('admin'), wrap((req) => {
+app.delete('/api/work-orders/:id', requirePermission('wo.delete'), wrap((req) => {
   deleteWorkOrder(req.params.id);
   return { message: 'Deleted' };
 }));
 
-app.post('/api/work-orders/:id/approval', allowRoles('admin'), wrap((req) => {
+app.post('/api/work-orders/:id/approval', requirePermission('wo.approve'), wrap((req) => {
   const { action, reason } = req.body ?? {};
   return setApproval(req.params.id, action === 'REJECT' ? APPROVAL.REJECT : action === 'APPROVE' ? APPROVAL.APPROVE : action, reason);
 }));
 
-app.post('/api/work-orders/:id/steps/:stepId/:action(start|finish)', allowRoles('admin', 'mechanic'), wrap((req) =>
+app.post('/api/work-orders/:id/steps/:stepId/:action(start|finish)', requirePermission('wo.progress'), wrap((req) =>
   progressStep(req.params.id, Number(req.params.stepId), req.params.action, req.user, req.body?.remarks)));
 
-app.post('/api/work-orders/:id/additional-work', allowRoles('admin', 'mechanic'), wrap((req) =>
+app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));
 
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));

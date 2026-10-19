@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { db, tx } from './db.js';
+import { db, ensureSystemRoles, tx } from './db.js';
 import { hashPassword } from './auth.js';
 import { insertSteps, recomputeStatus } from './workorders.js';
 
@@ -50,32 +50,35 @@ const minutes = (n) => n * 60_000;
 
 export function seed({ reset = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM repair_categories; DELETE FROM employees;');
-    db.exec("DELETE FROM sqlite_sequence");
+    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0;');
+    db.exec("DELETE FROM sqlite_sequence WHERE name != 'roles'");
+    ensureSystemRoles({ reset: true });
   } else if (db.prepare('SELECT COUNT(*) AS n FROM employees').get().n > 0) {
     return false;
   }
 
   tx(() => {
     const insEmp = db.prepare(
-      'INSERT INTO employees (employee_id, full_name, role, company, site, username, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (employee_id, full_name, role_id, company, site, username, password_hash) VALUES (?, ?, (SELECT id FROM roles WHERE code = ?), ?, ?, ?, ?)',
     );
     for (const [eid, name, role, username] of EMPLOYEES) {
       insEmp.run(eid, name, role, COMPANY, SITE, username, username ? hashPassword('password123') : null);
     }
 
-    const insUnit = db.prepare('INSERT INTO units (unit_code, unit_number, unit_type, brand, model) VALUES (?, ?, ?, ?, ?)');
+    const insUnit = db.prepare('INSERT INTO units (unit_code, unit_number, unit_type, brand, model, serial_number, year) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const models = [['Hino', 'FM 260 JD'], ['Mercedes-Benz', 'Axor 4028'], ['Volvo', 'FMX 440'], ['Scania', 'P410']];
     for (let i = 1; i <= 20; i++) {
       const [brand, model] = models[i % models.length];
-      insUnit.run(`DT-${String(i).padStart(3, '0')}`, `DT ${100 + i}`, 'Dump Truck', brand, model);
+      insUnit.run(`DT-${String(i).padStart(3, '0')}`, `DT ${100 + i}`, 'Dump Truck', brand, model,
+        `${brand.slice(0, 3).toUpperCase()}${String(240000 + i * 137)}`, 2018 + (i % 7));
     }
 
     const insCat = db.prepare('INSERT INTO repair_categories (name) VALUES (?)');
     CATEGORIES.forEach((c) => insCat.run(c));
   });
 
-  const emp = (role) => db.prepare('SELECT id FROM employees WHERE role = ?').all(role).map((r) => r.id);
+  const emp = (role) =>
+    db.prepare('SELECT e.id FROM employees e JOIN roles r ON r.id = e.role_id WHERE r.code = ?').all(role).map((r) => r.id);
   const drivers = emp('driver');
   const mechanics = emp('mechanic');
   const [admin] = emp('admin');

@@ -32,7 +32,9 @@ export function ProfilePage() {
     [t('employee_id'), user.employee_id],
     [t('full_name'), user.full_name],
     [t('username'), user.username],
-    [t('role'), user.role],
+    [t('role'), user.role_name],
+    [t('phone'), user.phone ?? '-'],
+    [t('email'), user.email ?? '-'],
     [t('company'), user.company],
     [t('site'), user.site],
   ];
@@ -45,7 +47,7 @@ export function ProfilePage() {
           <span className="flex size-16 items-center justify-center rounded-full bg-sidebar-accent text-xl font-semibold text-white">{initials(user.full_name)}</span>
           <div className="text-center sm:text-left">
             <p className="text-lg font-semibold">{user.full_name}</p>
-            <p className="text-sm text-muted-foreground capitalize">{user.role} · {user.company}</p>
+            <p className="text-sm text-muted-foreground">{user.role_name} · {user.company}</p>
           </div>
           <Button variant="outline" className="sm:ml-auto" onClick={() => setOpen(true)}>
             <KeyRound className="size-4" /> {t('change_password')}
@@ -55,7 +57,7 @@ export function ProfilePage() {
           {rows.map(([label, value]) => (
             <div key={label}>
               <dt className="text-xs text-muted-foreground">{label}</dt>
-              <dd className={`mt-1 text-sm font-medium ${label === t('role') ? 'capitalize' : ''}`}>{value}</dd>
+              <dd className="mt-1 text-sm font-medium">{value}</dd>
             </div>
           ))}
         </dl>

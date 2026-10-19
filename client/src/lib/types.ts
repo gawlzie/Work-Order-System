@@ -1,4 +1,14 @@
-export type Role = 'admin' | 'mechanic' | 'driver';
+export type Permission =
+  | 'wo.create'
+  | 'wo.update'
+  | 'wo.delete'
+  | 'wo.approve'
+  | 'wo.progress'
+  | 'wo.as_driver'
+  | 'wo.as_mechanic'
+  | 'master.unit'
+  | 'master.employee'
+  | 'master.role';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'APPROVE_BY_SYSTEM' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
@@ -8,9 +18,14 @@ export interface User {
   employee_id: string;
   full_name: string;
   username: string;
-  role: Role;
+  /** Role code, e.g. admin / mechanic / driver or a custom role. */
+  role: string;
+  role_name: string;
+  permissions: Permission[];
   company: string;
   site: string;
+  phone: string | null;
+  email: string | null;
 }
 
 export interface Unit {
@@ -18,15 +33,58 @@ export interface Unit {
   unit_code: string;
   unit_number: string;
   unit_type: string;
-  brand: string;
-  model: string;
+  brand: string | null;
+  model: string | null;
+  serial_number: string | null;
+  year: number | null;
+  is_active: number;
 }
 
 export interface Employee {
   id: number;
   employee_id: string;
   full_name: string;
-  role: Role;
+  role: string;
+}
+
+export interface RoleOption {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface MasterRole extends RoleOption {
+  description: string | null;
+  permissions: Permission[];
+  is_system: number;
+  employee_count: number;
+}
+
+export interface PermissionDef {
+  key: Permission;
+  group: 'work_order' | 'assignment' | 'master';
+  label: string;
+}
+
+export interface MasterEmployee {
+  id: number;
+  employee_id: string;
+  full_name: string;
+  role_id: number;
+  role: string;
+  role_name: string;
+  company: string;
+  site: string;
+  phone: string | null;
+  email: string | null;
+  username: string | null;
+  has_account: number;
+  is_active: number;
+}
+
+export interface MasterUnit extends Unit {
+  wo_count: number;
+  active_wo: string | null;
 }
 
 export interface Category {

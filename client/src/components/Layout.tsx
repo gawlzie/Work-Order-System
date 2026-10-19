@@ -1,14 +1,18 @@
 import { clsx } from 'clsx';
-import { ClipboardList, LayoutDashboard, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, Smartphone, Sun, User as UserIcon, Wrench } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, LogOut, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Truck, User as UserIcon, Users, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
+import type { Permission } from '../lib/types';
 
-const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey }[] = [
+const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; permission?: Permission }[] = [
   { to: '/dashboard/work-order', key: 'dashboard', icon: LayoutDashboard },
   { to: '/transaction/work-order', key: 'work_order', icon: ClipboardList, group: 'transaction' },
+  { to: '/master/unit', key: 'units', icon: Truck, group: 'master_data', permission: 'master.unit' },
+  { to: '/master/employee', key: 'employees', icon: Users, group: 'master_data', permission: 'master.employee' },
+  { to: '/master/role', key: 'roles', icon: ShieldCheck, group: 'master_data', permission: 'master.role' },
   { to: '/app/work-order', key: 'application', icon: Smartphone },
 ];
 
@@ -27,7 +31,8 @@ function useTheme() {
 
 export function Layout() {
   const { t, lang, setLang } = useI18n();
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
+  const nav = NAV.filter((item) => !item.permission || can(item.permission));
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -54,9 +59,9 @@ export function Layout() {
           <p className="text-[11px] text-muted-foreground">{t('app_name')}</p>
         </div>
       </div>
-      {NAV.map((item, i) => (
+      {nav.map((item, i) => (
         <div key={item.to}>
-          {item.group && NAV[i - 1]?.group !== item.group && (
+          {item.group && nav[i - 1]?.group !== item.group && (
             <p className={clsx('mt-3 mb-1 px-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase', collapsed && 'lg:hidden')}>
               {t(item.group)}
             </p>
@@ -124,7 +129,7 @@ export function Layout() {
                 </span>
                 <span className="hidden text-left leading-tight sm:block">
                   <span className="block text-sm font-medium">{user?.full_name}</span>
-                  <span className="block text-[11px] text-muted-foreground capitalize">{user?.role}</span>
+                  <span className="block text-[11px] text-muted-foreground">{user?.role_name}</span>
                 </span>
               </button>
               {menuOpen && (

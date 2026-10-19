@@ -5,6 +5,9 @@ import { Spinner } from './components/ui';
 import { useAuth } from './lib/auth';
 import { AppDownloadPage } from './pages/AppDownload';
 import { DashboardPage } from './pages/Dashboard';
+import { EmployeeMasterPage } from './pages/master/EmployeeMaster';
+import { RoleMasterPage } from './pages/master/RoleMaster';
+import { UnitMasterPage } from './pages/master/UnitMaster';
 import { LoginPage } from './pages/Login';
 import { NotFoundPage } from './pages/NotFound';
 import { ProfilePage } from './pages/Profile';
@@ -45,10 +48,13 @@ export function App() {
         <Route path="/dashboard/work-order" element={<DashboardPage />} />
         <Route path="/transaction/work-order">
           <Route index element={<WorkOrderListPage />} />
-          <Route path="create" element={<RequireRole allowed={can('create')}><WorkOrderFormPage /></RequireRole>} />
-          <Route path="update/:id" element={<RequireRole allowed={can('update')}><WorkOrderFormPage /></RequireRole>} />
+          <Route path="create" element={<RequireRole allowed={can('wo.create')}><WorkOrderFormPage /></RequireRole>} />
+          <Route path="update/:id" element={<RequireRole allowed={can('wo.update')}><WorkOrderFormPage /></RequireRole>} />
           <Route path="details/:id" element={<WorkOrderDetailPage />} />
         </Route>
+        <Route path="/master/unit" element={<RequireRole allowed={can('master.unit')}><UnitMasterPage /></RequireRole>} />
+        <Route path="/master/employee" element={<RequireRole allowed={can('master.employee')}><EmployeeMasterPage /></RequireRole>} />
+        <Route path="/master/role" element={<RequireRole allowed={can('master.role')}><RoleMasterPage /></RequireRole>} />
         <Route path="/app/work-order" element={<AppDownloadPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<NotFoundPage />} />

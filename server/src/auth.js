@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { db, DB_PATH } from './db.js';
+import { DB_PATH, loadUser } from './db.js';
 
 const TOKEN_TTL_SEC = 60 * 60 * 12;
 
@@ -51,20 +51,26 @@ export const publicUser = (u) => ({
   full_name: u.full_name,
   username: u.username,
   role: u.role,
+  role_name: u.role_name,
+  permissions: u.permissions,
   company: u.company,
   site: u.site,
+  phone: u.phone,
+  email: u.email,
 });
 
 /** Express middleware: requires a valid bearer token and attaches req.user. */
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const data = header.startsWith('Bearer ') ? readToken(header.slice(7)) : null;
-  const user = data && db.prepare('SELECT * FROM employees WHERE id = ? AND is_active = 1').get(data.sub);
+  const user = data && loadUser('e.id = ? AND e.is_active = 1', data.sub);
   if (!user) return res.status(401).json({ message: 'Unauthorized' });
   req.user = user;
   next();
 }
 
-/** Express middleware factory: restricts a route to the given roles. */
-export const allowRoles = (...roles) => (req, res, next) =>
-  roles.includes(req.user.role) ? next() : res.status(403).json({ message: 'Forbidden for your role' });
+export const hasPermission = (user, permission) => user.permissions.includes(permission);
+
+/** Express middleware factory: restricts a route to users whose role holds the permission. */
+export const requirePermission = (permission) => (req, res, next) =>
+  hasPermission(req.user, permission) ? next() : res.status(403).json({ message: 'Forbidden for your role' });

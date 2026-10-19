@@ -74,6 +74,9 @@ export function WorkOrderFormPage() {
     if (!Object.keys(next).length) setConfirm(true);
   };
 
+  // Keep the saved unit / driver / mechanic selectable when it has been deactivated since.
+  const wo = existing.data;
+
   if (isEdit && existing.isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
 
   return (
@@ -88,6 +91,7 @@ export function WorkOrderFormPage() {
           <Field label={`${t('unit')} (Dump Truck)`} required error={errors.unit_id}>
             <Select value={form.unit_id} onChange={set('unit_id')} invalid={!!errors.unit_id}>
               <option value="">{t('select_unit')}</option>
+              {wo && units.data && !units.data.some((u) => u.id === wo.unit_id) && <option value={wo.unit_id}>{wo.unit_number} · {wo.unit_code}</option>}
               {units.data?.map((u) => (
                 <option key={u.id} value={u.id}>{u.unit_number} · {u.unit_code} · {u.brand} {u.model}</option>
               ))}
@@ -96,12 +100,14 @@ export function WorkOrderFormPage() {
           <Field label={t('driver')} required error={errors.driver_id}>
             <Select value={form.driver_id} onChange={set('driver_id')} invalid={!!errors.driver_id}>
               <option value="">{t('select_driver')}</option>
+              {wo && drivers.data && !drivers.data.some((d) => d.id === wo.driver_id) && <option value={wo.driver_id}>{wo.driver_name}</option>}
               {drivers.data?.map((d) => <option key={d.id} value={d.id}>{d.full_name} ({d.employee_id})</option>)}
             </Select>
           </Field>
           <Field label={t('pic_mechanic')} error={errors.mechanic_id}>
             <Select value={form.mechanic_id} onChange={set('mechanic_id')}>
               <option value="">{t('select_mechanic')}</option>
+              {wo?.mechanic_id && mechanics.data && !mechanics.data.some((m) => m.id === wo.mechanic_id) && <option value={wo.mechanic_id}>{wo.mechanic_name}</option>}
               {mechanics.data?.map((m) => <option key={m.id} value={m.id}>{m.full_name} ({m.employee_id})</option>)}
             </Select>
           </Field>

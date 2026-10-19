@@ -64,7 +64,7 @@ export function WorkOrderDetailPage() {
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
 
   const approved = wo.approval_status === 'APPROVE' || wo.approval_status === 'APPROVE_BY_SYSTEM';
-  const canProgress = can('progress') && approved;
+  const canProgress = can('wo.progress') && approved;
   const allTop = [...wo.steps, ...wo.additional_work];
   const nextTop = allTop.find((s) => !s.finished_at);
 
@@ -144,7 +144,7 @@ export function WorkOrderDetailPage() {
             <Button variant="outline" onClick={() => window.print()}>
               <Printer className="size-4" /> {t('print')}
             </Button>
-            {can('update') && wo.status !== 'FINISH' && (
+            {can('wo.update') && wo.status !== 'FINISH' && (
               <Button onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
                 <Pencil className="size-4" /> {t('edit')}
               </Button>

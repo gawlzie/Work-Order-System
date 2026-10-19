@@ -122,7 +122,7 @@ export function EmptyState({ title, description, action }: { title: string; desc
   );
 }
 
-export function Modal({ open, onClose, title, description, children, footer }: { open: boolean; onClose: () => void; title: string; description?: string; children?: ReactNode; footer?: ReactNode }) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: { open: boolean; onClose: () => void; title: string; description?: string; children?: ReactNode; footer?: ReactNode; size?: 'md' | 'lg' }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -132,7 +132,7 @@ export function Modal({ open, onClose, title, description, children, footer }: {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={clsx('flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-xl border border-border bg-card shadow-xl', size === 'lg' ? 'max-w-2xl' : 'max-w-md')} onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 border-b border-border p-5">
           <div>
             <h2 className="text-lg font-semibold">{title}</h2>
@@ -142,7 +142,7 @@ export function Modal({ open, onClose, title, description, children, footer }: {
             <X className="size-4" />
           </button>
         </div>
-        {children && <div className="p-5">{children}</div>}
+        {children && <div className="overflow-y-auto p-5">{children}</div>}
         {footer && <div className="flex justify-end gap-2 border-t border-border p-4">{footer}</div>}
       </div>
     </div>
@@ -158,5 +158,26 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
       </div>
       {actions && <div className="no-print flex flex-wrap gap-2">{actions}</div>}
     </div>
+  );
+}
+
+export function Switch({ checked, onChange, label, description, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; description?: string; disabled?: boolean }) {
+  return (
+    <label className={clsx('flex items-start gap-3', disabled ? 'opacity-60' : 'cursor-pointer')}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={clsx('relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary', checked ? 'bg-primary' : 'bg-border')}
+      >
+        <span className={clsx('absolute top-0.5 size-4 rounded-full bg-white shadow transition-all', checked ? 'left-[18px]' : 'left-0.5')} />
+      </button>
+      <span>
+        <span className="block text-sm font-medium">{label}</span>
+        {description && <span className="block text-xs text-muted-foreground">{description}</span>}
+      </span>
+    </label>
   );
 }
