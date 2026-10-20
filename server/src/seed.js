@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { db, ensureSystemRoles, tx } from './db.js';
 import { hashPassword } from './auth.js';
 import { ensureStepTemplates, insertSteps, recomputeStatus } from './workorders.js';
+import { fillMeterReadings } from './meter-examples.js';
 
 const COMPANY = 'Inline Technology International';
 const SITE = 'Site Kalimantan - Pit A';
@@ -194,6 +195,7 @@ export function seed({ reset = false } = {}) {
         recomputeStatus(uuid);
       }
     }
+    fillMeterReadings();
   });
   return true;
 }
