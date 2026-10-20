@@ -71,6 +71,23 @@ CREATE TABLE IF NOT EXISTS repair_categories (
 
 ${jobCodesDdl('job_codes')}
 
+-- Spare part inventory: stock on hand per part; low stock when stock is at or below min_stock.
+CREATE TABLE IF NOT EXISTS spareparts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  part_number TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  part_name   TEXT NOT NULL,
+  category_id INTEGER REFERENCES repair_categories(id),
+  brand       TEXT,
+  uom         TEXT NOT NULL DEFAULT 'PCS',
+  stock       REAL NOT NULL DEFAULT 0,
+  min_stock   REAL NOT NULL DEFAULT 0,
+  location    TEXT,
+  unit_price  INTEGER,
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT,
+  updated_at  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS work_orders (
   wo_uuid          TEXT PRIMARY KEY,
   wo_number        TEXT NOT NULL UNIQUE,

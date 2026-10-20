@@ -4,6 +4,7 @@ import { db, ensureSystemRoles, tx } from './db.js';
 import { hashPassword } from './auth.js';
 import { ensureStepTemplates, insertSteps, recomputeStatus } from './workorders.js';
 import { fillMeterReadings } from './meter-examples.js';
+import { ensureSparepartExamples } from './sparepart-examples.js';
 
 const COMPANY = 'Inline Technology International';
 const SITE = 'Site Kalimantan - Pit A';
@@ -67,7 +68,7 @@ const minutes = (n) => n * 60_000;
 
 export function seed({ reset = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM job_codes; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
+    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM job_codes; DELETE FROM spareparts; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
     db.exec("DELETE FROM sqlite_sequence WHERE name != 'roles'");
     ensureSystemRoles({ reset: true });
   }
@@ -196,6 +197,7 @@ export function seed({ reset = false } = {}) {
       }
     }
     fillMeterReadings();
+    ensureSparepartExamples();
   });
   return true;
 }

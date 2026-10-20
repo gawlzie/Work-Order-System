@@ -86,7 +86,7 @@ export const Th = ({ children, className }: { children?: ReactNode; className?: 
 export const fieldErrors = (err: unknown) => (err instanceof ApiError ? err.errors : undefined);
 
 /** Confirms and deletes one master record; the server refuses records still used by work orders. */
-export function DeleteDialog({ path, item, onClose, hint = 'delete_hint' }: { path: 'units' | 'employees' | 'roles' | 'steps' | 'categories' | 'job-codes'; item: { id: number; label: string } | null; onClose: () => void; hint?: TKey }) {
+export function DeleteDialog({ path, item, onClose, hint = 'delete_hint' }: { path: 'units' | 'employees' | 'roles' | 'steps' | 'categories' | 'job-codes' | 'spareparts'; item: { id: number; label: string } | null; onClose: () => void; hint?: TKey }) {
   const { t } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();

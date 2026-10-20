@@ -11,7 +11,8 @@ export type Permission =
   | 'master.role'
   | 'master.step'
   | 'master.category'
-  | 'master.job';
+  | 'master.job'
+  | 'master.sparepart';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
@@ -232,6 +233,33 @@ export interface WorkOrderDetail extends WorkOrder {
   additional_work: Step[];
   proofs: Proof[];
   job_codes: WoJobCode[];
+}
+
+export interface MasterSparepart {
+  id: number;
+  part_number: string;
+  part_name: string;
+  category_id: number | null;
+  category_name: string | null;
+  category_active: number | null;
+  brand: string | null;
+  uom: string;
+  stock: number;
+  min_stock: number;
+  location: string | null;
+  /** Price per unit in rupiah; null when unknown. */
+  unit_price: number | null;
+  is_active: number;
+  /** out: no stock, low: at or below the minimum, ok: above it. */
+  stock_status: 'ok' | 'low' | 'out';
+}
+
+/** Stock alerts over all active spare parts, returned next to the paged list. */
+export interface SparepartSummary {
+  total: number;
+  low: number;
+  out: number;
+  stock_value: number;
 }
 
 export interface Paged<T> {

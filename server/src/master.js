@@ -315,7 +315,8 @@ export const unitTypes = () => db.prepare('SELECT DISTINCT unit_type FROM units 
 
 const CATEGORY_COLUMNS = `c.*,
   (SELECT COUNT(*) FROM work_orders w WHERE w.category_id = c.id) AS wo_count,
-  (SELECT COUNT(*) FROM job_codes j WHERE j.category_id = c.id) AS job_count`;
+  (SELECT COUNT(*) FROM job_codes j WHERE j.category_id = c.id) AS job_count,
+  (SELECT COUNT(*) FROM spareparts p WHERE p.category_id = c.id) AS part_count`;
 
 export function listCategories(q = {}) {
   const s = `%${str(q.search)}%`;
@@ -369,6 +370,7 @@ export function deleteCategory(id) {
   const category = getCategory(id);
   if (category.wo_count) throw new HttpError(409, 'Category is used in work order history. Deactivate the category instead');
   if (category.job_count) throw new HttpError(409, `Category has ${category.job_count} job code(s). Delete them or move them to another category first`);
+  if (category.part_count) throw new HttpError(409, `Category has ${category.part_count} spare part(s). Move them to another category first`);
   db.prepare('DELETE FROM repair_categories WHERE id = ?').run(id);
 }
 
@@ -443,6 +445,112 @@ export function deleteJobCode(id) {
   const job = getJobCode(id);
   if (job.wo_count) throw new HttpError(409, 'Job code is used on work orders. Deactivate it instead');
   db.prepare('DELETE FROM job_codes WHERE id = ?').run(id);
+}
+
+/* ---------- Spare parts ---------- */
+
+/** Units of measure; LTR, KG and MTR may hold decimals, the others are counted in whole numbers. */
+export const UOMS = ['PCS', 'SET', 'UNIT', 'PAIR', 'BOX', 'ROLL', 'TUBE', 'CAN', 'PAIL', 'DRUM', 'LTR', 'KG', 'MTR'];
+const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+
+const PART_COLUMNS = `p.*, c.name AS category_name, c.is_active AS category_active,
+  CASE WHEN p.stock <= 0 THEN 'out' WHEN p.stock <= p.min_stock THEN 'low' ELSE 'ok' END AS stock_status`;
+const PART_FROM = 'FROM spareparts p LEFT JOIN repair_categories c ON c.id = p.category_id';
+
+export function listSpareparts(q = {}) {
+  const s = `%${str(q.search)}%`;
+  const where = [`(p.part_number LIKE ? OR p.part_name LIKE ? OR IFNULL(p.brand, '') LIKE ? OR IFNULL(p.location, '') LIKE ?)`];
+  const params = [s, s, s, s];
+  if (q.category_id) {
+    where.push('p.category_id = ?');
+    params.push(Number(q.category_id));
+  }
+  if (q.status === 'active' || q.status === 'inactive') where.push(`p.is_active = ${q.status === 'active' ? 1 : 0}`);
+  if (q.stock === 'out') where.push('p.stock <= 0');
+  else if (q.stock === 'low') where.push('p.stock > 0 AND p.stock <= p.min_stock');
+  else if (q.stock === 'ok') where.push('p.stock > p.min_stock');
+  const result = pagedQuery({
+    select: PART_COLUMNS,
+    from: `${PART_FROM} WHERE ${where.join(' AND ')}`,
+    params,
+    order: orderBy(q, { part_number: 'p.part_number', part_name: 'p.part_name', category: 'c.name', stock: 'p.stock', unit_price: 'p.unit_price', location: 'p.location' }, 'part_number'),
+    q,
+  });
+  // Stock alerts over all active parts (not only this page), for the counters above the list.
+  const summary = db.prepare(`SELECT COUNT(*) AS total, SUM(stock <= 0) AS out_count, SUM(stock > 0 AND stock <= min_stock) AS low_count,
+                                SUM(stock * IFNULL(unit_price, 0)) AS stock_value FROM spareparts WHERE is_active = 1`).get();
+  return { ...result, summary: { total: summary.total, out: summary.out_count ?? 0, low: summary.low_count ?? 0, stock_value: Math.round(summary.stock_value ?? 0) } };
+}
+
+export function getSparepart(id) {
+  const row = db.prepare(`SELECT ${PART_COLUMNS} ${PART_FROM} WHERE p.id = ?`).get(id);
+  if (!row) throw new HttpError(404, 'Spare part not found');
+  return row;
+}
+
+/** Body: part_number, part_name, category_id (optional), brand, uom, stock, min_stock, location, unit_price (optional), is_active. */
+function validateSparepart(body, existing) {
+  const errors = {};
+  const num = (v) => (str(v) === '' ? null : Number(str(v).replace(',', '.')));
+  const data = {
+    part_number: str(body.part_number).toUpperCase(),
+    part_name: str(body.part_name),
+    category_id: str(body.category_id) ? Number(body.category_id) : null,
+    brand: optional(body.brand),
+    uom: str(body.uom).toUpperCase() || 'PCS',
+    stock: num(body.stock) ?? 0,
+    min_stock: num(body.min_stock) ?? 0,
+    location: optional(body.location)?.toUpperCase() ?? null,
+    unit_price: num(body.unit_price),
+    is_active: flag(body.is_active, existing?.is_active ?? 1),
+  };
+  if (!/^[A-Z0-9][A-Z0-9._\-/]{1,39}$/.test(data.part_number)) errors.part_number = 'Part number must be 2-40 characters: A-Z, 0-9, . _ - /';
+  else if (taken('spareparts', 'part_number', data.part_number, existing?.id)) errors.part_number = 'Part number is already used';
+  if (data.part_name.length < 2 || data.part_name.length > 200) errors.part_name = 'Part name must be 2-200 characters';
+  if (data.category_id !== null && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(data.category_id, existing?.category_id ?? 0))
+    errors.category_id = 'Choose an active repair category';
+  if (data.brand && data.brand.length > 60) errors.brand = 'Brand must be at most 60 characters';
+  if (!UOMS.includes(data.uom)) errors.uom = `Unit must be one of ${UOMS.join(', ')}`;
+  const decimals = DECIMAL_UOMS.includes(data.uom);
+  const qty = (v, label) => {
+    if (!Number.isFinite(v) || v < 0 || v > 9999999) return `${label} must be a number from 0 to 9,999,999`;
+    if (!decimals && !Number.isInteger(v)) return `${label} must be a whole number for ${data.uom}`;
+    if (decimals && Math.round(v * 100) !== v * 100) return `${label} can have at most 2 decimals`;
+    return null;
+  };
+  const stockError = qty(data.stock, 'Stock');
+  if (stockError) errors.stock = stockError;
+  const minError = qty(data.min_stock, 'Minimum stock');
+  if (minError) errors.min_stock = minError;
+  if (data.location && !/^[A-Z0-9][A-Z0-9 ._\-/]{0,29}$/.test(data.location)) errors.location = 'Location must be at most 30 characters: A-Z, 0-9, space . _ - /';
+  if (data.unit_price !== null && !(Number.isInteger(data.unit_price) && data.unit_price >= 0 && data.unit_price <= 1e12))
+    errors.unit_price = 'Unit price must be a whole number of rupiah from 0';
+  fail(errors);
+  return data;
+}
+
+export function createSparepart(body) {
+  const d = validateSparepart(body);
+  const ts = new Date().toISOString();
+  const { lastInsertRowid } = db
+    .prepare(`INSERT INTO spareparts (part_number, part_name, category_id, brand, uom, stock, min_stock, location, unit_price, is_active, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(d.part_number, d.part_name, d.category_id, d.brand, d.uom, d.stock, d.min_stock, d.location, d.unit_price, d.is_active, ts, ts);
+  return getSparepart(lastInsertRowid);
+}
+
+export function updateSparepart(id, body) {
+  const existing = getSparepart(id);
+  const d = validateSparepart(body, existing);
+  db.prepare(`UPDATE spareparts SET part_number = ?, part_name = ?, category_id = ?, brand = ?, uom = ?, stock = ?, min_stock = ?, location = ?,
+              unit_price = ?, is_active = ?, updated_at = ? WHERE id = ?`)
+    .run(d.part_number, d.part_name, d.category_id, d.brand, d.uom, d.stock, d.min_stock, d.location, d.unit_price, d.is_active, new Date().toISOString(), id);
+  return getSparepart(id);
+}
+
+export function deleteSparepart(id) {
+  getSparepart(id);
+  db.prepare('DELETE FROM spareparts WHERE id = ?').run(id);
 }
 
 /* ---------- Repair steps ---------- */

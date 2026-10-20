@@ -9,6 +9,7 @@ import {
   getUnit, listEmployees, listRoles, listUnits, unitTypes, updateEmployee, updateRole, updateUnit,
   createCategory, deleteCategory, getCategory, listCategories, updateCategory,
   createJobCode, deleteJobCode, getJobCode, listJobCodes, updateJobCode,
+  createSparepart, deleteSparepart, getSparepart, listSpareparts, updateSparepart, UOMS,
   createStepTemplate, deleteStepTemplate, getStepTemplate, listStepTemplates, moveStepTemplate, updateStepTemplate,
 } from './master.js';
 import { PERMISSIONS } from './permissions.js';
@@ -105,6 +106,8 @@ app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTyp
 crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
 crud('categories', 'master.category', { list: listCategories, get: getCategory, create: createCategory, update: updateCategory, remove: deleteCategory });
 crud('job-codes', 'master.job', { list: listJobCodes, get: getJobCode, create: createJobCode, update: updateJobCode, remove: deleteJobCode });
+app.get('/api/spareparts/uoms', requirePermission('master.sparepart'), wrap(() => UOMS));
+crud('spareparts', 'master.sparepart', { list: listSpareparts, get: getSparepart, create: createSparepart, update: updateSparepart, remove: deleteSparepart });
 app.post('/api/steps/:id(\\d+)/move', requirePermission('master.step'), wrap((req) => moveStepTemplate(Number(req.params.id), req.body?.direction)));
 crud('steps', 'master.step', { list: listStepTemplates, get: getStepTemplate, create: createStepTemplate, update: updateStepTemplate, remove: deleteStepTemplate });
 
