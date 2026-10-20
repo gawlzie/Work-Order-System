@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Play, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalDialog } from '../components/ApprovalDialog';
@@ -11,7 +11,7 @@ import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
 import { useConfirm } from '../components/confirm';
 import { useToast } from '../components/toast';
-import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Textarea } from '../components/ui';
+import { BtnLabel, Button, Card, EmptyState, Input, PageHeader, Spinner } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
@@ -60,8 +60,6 @@ export function WorkOrderDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
-  const [finishing, setFinishing] = useState<Step | null>(null);
-  const [remarks, setRemarks] = useState('');
   const [extra, setExtra] = useState('');
   const [approval, setApproval] = useState<'approve' | 'reject' | null>(null);
 
@@ -70,17 +68,6 @@ export function WorkOrderDetailPage() {
     qc.invalidateQueries({ queryKey: ['work-orders'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
   };
-
-  const progress = useMutation({
-    mutationFn: ({ step, action }: { step: Step; action: 'start' | 'finish' }) =>
-      api<WorkOrderDetail>(`/work-orders/${id}/steps/${step.id}/${action}`, { method: 'POST', body: { remarks } }),
-    onSuccess: (data) => {
-      onDone(data);
-      setFinishing(null);
-      setRemarks('');
-    },
-    onError: (err) => toast('error', (err as Error).message),
-  });
 
   const addExtra = useMutation({
     mutationFn: () => api<WorkOrderDetail>(`/work-orders/${id}/additional-work`, { method: 'POST', body: { name: extra } }),
@@ -96,27 +83,10 @@ export function WorkOrderDetailPage() {
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
 
-  // Work can start before approval; a rejected WO cannot be worked on.
+  // Steps are started and finished in the mechanic app only; this page shows their times.
+  // A rejected WO cannot be worked on.
   const canProgress = can('wo.progress') && wo.approval_status !== 'REJECT';
   const allTop = [...wo.steps, ...wo.additional_work];
-  const nextTop = allTop.find((s) => !s.finished_at);
-
-  const stepActions = (step: Step, parent?: Step) => {
-    if (!canProgress || step.finished_at) return null;
-    const startable = parent ? !!parent.started_at && !parent.finished_at : nextTop?.id === step.id;
-    if (!step.started_at) {
-      return startable ? (
-        <Button size="sm" variant="outline" loading={progress.isPending && progress.variables?.step.id === step.id} onClick={() => confirm({ message: t('confirm_start_step', { step: `${step.step_no}. ${step.step_name}` }) }, () => progress.mutate({ step, action: 'start' }))}>
-          <Play className="size-3.5" /> {t('start')}
-        </Button>
-      ) : null;
-    }
-    return (
-      <Button size="sm" variant="success" onClick={() => (parent ? confirm({ message: t('confirm_finish_step', { step: step.step_name }), tone: 'success' }, () => progress.mutate({ step, action: 'finish' })) : setFinishing(step))}>
-        <Check className="size-3.5" /> {t('finish')}
-      </Button>
-    );
-  };
 
   const stateIcon = (s: Step) =>
     s.finished_at ? <CheckCircle2 className="size-5 text-emerald-500" /> : s.started_at ? <Loader className="size-5 animate-spin text-yellow-500 [animation-duration:3s]" /> : <Circle className="size-5 text-muted-foreground/50" />;
@@ -132,7 +102,6 @@ export function WorkOrderDetailPage() {
                 <p className="font-medium break-words">
                   {step.step_no}. {step.step_name}
                 </p>
-                <div className="no-print shrink-0">{stepActions(step)}</div>
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
                 <div><span className="block">{t('pic')}</span><span className="text-foreground">{step.pic_name ?? '-'}</span></div>
@@ -151,7 +120,6 @@ export function WorkOrderDetailPage() {
                         {!!sub.is_additional && <span className="ml-1.5 text-xs text-primary">· {t('added_in_app')}</span>}
                       </span>
                       <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(durationBetween(sub.started_at, sub.finished_at))}</span>
-                      <span className="no-print">{stepActions(sub, step)}</span>
                     </li>
                   ))}
                 </ul>
@@ -260,7 +228,7 @@ export function WorkOrderDetailPage() {
       </Card>
 
       <Card className="print-area mt-4 overflow-hidden">
-        <WoJobCodes wo={wo} />
+        <WoJobCodes wo={wo} manual />
       </Card>
 
       <Card className="print-area mt-4 overflow-hidden">
@@ -285,23 +253,6 @@ export function WorkOrderDetailPage() {
 
       {approval && <ApprovalDialog kind={approval} wo={wo} onClose={() => setApproval(null)} />}
 
-      <Modal
-        open={!!finishing}
-        onClose={() => setFinishing(null)}
-        title={`${t('finish_step')}: ${finishing?.step_name ?? ''}`}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setFinishing(null)}>{t('cancel')}</Button>
-            <Button variant="success" loading={progress.isPending} onClick={() => finishing && progress.mutate({ step: finishing, action: 'finish' })}>
-              {t('finish')}
-            </Button>
-          </>
-        }
-      >
-        <Field label={t('remarks')}>
-          <Textarea autoFocus value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={t('remarks_placeholder')} maxLength={500} />
-        </Field>
-      </Modal>
     </div>
   );
 }

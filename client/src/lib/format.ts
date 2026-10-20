@@ -35,6 +35,20 @@ export function durationBetween(start: string | null, end: string | null) {
 export const toDateInput = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+/** ISO time as the value of a datetime-local input (local time, with seconds). */
+export const toDateTimeInput = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${toDateInput(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+/** datetime-local value (local time) as ISO, or '' when empty or invalid. */
+export const fromDateTimeInput = (value: string) => {
+  const d = value ? new Date(value) : null;
+  return d && !Number.isNaN(d.getTime()) ? d.toISOString() : '';
+};
+
 export const initials = (name: string) =>
   name
     .split(' ')

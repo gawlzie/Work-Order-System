@@ -522,9 +522,41 @@ export function setWoCategory(woUuid, body, user) {
   return getWorkOrder(woUuid);
 }
 
+/**
+ * Start and finish time of a job code typed in by the admin (instead of the mechanic's timer). Both are required,
+ * the finish is after the start and both lie within the job code step: not before it started, not after it finished
+ * (or now, while it runs).
+ */
+function manualJobTimes(wo, body) {
+  const repair = wo.steps.find((s) => s.allow_add_sub);
+  const parse = (v) => (v == null || String(v).trim() === '' ? null : new Date(String(v)));
+  const start = parse(body?.started_at);
+  const finish = parse(body?.finished_at);
+  const errors = {};
+  const from = Date.parse(repair.started_at);
+  const until = repair.finished_at ? Date.parse(repair.finished_at) : Date.now();
+  const window = `Step ${repair.step_no} · ${repair.step_name}`;
+  if (!start) errors.started_at = 'Start time is required';
+  else if (Number.isNaN(start.getTime())) errors.started_at = 'Start time is not a valid date and time';
+  else if (start.getTime() < from - 999) errors.started_at = `Start time cannot be before ${window} started`;
+  if (!finish) errors.finished_at = 'Finish time is required';
+  else if (Number.isNaN(finish.getTime())) errors.finished_at = 'Finish time is not a valid date and time';
+  else if (finish.getTime() > until + 999) errors.finished_at = repair.finished_at ? `Finish time cannot be after ${window} finished` : 'Finish time cannot be in the future';
+  if (!errors.started_at && !errors.finished_at && finish <= start) errors.finished_at = 'Finish time must be after the start time';
+  if (Object.keys(errors).length) {
+    const err = new HttpError(422, Object.values(errors)[0]);
+    err.errors = errors;
+    throw err;
+  }
+  return { started_at: start.toISOString(), finished_at: finish.toISOString() };
+}
+
 export function addWoJobCode(woUuid, body, user) {
   const wo = getWorkOrder(woUuid);
-  jobCodeGate(wo, user);
+  const admin = jobCodeGate(wo, user);
+  // Admin entries come with the times typed in; mechanics use the start / finish timer instead.
+  const manual = body?.started_at != null || body?.finished_at != null;
+  if (manual && !admin) throw new HttpError(403, 'Only an approver can type in job code times');
   if (!wo.category_id) throw Object.assign(new HttpError(422, 'Choose the repair category first'), { errors: { category_id: 'Choose the repair category first' } });
   const jobId = Number(body?.job_code_id);
   const mechanicId = Number(body?.mechanic_id);
@@ -540,8 +572,20 @@ export function addWoJobCode(woUuid, body, user) {
     err.errors = errors;
     throw err;
   }
-  db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at) VALUES (?, ?, ?, ?, ?)')
-    .run(woUuid, jobId, mechanicId, user.id, now());
+  const times = manual ? manualJobTimes(wo, body) : { started_at: null, finished_at: null };
+  db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(woUuid, jobId, mechanicId, user.id, now(), times.started_at, times.finished_at);
+  return getWorkOrder(woUuid);
+}
+
+/** Admin correction of a job code's start and finish time (e.g. a timer the mechanic forgot to stop). */
+export function setWoJobCodeTimes(woUuid, entryId, body, user) {
+  const wo = getWorkOrder(woUuid);
+  if (!jobCodeGate(wo, user)) throw new HttpError(403, 'Only an approver can change job code times');
+  if (!db.prepare('SELECT 1 FROM wo_job_codes WHERE id = ? AND wo_uuid = ?').get(entryId, woUuid)) throw new HttpError(404, 'Job code entry not found');
+  const times = manualJobTimes(wo, body);
+  db.prepare('UPDATE wo_job_codes SET started_at = ?, finished_at = ? WHERE id = ?').run(times.started_at, times.finished_at, entryId);
+  db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(now(), woUuid);
   return getWorkOrder(woUuid);
 }
 
