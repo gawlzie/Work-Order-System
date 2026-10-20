@@ -453,6 +453,18 @@ export function deleteJobCode(id) {
 export const UOMS = ['PCS', 'SET', 'UNIT', 'PAIR', 'BOX', 'ROLL', 'TUBE', 'CAN', 'PAIL', 'DRUM', 'LTR', 'KG', 'MTR'];
 const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
 
+/**
+ * Part numbers as stored: upper case, single spaces, full-width characters (from Chinese keyboards) as ASCII and the
+ * Chinese "一" used as a dash turned into "-". Material codes may hold sizes, e.g. BS40*65*12 or GB/T 70.3.
+ */
+export const normalizePartNumber = (v) =>
+  str(v)
+    .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/一/g, '-')
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+export const PART_NUMBER_RULE = /^[A-Z0-9][A-Z0-9 ._\-/*()+#]{1,59}$/;
+
 const PART_COLUMNS = `p.*, c.name AS category_name, c.is_active AS category_active,
   CASE WHEN p.stock <= 0 THEN 'out' WHEN p.stock <= p.min_stock THEN 'low' ELSE 'ok' END AS stock_status`;
 const PART_FROM = 'FROM spareparts p LEFT JOIN repair_categories c ON c.id = p.category_id';
@@ -493,7 +505,7 @@ function validateSparepart(body, existing) {
   const errors = {};
   const num = (v) => (str(v) === '' ? null : Number(str(v).replace(',', '.')));
   const data = {
-    part_number: str(body.part_number).toUpperCase(),
+    part_number: normalizePartNumber(body.part_number),
     part_name: str(body.part_name),
     category_id: str(body.category_id) ? Number(body.category_id) : null,
     brand: optional(body.brand),
@@ -504,9 +516,9 @@ function validateSparepart(body, existing) {
     unit_price: num(body.unit_price),
     is_active: flag(body.is_active, existing?.is_active ?? 1),
   };
-  if (!/^[A-Z0-9][A-Z0-9._\-/]{1,39}$/.test(data.part_number)) errors.part_number = 'Part number must be 2-40 characters: A-Z, 0-9, . _ - /';
+  if (!PART_NUMBER_RULE.test(data.part_number)) errors.part_number = 'Part number must be 2-60 characters: A-Z, 0-9, space . _ - / * ( ) + #';
   else if (taken('spareparts', 'part_number', data.part_number, existing?.id)) errors.part_number = 'Part number is already used';
-  if (data.part_name.length < 2 || data.part_name.length > 200) errors.part_name = 'Part name must be 2-200 characters';
+  if (data.part_name.length < 2 || data.part_name.length > 300) errors.part_name = 'Part name must be 2-300 characters';
   if (data.category_id !== null && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(data.category_id, existing?.category_id ?? 0))
     errors.category_id = 'Choose an active repair category';
   if (data.brand && data.brand.length > 60) errors.brand = 'Brand must be at most 60 characters';

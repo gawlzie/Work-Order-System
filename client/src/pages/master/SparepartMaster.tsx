@@ -276,8 +276,8 @@ function SparepartForm({ part, categories, defaultCategory, onClose }: { part: M
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (!/^[A-Za-z0-9][A-Za-z0-9._\-/]{1,39}$/.test(form.part_number.trim())) next.part_number = 'Part number must be 2-40 characters: A-Z, 0-9, . _ - /';
-    if (form.part_name.trim().length < 2) next.part_name = 'Part name must be 2-200 characters';
+    if (!/^[A-Za-z0-9][A-Za-z0-9 ._\-/*()+#]{1,59}$/.test(form.part_number.trim().replace(/\s+/g, ' '))) next.part_number = 'Part number must be 2-60 characters: A-Z, 0-9, space . _ - / * ( ) + #';
+    if (form.part_name.trim().length < 2) next.part_name = 'Part name must be 2-300 characters';
     const stockError = qtyError(form.stock, 'Stock');
     if (stockError) next.stock = stockError;
     const minError = qtyError(form.min_stock, 'Minimum stock');
@@ -304,9 +304,9 @@ function SparepartForm({ part, categories, defaultCategory, onClose }: { part: M
         <Field label={t('part_number')} required error={errors.part_number}>
           <Input
             value={form.part_number}
-            onChange={(e) => set('part_number')({ target: { value: e.target.value.toUpperCase().replace(/\s+/g, '-') } })}
+            onChange={(e) => set('part_number')({ target: { value: e.target.value.toUpperCase() } })}
             placeholder="VG61000070005"
-            maxLength={40}
+            maxLength={60}
             invalid={!!errors.part_number}
             className="font-mono uppercase"
             autoFocus
@@ -316,7 +316,7 @@ function SparepartForm({ part, categories, defaultCategory, onClose }: { part: M
           <Input value={form.brand} onChange={set('brand')} placeholder="Weichai" maxLength={60} invalid={!!errors.brand} />
         </Field>
         <Field label={t('part_name')} required error={errors.part_name} className="sm:col-span-2">
-          <Input value={form.part_name} onChange={set('part_name')} placeholder="Filter Oli Engine" maxLength={200} invalid={!!errors.part_name} />
+          <Input value={form.part_name} onChange={set('part_name')} placeholder="Filter Oli Engine" maxLength={300} invalid={!!errors.part_name} />
         </Field>
         <Field label={t('category')} error={errors.category_id}>
           <Select value={form.category_id} onChange={set('category_id')} invalid={!!errors.category_id}>
