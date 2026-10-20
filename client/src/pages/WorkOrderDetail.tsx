@@ -7,6 +7,7 @@ import { ApprovalDialog } from '../components/ApprovalDialog';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { jobDuration } from '../components/JobCodePicker';
 import { ProofSection } from '../components/ProofSection';
+import { WoJobCodes } from '../components/WoJobCodes';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Textarea } from '../components/ui';
 import { api } from '../lib/api';
@@ -213,13 +214,14 @@ export function WorkOrderDetailPage() {
           <Info label={t('driver')}>{wo.driver_name}</Info>
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
           <Info label={t('category')}>{wo.category ?? '-'}</Info>
-          <Info label={t('job_code')}>{wo.job_code ? <><span className="font-mono text-xs">{wo.job_code}</span> · {wo.job_name}</> : '-'}</Info>
-          <Info label={t('standard_duration')}><span className="tabular-nums">{wo.job_code ? jobDuration(wo.job_standard_duration) : '-'}</span></Info>
           <Info label={t('created_at')}>{formatDateTime(wo.created_at)}</Info>
           <Info label={t('created_by')}>{wo.created_by_name ?? '-'}</Info>
           <Info label={t('mobile_sync_time')}>{formatDateTime(wo.mobile_sync_time)}</Info>
           <Info label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></Info>
-          {wo.job_code && (
+          {wo.job_codes.length > 0 && (
+            <Info label={t('standard_total')}><span className="tabular-nums">{jobDuration(wo.job_standard_duration)}</span></Info>
+          )}
+          {wo.job_codes.length > 0 && (
             <Info label={t('repair_time')}><span className="tabular-nums">{wo.repair_time == null ? '-' : formatDuration(wo.repair_time)}</span><StandardCompare wo={wo} /></Info>
           )}
         </dl>
@@ -238,6 +240,10 @@ export function WorkOrderDetailPage() {
           <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(1, allTop.length)) * 100}%` }} />
         </div>
         {renderSteps(wo.steps)}
+      </Card>
+
+      <Card className="print-area mt-4 overflow-hidden">
+        <WoJobCodes wo={wo} />
       </Card>
 
       <Card className="print-area mt-4 overflow-hidden">

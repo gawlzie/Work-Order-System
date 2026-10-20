@@ -2,17 +2,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { JobCodePicker, jobDuration } from '../../components/JobCodePicker';
 import { useToast } from '../../components/toast';
 import { Button, Card, Field, Select, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
 import { useOnline } from '../../lib/pwa';
-import { useCategories, useEmployees, useJobCodeOptions, useUnits } from '../../lib/queries';
+import { useCategories, useEmployees, useUnits } from '../../lib/queries';
 import type { WorkOrderDetail } from '../../lib/types';
 
-type Form = { unit_id: string; driver_id: string; mechanic_id: string; job_code_id: string; category_id: string; problem: string };
+type Form = { unit_id: string; driver_id: string; mechanic_id: string; category_id: string; problem: string };
 
 /** Raise a work order from the field. Mechanics are set as PIC by default; the admin approves it on the web. */
 export function NewJobPage() {
@@ -26,12 +25,9 @@ export function NewJobPage() {
   const drivers = useEmployees('driver');
   const mechanics = useEmployees('mechanic');
   const categories = useCategories();
-  const jobCodes = useJobCodeOptions();
   const self = can('wo.as_mechanic') && user ? String(user.id) : '';
 
-  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, job_code_id: '', category_id: '', problem: '' });
-  const jobOptions = jobCodes.data ?? [];
-  const selectedJob = jobOptions.find((j) => String(j.id) === form.job_code_id) ?? null;
+  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, category_id: '', problem: '' });
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
 
   const save = useMutation({
@@ -89,22 +85,8 @@ export function NewJobPage() {
               ))}
             </Select>
           </Field>
-          <Field label={t('job_code')} error={errors.job_code_id} className="">
-            <JobCodePicker
-              options={jobOptions}
-              value={form.job_code_id}
-              invalid={!!errors.job_code_id}
-              onChange={(job) => {
-                setForm((f) => ({ ...f, job_code_id: job ? String(job.id) : '', category_id: job ? String(job.category_id) : f.category_id }));
-                setErrors((er) => ({ ...er, job_code_id: undefined, category_id: undefined }));
-              }}
-            />
-            <span className="text-xs text-muted-foreground">
-              {selectedJob ? `${t('standard_duration')}: ${jobDuration(selectedJob.standard_duration)} · ${selectedJob.category_name}` : t('job_code_hint')}
-            </span>
-          </Field>
           <Field label={t('category')}>
-            <Select value={form.category_id} onChange={set('category_id')} className="h-12" disabled={!!selectedJob}>
+            <Select value={form.category_id} onChange={set('category_id')} className="h-12">
               <option value="">{t('select_category')}</option>
               {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>

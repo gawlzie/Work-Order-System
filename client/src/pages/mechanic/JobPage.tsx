@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageS
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
-import { jobDuration } from '../../components/JobCodePicker';
+import { WoJobCodes } from '../../components/WoJobCodes';
 import { useToast } from '../../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Input, Spinner, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -215,6 +215,8 @@ export function JobPage() {
                 </div>
               )}
 
+              {!!current.allow_add_sub && current.started_at && <WoJobCodes wo={wo} compact className="mt-4" />}
+
               {canProgress && (
                 current.started_at ? (
                   <div className="mt-4 space-y-3">
@@ -245,18 +247,18 @@ export function JobPage() {
         </Card>
       )}
 
+      {wo.job_codes.length > 0 && !(current?.allow_add_sub && current.started_at) && (
+        <Card className="p-4">
+          <WoJobCodes wo={wo} compact />
+        </Card>
+      )}
+
       <Card className="p-4">
         <dl className="grid grid-cols-2 gap-4">
           <Info label={t('driver')}>{wo.driver_name}</Info>
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
           <Info label={t('category')}>{wo.category ?? '-'}</Info>
           <Info label={t('created_at')}>{formatDateTime(wo.created_at)}</Info>
-          {wo.job_code && (
-            <>
-              <Info label={t('job_code')}><span className="font-mono text-xs">{wo.job_code}</span> · {wo.job_name}</Info>
-              <Info label={t('standard_duration')}><span className="tabular-nums">{jobDuration(wo.job_standard_duration)}</span></Info>
-            </>
-          )}
         </dl>
       </Card>
 

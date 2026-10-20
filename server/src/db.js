@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   driver_id        INTEGER NOT NULL REFERENCES employees(id),
   mechanic_id      INTEGER REFERENCES employees(id),
   category_id      INTEGER REFERENCES repair_categories(id),
-  job_code_id      INTEGER REFERENCES job_codes(id),
+  job_code_id      INTEGER REFERENCES job_codes(id), -- no longer used: job codes are in wo_job_codes
   problem          TEXT NOT NULL,
   status           TEXT NOT NULL DEFAULT 'OPEN',
   approval_status  TEXT NOT NULL DEFAULT 'WAITING',
@@ -133,6 +133,17 @@ CREATE TABLE IF NOT EXISTS wo_proofs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_proofs_wo ON wo_proofs(wo_uuid);
+
+/* Job codes done on a work order, each with the mechanic who did it; added in the repair step (Step 7). */
+CREATE TABLE IF NOT EXISTS wo_job_codes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  wo_uuid     TEXT NOT NULL REFERENCES work_orders(wo_uuid) ON DELETE CASCADE,
+  job_code_id INTEGER NOT NULL REFERENCES job_codes(id),
+  mechanic_id INTEGER NOT NULL REFERENCES employees(id),
+  added_by    INTEGER REFERENCES employees(id),
+  added_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wo_job_codes_wo ON wo_job_codes(wo_uuid);
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_wo ON wo_steps(wo_uuid);
 `);
@@ -214,6 +225,16 @@ if (db.prepare('PRAGMA table_info(job_codes)').all().find((c) => c.name === 'sta
   });
 }
 if (!columns('work_orders').includes('job_code_id')) db.exec('ALTER TABLE work_orders ADD COLUMN job_code_id INTEGER REFERENCES job_codes(id)');
+// One job code per work order (work_orders.job_code_id) became a list per work order: move it over once.
+if (db.prepare('SELECT 1 FROM work_orders WHERE job_code_id IS NOT NULL LIMIT 1').get()) {
+  tx(() => {
+    db.exec(`INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at)
+             SELECT w.wo_uuid, w.job_code_id, w.mechanic_id, w.mechanic_id, COALESCE(w.started_at, w.created_at)
+             FROM work_orders w WHERE w.job_code_id IS NOT NULL AND w.mechanic_id IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM wo_job_codes x WHERE x.wo_uuid = w.wo_uuid AND x.job_code_id = w.job_code_id)`);
+    db.exec('UPDATE work_orders SET job_code_id = NULL WHERE job_code_id IS NOT NULL');
+  });
+}
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 

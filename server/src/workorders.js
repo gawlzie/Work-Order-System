@@ -151,7 +151,8 @@ const LIST_SELECT = `
   SELECT wo.*, u.unit_number, u.unit_code, u.unit_type,
          d.full_name AS driver_name, m.full_name AS mechanic_name,
          c.name AS category, cb.full_name AS created_by_name,
-         jc.job_code, jc.job_name, jc.standard_duration AS job_standard_duration,
+         (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
+         (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NOT NULL AND s.finished_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS current_step,
@@ -167,7 +168,6 @@ const LIST_SELECT = `
   JOIN employees d ON d.id = wo.driver_id
   LEFT JOIN employees m ON m.id = wo.mechanic_id
   LEFT JOIN repair_categories c ON c.id = wo.category_id
-  LEFT JOIN job_codes jc ON jc.id = wo.job_code_id
   LEFT JOIN employees cb ON cb.id = wo.created_by`;
 
 function decorate(row) {
@@ -184,13 +184,14 @@ function decorate(row) {
   return { ...rest, step_information: stepInfo, total_time: totalSec, repair_time: repairTime };
 }
 
-const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'job_code', 'total_time'];
+const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'job_code_list', 'total_time'];
 
 function buildFilters(q) {
   const where = [];
   const params = [];
   if (q.search) {
-    where.push('(wo.wo_number LIKE ? OR u.unit_number LIKE ? OR d.full_name LIKE ? OR wo.problem LIKE ? OR IFNULL(jc.job_code, \'\') LIKE ? OR IFNULL(jc.job_name, \'\') LIKE ?)');
+    where.push(`(wo.wo_number LIKE ? OR u.unit_number LIKE ? OR d.full_name LIKE ? OR wo.problem LIKE ?
+      OR EXISTS (SELECT 1 FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid AND (jc.job_code LIKE ? OR jc.job_name LIKE ?)))`);
     const s = `%${q.search}%`;
     params.push(s, s, s, s, s, s);
   }
@@ -202,7 +203,6 @@ function buildFilters(q) {
     ['driver_id', 'wo.driver_id'],
     ['mechanic_id', 'wo.mechanic_id'],
     ['category_id', 'wo.category_id'],
-    ['job_code_id', 'wo.job_code_id'],
     ['created_by', 'wo.created_by'],
   ]) {
     if (q[key]) {
@@ -214,6 +214,11 @@ function buildFilters(q) {
       where.push(`(${parts.join(' OR ')})`);
       params.push(...ids);
     }
+  }
+  if (q.job_code_id) {
+    const ids = String(q.job_code_id).split(',');
+    where.push(`EXISTS (SELECT 1 FROM wo_job_codes x WHERE x.wo_uuid = wo.wo_uuid AND x.job_code_id IN (${ids.map(() => '?').join(',')}))`);
+    params.push(...ids);
   }
   if (q.created_start) {
     where.push('wo.created_at >= ?');
@@ -254,6 +259,14 @@ const PROOF_SELECT = `SELECT p.id, p.file_name, p.mime_type, p.size, p.uploaded_
 /** Proof-of-completion files of a work order, oldest first. */
 export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uuid = ? ORDER BY p.uploaded_at, p.id`).all(woUuid);
 
+/** Job codes done on a work order, in the order they were added. */
+export const listWoJobCodes = (woUuid) =>
+  db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, c.name AS category_name, j.standard_duration,
+                     x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at
+              FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id JOIN repair_categories c ON c.id = j.category_id
+              JOIN employees m ON m.id = x.mechanic_id LEFT JOIN employees a ON a.id = x.added_by
+              WHERE x.wo_uuid = ? ORDER BY x.added_at, x.id`).all(woUuid);
+
 export function getWorkOrder(woUuid) {
   const row = db.prepare(`${LIST_SELECT} WHERE wo.wo_uuid = ?`).get(woUuid);
   if (!row) throw new HttpError(404, 'Work order not found');
@@ -271,6 +284,7 @@ export function getWorkOrder(woUuid) {
     steps: withSubs.filter((s) => !s.is_additional),
     additional_work: withSubs.filter((s) => s.is_additional),
     proofs: listProofs(woUuid),
+    job_codes: listWoJobCodes(woUuid),
   };
 }
 
@@ -278,24 +292,14 @@ const assignable = (employeeId, permission) =>
   db.prepare(`SELECT 1 FROM employees e JOIN roles r ON r.id = e.role_id WHERE e.id = ? AND e.is_active = 1 AND ${roleHas()}`)
     .get(employeeId, permission);
 
-/**
- * Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records.
- * A job code decides the category: the WO's category is set to the job code's category.
- */
-function assertRefs(data, current = {}) {
-  const { unit_id, driver_id, mechanic_id } = data;
-  if (data.job_code_id) {
-    const job = db.prepare('SELECT category_id FROM job_codes WHERE id = ? AND (is_active = 1 OR id = ?)').get(data.job_code_id, current.job_code_id ?? null);
-    if (!job) throw new HttpError(422, 'Job code not found or inactive');
-    data.category_id = job.category_id;
-  }
-  const { category_id } = data;
+/** Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records. */
+function assertRefs({ unit_id, driver_id, mechanic_id, category_id }, current = {}) {
   if (!db.prepare('SELECT 1 FROM units WHERE id = ? AND (is_active = 1 OR id = ?)').get(unit_id, current.unit_id ?? null))
     throw new HttpError(422, 'Unit not found or inactive');
   if (driver_id !== current.driver_id && !assignable(driver_id, 'wo.as_driver')) throw new HttpError(422, 'Driver not found');
   if (mechanic_id && mechanic_id !== current.mechanic_id && !assignable(mechanic_id, 'wo.as_mechanic'))
     throw new HttpError(422, 'Mechanic not found');
-  if (category_id && !data.job_code_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(category_id, current.category_id ?? null))
+  if (category_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(category_id, current.category_id ?? null))
     throw new HttpError(422, 'Repair category not found or inactive');
 }
 
@@ -319,7 +323,6 @@ function validatePayload(body) {
     problem,
     mechanic_id: body.mechanic_id ? Number(body.mechanic_id) : null,
     category_id: body.category_id ? Number(body.category_id) : null,
-    job_code_id: body.job_code_id ? Number(body.job_code_id) : null,
   };
 }
 
@@ -337,10 +340,10 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
   const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
-      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, job_code_id, problem,
+      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem,
         status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.job_code_id, data.problem,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.problem,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
   });
@@ -353,9 +356,9 @@ export function updateWorkOrder(woUuid, body) {
   const data = validatePayload(body);
   assertRefs(data, wo);
   db.prepare(
-    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, category_id = ?, job_code_id = ?, problem = ?, updated_at = ?
+    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, category_id = ?, problem = ?, updated_at = ?
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.job_code_id, data.problem, now(), woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.problem, now(), woUuid);
   return getWorkOrder(woUuid);
 }
 
@@ -448,6 +451,50 @@ export function addSubStep(woUuid, stepId, name) {
   const { max } = db.prepare('SELECT MAX(step_no) AS max FROM wo_steps WHERE parent_id = ?').get(step.id);
   db.prepare('INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_additional) VALUES (?, ?, ?, ?, 1)').run(
     woUuid, step.id, (max ?? 0) + 1, title);
+  return getWorkOrder(woUuid);
+}
+
+/**
+ * Job codes are added in the repair step (Step 7, the step where mechanics add their own sub-steps):
+ * a mechanic while that step runs, an approver (admin) any time after it started, also to correct a finished WO.
+ * Each entry names the mechanic who did the job.
+ */
+function jobCodeGate(wo, user) {
+  if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved first');
+  const repair = wo.steps.find((s) => s.allow_add_sub);
+  if (!repair) throw new HttpError(409, 'This work order has no repair step for job codes');
+  const admin = hasPermission(user, 'wo.approve');
+  if (!repair.started_at) throw new HttpError(409, `Job codes can be added from Step ${repair.step_no} · ${repair.step_name}`);
+  if (!admin && repair.finished_at) throw new HttpError(409, `Step ${repair.step_no} · ${repair.step_name} is finished; ask the admin to change job codes`);
+  return admin;
+}
+
+export function addWoJobCode(woUuid, body, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  const jobId = Number(body?.job_code_id);
+  const mechanicId = Number(body?.mechanic_id);
+  const errors = {};
+  if (!jobId || !db.prepare('SELECT 1 FROM job_codes j JOIN repair_categories c ON c.id = j.category_id WHERE j.id = ? AND j.is_active = 1').get(jobId))
+    errors.job_code_id = 'Choose an active job code';
+  if (!mechanicId || !assignable(mechanicId, 'wo.as_mechanic')) errors.mechanic_id = 'Choose the mechanic who does this job';
+  else if (jobId && db.prepare('SELECT 1 FROM wo_job_codes WHERE wo_uuid = ? AND job_code_id = ? AND mechanic_id = ?').get(woUuid, jobId, mechanicId))
+    errors.job_code_id = 'This job code is already added for this mechanic';
+  if (Object.keys(errors).length) {
+    const err = new HttpError(422, Object.values(errors)[0]);
+    err.errors = errors;
+    throw err;
+  }
+  db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at) VALUES (?, ?, ?, ?, ?)')
+    .run(woUuid, jobId, mechanicId, user.id, now());
+  return getWorkOrder(woUuid);
+}
+
+export function removeWoJobCode(woUuid, entryId, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  if (!db.prepare('SELECT 1 FROM wo_job_codes WHERE id = ? AND wo_uuid = ?').get(entryId, woUuid)) throw new HttpError(404, 'Job code entry not found');
+  db.prepare('DELETE FROM wo_job_codes WHERE id = ?').run(entryId);
   return getWorkOrder(woUuid);
 }
 

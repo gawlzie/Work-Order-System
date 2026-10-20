@@ -375,7 +375,7 @@ export function deleteCategory(id) {
 /* ---------- Job codes ---------- */
 
 const JOB_COLUMNS = `j.*, c.name AS category_name, c.is_active AS category_active,
-  (SELECT COUNT(*) FROM work_orders w WHERE w.job_code_id = j.id) AS wo_count`;
+  (SELECT COUNT(DISTINCT x.wo_uuid) FROM wo_job_codes x WHERE x.job_code_id = j.id) AS wo_count`;
 
 export function listJobCodes(q = {}) {
   const s = `%${str(q.search)}%`;

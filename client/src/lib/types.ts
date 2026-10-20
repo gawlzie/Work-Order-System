@@ -152,11 +152,9 @@ export interface WorkOrder {
   mechanic_name: string | null;
   category_id: number | null;
   category: string | null;
-  /** Standard repair job of this work order (optional); its category is the WO's category. */
-  job_code_id: number | null;
-  job_code: string | null;
-  job_name: string | null;
-  /** Standard duration of the job code in minutes, null when unknown. */
+  /** Job codes done on this WO, comma separated (null when none). */
+  job_code_list: string | null;
+  /** Sum of the standard durations of the WO's job codes in minutes, null when none is known. */
   job_standard_duration: number | null;
   /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
   repair_time: number | null;
@@ -204,10 +202,25 @@ export interface Proof {
   uploaded_by_name: string | null;
 }
 
+/** A job code done on a work order and the mechanic who did it (added in Step 7). */
+export interface WoJobCode {
+  id: number;
+  job_code_id: number;
+  job_code: string;
+  job_name: string;
+  category_name: string;
+  standard_duration: number | null;
+  mechanic_id: number;
+  mechanic_name: string;
+  added_by_name: string | null;
+  added_at: string;
+}
+
 export interface WorkOrderDetail extends WorkOrder {
   steps: Step[];
   additional_work: Step[];
   proofs: Proof[];
+  job_codes: WoJobCode[];
 }
 
 export interface Paged<T> {

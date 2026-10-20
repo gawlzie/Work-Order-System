@@ -15,7 +15,7 @@ import { PERMISSIONS } from './permissions.js';
 import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.js';
 import { seed } from './seed.js';
 import {
-  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, createWorkOrder, dashboard, deleteWorkOrder,
+  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
   getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 
@@ -111,7 +111,7 @@ app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
 
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
-  ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['job_code', 'Job Code'], ['job_name', 'Job Name'], ['job_standard_duration', 'Standard Duration (minutes)'], ['problem', 'Problem'], ['status', 'Status'],
+  ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['job_standard_duration', 'Standard Duration (minutes, total)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (minutes)'], ['proof_count', 'Proof Files'],
 ];
@@ -174,6 +174,15 @@ app.post('/api/work-orders/:id/proofs', requirePermission('wo.approve'), express
 
 app.delete('/api/work-orders/:id/proofs/:proofId(\\d+)', requirePermission('wo.approve'), wrap((req) =>
   deleteProof(req.params.id, Number(req.params.proofId))));
+
+// Job codes of a work order (Step 7): mechanics (wo.progress) while the step runs, approvers (wo.approve) after it started.
+const canWorkJobs = (req, res, next) =>
+  hasPermission(req.user, 'wo.progress') || hasPermission(req.user, 'wo.approve') ? next() : next(new HttpError(403, 'Forbidden for your role'));
+app.post('/api/work-orders/:id/job-codes', canWorkJobs, wrap((req, res) => {
+  res.status(201);
+  return addWoJobCode(req.params.id, req.body ?? {}, req.user);
+}));
+app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)', canWorkJobs, wrap((req) => removeWoJobCode(req.params.id, Number(req.params.entryId), req.user)));
 
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));
