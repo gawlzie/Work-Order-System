@@ -34,7 +34,7 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!running) return;
-    const id = setInterval(() => setTick((n) => n + 1), 15_000);
+    const id = setInterval(() => setTick((n) => n + 1), 1_000);
     return () => clearInterval(id);
   }, [running]);
   const jobs = useJobCodeOptions();

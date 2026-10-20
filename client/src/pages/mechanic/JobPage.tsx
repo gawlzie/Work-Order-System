@@ -50,7 +50,7 @@ export function JobPage() {
   const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
   const [remarks, setRemarks] = useState('');
   const [extra, setExtra] = useState('');
-  useTick(15_000);
+  useTick(1_000);
 
   const onDone = (data: WorkOrderDetail) => {
     qc.setQueryData(['work-order', id], data);

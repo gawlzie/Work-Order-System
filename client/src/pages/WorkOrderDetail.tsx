@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Play, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
@@ -37,6 +37,16 @@ function StandardCompare({ wo }: { wo: WorkOrderDetail }) {
   ) : (
     <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">{t('within_standard')}</span>
   );
+}
+
+/** Re-renders every second while something is running, so live durations show their seconds. */
+function useSecondTick(active: boolean) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1_000);
+    return () => clearInterval(id);
+  }, [active]);
 }
 
 export function WorkOrderDetailPage() {
@@ -77,6 +87,8 @@ export function WorkOrderDetailPage() {
     },
     onError: (err) => toast('error', (err as Error).message),
   });
+
+  useSecondTick(!!wo && wo.status !== 'FINISH' && !!wo.started_at);
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;

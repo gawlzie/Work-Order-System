@@ -6,16 +6,24 @@ export function formatDateTime(iso: string | null | undefined, locale = 'en-GB')
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
   });
 }
 
-/** Seconds -> "2d 3h 15m" style duration. */
+/** Seconds -> duration down to the second: "45s", "3m 05s", "2h 03m 15s", "1d 4h 00m 00s"; 0 or null -> "-". */
 export function formatDuration(seconds: number | null | undefined) {
-  if (!seconds || seconds < 60) return seconds ? '< 1m' : '-';
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ') || '0m';
+  // No time yet (e.g. a work order that has not started) shows '-'.
+  if (!seconds || seconds < 0) return '-';
+  const total = Math.max(0, Math.round(seconds));
+  const d = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (d) return `${d}d ${h}h ${pad(m)}m ${pad(s)}s`;
+  if (h) return `${h}h ${pad(m)}m ${pad(s)}s`;
+  if (m) return `${m}m ${pad(s)}s`;
+  return `${s}s`;
 }
 
 export function durationBetween(start: string | null, end: string | null) {
