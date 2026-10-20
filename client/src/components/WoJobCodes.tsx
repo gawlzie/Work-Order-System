@@ -19,6 +19,7 @@ import { Button, Field, Input, Modal, Select } from './ui';
  * mechanics while it runs (mechanic pre-filled with themselves, or the colleague they help), approvers (admin) once it
  * has started, to correct. The category comes first and the job code list only offers job codes of that category.
  * `manual` (admin page): no start / finish timers; the admin types in each job code's start and finish time instead.
+ * `compact` with `manual`: shown inside the Step 7 row of the admin page, still with each job code's times.
  */
 export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDetail; className?: string; compact?: boolean; manual?: boolean }) {
   const { t } = useI18n();
@@ -174,7 +175,12 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
       {compact && (
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <p className="text-sm font-medium">{t('category_job_codes')}</p>
-          {wo.job_codes.length > 0 && <span className="text-xs text-muted-foreground tabular-nums">{t('jobs_done', { done: finishedJobs, total: wo.job_codes.length })}</span>}
+          {wo.job_codes.length > 0 && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {t('jobs_done', { done: finishedJobs, total: wo.job_codes.length })}
+              {manual && <> · {t('standard_total')} {jobDuration(totalStd || null)}</>}
+            </span>
+          )}
         </div>
       )}
 
@@ -211,12 +217,12 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                 <p className="text-sm break-words"><span className="font-mono text-xs">{j.job_code}</span> · {j.job_name}</p>
                 <p className="text-xs text-muted-foreground">
                   {j.mechanic_name} · {t('standard_short')} {jobDuration(j.standard_duration)}
-                  {!compact && <> · {j.category_name} · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
+                  {(!compact || manual) && <> · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
                 </p>
                 {j.started_at && (
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
                     <span className="font-medium tabular-nums">{formatDuration(durationBetween(j.started_at, j.finished_at))}</span>
-                    {!compact && <span className="text-muted-foreground">{formatDateTime(j.started_at)} – {j.finished_at ? formatDateTime(j.finished_at) : '…'}</span>}
+                    {(!compact || manual) && <span className="text-muted-foreground">{formatDateTime(j.started_at)} – {j.finished_at ? formatDateTime(j.finished_at) : '…'}</span>}
                     {j.finished_at && j.standard_duration ? (
                       (durationBetween(j.started_at, j.finished_at) ?? 0) > j.standard_duration * 60
                         ? <span className="rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration((durationBetween(j.started_at, j.finished_at) ?? 0) - j.standard_duration * 60) })}</span>

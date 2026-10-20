@@ -110,7 +110,10 @@ export function WorkOrderDetailPage() {
                 <div><span className="block">{t('duration')}</span><span className="text-foreground tabular-nums">{formatDuration(durationBetween(step.started_at, step.finished_at))}</span></div>
               </dl>
               {step.remarks && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs"><span className="text-muted-foreground">{t('remarks')}: </span>{step.remarks}</p>}
-              {step.sub_steps.length > 0 && (
+              {/* The job code step (Step 7) shows its repair category and job codes, each with its own time. */}
+              {step.allow_add_sub ? (
+                (step.started_at || wo.job_codes.length > 0) && <WoJobCodes wo={wo} compact manual className="mt-3 border-l-2 border-border pl-4" />
+              ) : step.sub_steps.length > 0 && (
                 <ul className="mt-3 space-y-1.5 border-l-2 border-border pl-4">
                   {step.sub_steps.map((sub) => (
                     <li key={sub.id} className="flex flex-wrap items-center gap-2 text-sm">
@@ -225,10 +228,6 @@ export function WorkOrderDetailPage() {
           <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(1, allTop.length)) * 100}%` }} />
         </div>
         {renderSteps(wo.steps)}
-      </Card>
-
-      <Card className="print-area mt-4 overflow-hidden">
-        <WoJobCodes wo={wo} manual />
       </Card>
 
       <Card className="print-area mt-4 overflow-hidden">
