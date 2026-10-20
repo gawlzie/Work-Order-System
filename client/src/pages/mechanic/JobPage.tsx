@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareTe
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
+import { formatMeter } from '../../components/MeterFields';
 import { WoJobCodes } from '../../components/WoJobCodes';
 import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
@@ -42,7 +43,7 @@ function Info({ label, children }: { label: string; children: ReactNode }) {
 
 export function JobPage() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user, can } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
@@ -214,6 +215,8 @@ export function JobPage() {
         <dl className="grid grid-cols-2 gap-4">
           <Info label={t('driver')}>{wo.driver_name}</Info>
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
+          <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
+          <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>
           <Info label={t('category')}>{wo.category ?? '-'}</Info>
           <Info label={t('created_at')}>{formatDateTime(wo.created_at)}</Info>
         </dl>

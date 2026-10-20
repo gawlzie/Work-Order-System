@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS work_orders (
   category_id      INTEGER REFERENCES repair_categories(id),
   job_code_id      INTEGER REFERENCES job_codes(id), -- no longer used: job codes are in wo_job_codes
   problem          TEXT NOT NULL,
+  hm               REAL, -- hour meter reading when the WO was raised
+  km               REAL, -- odometer reading when the WO was raised
   status           TEXT NOT NULL DEFAULT 'OPEN',
   approval_status  TEXT NOT NULL DEFAULT 'WAITING',
   reject_reason    TEXT,
@@ -240,6 +242,9 @@ if (db.prepare('SELECT 1 FROM work_orders WHERE job_code_id IS NOT NULL LIMIT 1'
 const jobEntryCols = columns('wo_job_codes');
 if (!jobEntryCols.includes('started_at')) db.exec('ALTER TABLE wo_job_codes ADD COLUMN started_at TEXT');
 if (!jobEntryCols.includes('finished_at')) db.exec('ALTER TABLE wo_job_codes ADD COLUMN finished_at TEXT');
+const woCols = columns('work_orders');
+if (!woCols.includes('hm')) db.exec('ALTER TABLE work_orders ADD COLUMN hm REAL');
+if (!woCols.includes('km')) db.exec('ALTER TABLE work_orders ADD COLUMN km REAL');
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 

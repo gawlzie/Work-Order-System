@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { MeterFields, meterErrors } from '../components/MeterFields';
 import { useToast } from '../components/toast';
 import { Button, Card, Field, Modal, PageHeader, Select, Spinner, Textarea } from '../components/ui';
 import { api, ApiError } from '../lib/api';
@@ -9,7 +10,7 @@ import { useI18n } from '../lib/i18n';
 import { useEmployees, useUnits, useWorkOrder } from '../lib/queries';
 import type { WorkOrderDetail } from '../lib/types';
 
-const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', problem: '' };
+const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', hm: '', km: '', problem: '' };
 type Form = typeof EMPTY;
 
 export function WorkOrderFormPage() {
@@ -35,6 +36,8 @@ export function WorkOrderFormPage() {
         unit_id: String(wo.unit_id),
         driver_id: String(wo.driver_id),
         mechanic_id: wo.mechanic_id ? String(wo.mechanic_id) : '',
+        hm: wo.hm == null ? '' : String(wo.hm),
+        km: wo.km == null ? '' : String(wo.km),
         problem: wo.problem,
       });
     }
@@ -68,6 +71,7 @@ export function WorkOrderFormPage() {
     if (!form.unit_id) next.unit_id = 'Unit is required';
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
+    Object.assign(next, meterErrors(form.hm, form.km, !isEdit));
     setErrors(next);
     if (!Object.keys(next).length) setConfirm(true);
   };
@@ -109,6 +113,15 @@ export function WorkOrderFormPage() {
               {mechanics.data?.map((m) => <option key={m.id} value={m.id}>{m.full_name} ({m.employee_id})</option>)}
             </Select>
           </Field>
+          <MeterFields
+            hm={form.hm}
+            km={form.km}
+            errors={errors}
+            unit={units.data?.find((u) => String(u.id) === form.unit_id)}
+            currentWo={wo?.wo_number}
+            required={!isEdit}
+            onChange={(field, value) => set(field)({ target: { value } })}
+          />
           <Field label={t('problem')} required error={errors.problem} className="sm:col-span-2">
             <Textarea value={form.problem} onChange={set('problem')} placeholder={t('problem_placeholder')} maxLength={1000} invalid={!!errors.problem} />
             <span className="self-end text-xs text-muted-foreground">{form.problem.length}/1000</span>

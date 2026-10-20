@@ -61,7 +61,11 @@ app.post('/api/auth/change-password', wrap((req) => {
 app.get('/api/master/units', wrap((req) => {
   const s = `%${req.query.search ?? ''}%`;
   // Inactive units stay visible to filters (?all=1) but cannot be picked for new work orders.
-  return db.prepare(`SELECT * FROM units WHERE (unit_number LIKE ? OR unit_code LIKE ?) ${req.query.all ? '' : 'AND is_active = 1'} ORDER BY unit_code`).all(s, s);
+  // Last recorded HM / KM per unit, shown as a hint on the WO form.
+  const last = (col) => `(SELECT w.${col} FROM work_orders w WHERE w.unit_id = u.id AND w.${col} IS NOT NULL ORDER BY w.created_at DESC LIMIT 1)`;
+  const lastWo = (col) => `(SELECT w.wo_number FROM work_orders w WHERE w.unit_id = u.id AND w.${col} IS NOT NULL ORDER BY w.created_at DESC LIMIT 1)`;
+  return db.prepare(`SELECT u.*, ${last('hm')} AS last_hm, ${lastWo('hm')} AS last_hm_wo, ${last('km')} AS last_km, ${lastWo('km')} AS last_km_wo
+                     FROM units u WHERE (u.unit_number LIKE ? OR u.unit_code LIKE ?) ${req.query.all ? '' : 'AND u.is_active = 1'} ORDER BY u.unit_code`).all(s, s);
 }));
 
 app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
@@ -111,7 +115,7 @@ app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
 
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
-  ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
+  ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (h:mm:ss)'], ['proof_count', 'Proof Files'],
 ];

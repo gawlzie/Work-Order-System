@@ -304,7 +304,8 @@ function assertRefs({ unit_id, driver_id, mechanic_id }, current = {}) {
     throw new HttpError(422, 'Mechanic not found');
 }
 
-function validatePayload(body) {
+/** `metersRequired`: HM / KM must be given (new WOs); on edit an empty value keeps the stored reading. */
+function validatePayload(body, { metersRequired = true } = {}) {
   const unit_id = Number(body.unit_id);
   const driver_id = Number(body.driver_id);
   const problem = String(body.problem ?? '').trim();
@@ -313,6 +314,15 @@ function validatePayload(body) {
   if (!driver_id) errors.driver_id = 'Driver is required';
   if (problem.length < 5) errors.problem = 'Problem description must be at least 5 characters';
   if (problem.length > 1000) errors.problem = 'Problem description is too long (max 1000)';
+  // HM (hour meter, one decimal) and KM (odometer, whole number) are required readings of the unit.
+  const hmRaw = String(body.hm ?? '').trim().replace(',', '.');
+  const kmRaw = String(body.km ?? '').trim().replace(',', '.');
+  const hm = Number(hmRaw);
+  const km = Number(kmRaw);
+  if (!hmRaw) { if (metersRequired) errors.hm = 'HM is required'; }
+  else if (!Number.isFinite(hm) || hm < 0 || hm > 999999.9) errors.hm = 'HM must be a number from 0 to 999,999.9';
+  if (!kmRaw) { if (metersRequired) errors.km = 'KM is required'; }
+  else if (!Number.isInteger(km) || km < 0 || km > 9999999) errors.km = 'KM must be a whole number from 0 to 9,999,999';
   if (Object.keys(errors).length) {
     const err = new HttpError(422, 'Validation failed');
     err.errors = errors;
@@ -322,6 +332,8 @@ function validatePayload(body) {
     unit_id,
     driver_id,
     problem,
+    hm: hmRaw ? Math.round(hm * 10) / 10 : null,
+    km: kmRaw ? km : null,
     mechanic_id: body.mechanic_id ? Number(body.mechanic_id) : null,
   };
 }
@@ -340,10 +352,10 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
   const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
-      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem,
+      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, hm, km,
         status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.hm, data.km,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
   });
@@ -353,12 +365,12 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
 export function updateWorkOrder(woUuid, body) {
   const wo = getWorkOrder(woUuid);
   if (wo.status === STATUS.FINISH) throw new HttpError(409, 'A finished work order cannot be edited');
-  const data = validatePayload(body);
+  const data = validatePayload(body, { metersRequired: false });
   assertRefs(data, wo);
   db.prepare(
-    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, updated_at = ?
+    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, now(), woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.hm, data.km, now(), woUuid);
   return getWorkOrder(woUuid);
 }
 

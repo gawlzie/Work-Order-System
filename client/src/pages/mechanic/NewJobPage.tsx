@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm';
+import { MeterFields, meterErrors } from '../../components/MeterFields';
 import { useToast } from '../../components/toast';
 import { Button, Card, Field, Select, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
@@ -12,7 +13,7 @@ import { useOnline } from '../../lib/pwa';
 import { useEmployees, useUnits } from '../../lib/queries';
 import type { WorkOrderDetail } from '../../lib/types';
 
-type Form = { unit_id: string; driver_id: string; mechanic_id: string; problem: string };
+type Form = { unit_id: string; driver_id: string; mechanic_id: string; hm: string; km: string; problem: string };
 
 /** Raise a work order from the field. Mechanics are set as PIC by default; the admin approves it on the web. */
 export function NewJobPage() {
@@ -28,7 +29,7 @@ export function NewJobPage() {
   const mechanics = useEmployees('mechanic');
   const self = can('wo.as_mechanic') && user ? String(user.id) : '';
 
-  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, problem: '' });
+  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, hm: '', km: '', problem: '' });
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
 
   const save = useMutation({
@@ -56,6 +57,7 @@ export function NewJobPage() {
     if (!form.unit_id) next.unit_id = 'Unit is required';
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
+    Object.assign(next, meterErrors(form.hm, form.km));
     setErrors(next);
     if (!Object.keys(next).length) confirm({ message: t('confirm_submit_wo') }, () => save.mutate());
   };
@@ -86,6 +88,16 @@ export function NewJobPage() {
               ))}
             </Select>
           </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <MeterFields
+              hm={form.hm}
+              km={form.km}
+              errors={errors}
+              unit={units.data?.find((u) => String(u.id) === form.unit_id)}
+              inputClassName="h-12"
+              onChange={(field, value) => set(field)({ target: { value } })}
+            />
+          </div>
           <Field label={t('problem')} required error={errors.problem}>
             <Textarea value={form.problem} onChange={set('problem')} placeholder={t('problem_placeholder')} maxLength={1000} invalid={!!errors.problem} />
             <span className="self-end text-xs text-muted-foreground">{form.problem.length}/1000</span>

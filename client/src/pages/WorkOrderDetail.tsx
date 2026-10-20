@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { jobDuration } from '../components/JobCodePicker';
+import { formatMeter } from '../components/MeterFields';
 import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
 import { useConfirm } from '../components/confirm';
@@ -52,7 +53,7 @@ function useSecondTick(active: boolean) {
 
 export function WorkOrderDetailPage() {
   const { id } = useParams();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { can } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
@@ -227,6 +228,8 @@ export function WorkOrderDetailPage() {
           <Info label={t('unit')}>{wo.unit_number} <span className="text-muted-foreground">({wo.unit_code})</span></Info>
           <Info label={t('driver')}>{wo.driver_name}</Info>
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
+          <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
+          <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>
           <Info label={t('category')}>{wo.category ?? '-'}</Info>
           <Info label={t('created_at')}>{formatDateTime(wo.created_at)}</Info>
           <Info label={t('created_by')}>{wo.created_by_name ?? '-'}</Info>

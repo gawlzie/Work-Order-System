@@ -41,6 +41,11 @@ export interface Unit {
   serial_number: string | null;
   year: number | null;
   is_active: number;
+  /** Last recorded readings (WO form hint); only on the unit lookup. */
+  last_hm?: number | null;
+  last_hm_wo?: string | null;
+  last_km?: number | null;
+  last_km_wo?: string | null;
 }
 
 export interface Employee {
@@ -159,6 +164,9 @@ export interface WorkOrder {
   /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
   repair_time: number | null;
   problem: string;
+  /** Hour meter and odometer readings when the WO was raised (null on older WOs). */
+  hm: number | null;
+  km: number | null;
   status: WoStatus;
   approval_status: ApprovalStatus;
   reject_reason: string | null;
