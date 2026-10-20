@@ -17,7 +17,7 @@ type Form = { unit_id: string; driver_id: string; mechanic_id: string; hm: strin
 
 /** Raise a work order from the field. Mechanics are set as PIC by default; the admin approves it on the web. */
 export function NewJobPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { user, can } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
@@ -57,7 +57,7 @@ export function NewJobPage() {
     if (!form.unit_id) next.unit_id = 'Unit is required';
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
-    Object.assign(next, meterErrors(form.hm, form.km));
+    Object.assign(next, meterErrors(form.hm, form.km, true, units.data?.find((u) => String(u.id) === form.unit_id), undefined, lang));
     setErrors(next);
     if (!Object.keys(next).length) confirm({ message: t('confirm_submit_wo') }, () => save.mutate());
   };

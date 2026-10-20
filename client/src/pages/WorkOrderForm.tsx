@@ -16,7 +16,7 @@ type Form = typeof EMPTY;
 export function WorkOrderFormPage() {
   const { id } = useParams();
   const isEdit = !!id;
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const toast = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -71,7 +71,7 @@ export function WorkOrderFormPage() {
     if (!form.unit_id) next.unit_id = 'Unit is required';
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
-    Object.assign(next, meterErrors(form.hm, form.km, !isEdit));
+    Object.assign(next, meterErrors(form.hm, form.km, !isEdit, units.data?.find((u) => String(u.id) === form.unit_id), existing.data?.wo_number, lang));
     setErrors(next);
     if (!Object.keys(next).length) setConfirm(true);
   };

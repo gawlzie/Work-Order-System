@@ -338,9 +338,30 @@ function validatePayload(body, { metersRequired = true } = {}) {
   };
 }
 
+/**
+ * HM / KM never go down: a reading must be at least the unit's last recorded one. For an edited WO the comparison is
+ * with the unit's last reading before that WO (its own reading does not count).
+ */
+function assertMeters(data, current = null) {
+  const errors = {};
+  for (const [col, label] of [['hm', 'HM'], ['km', 'KM']]) {
+    if (data[col] == null) continue;
+    const last = db.prepare(`SELECT ${col} AS value, wo_number FROM work_orders
+                              WHERE unit_id = ? AND ${col} IS NOT NULL AND wo_uuid != ? ${current ? 'AND created_at < ?' : ''}
+                              ORDER BY created_at DESC LIMIT 1`).get(data.unit_id, current?.wo_uuid ?? '', ...(current ? [current.created_at] : []));
+    if (last && data[col] < last.value) errors[col] = `${label} cannot be lower than the last reading ${last.value} (${last.wo_number})`;
+  }
+  if (Object.keys(errors).length) {
+    const err = new HttpError(422, Object.values(errors)[0]);
+    err.errors = errors;
+    throw err;
+  }
+}
+
 export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
   const data = validatePayload(body);
   assertRefs(data);
+  assertMeters(data);
   const open = db
     .prepare("SELECT wo_number FROM work_orders WHERE unit_id = ? AND status != 'FINISH' AND approval_status != 'REJECT'")
     .get(data.unit_id);
@@ -367,6 +388,7 @@ export function updateWorkOrder(woUuid, body) {
   if (wo.status === STATUS.FINISH) throw new HttpError(409, 'A finished work order cannot be edited');
   const data = validatePayload(body, { metersRequired: false });
   assertRefs(data, wo);
+  assertMeters(data, wo);
   db.prepare(
     `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?
      WHERE wo_uuid = ?`,
