@@ -452,6 +452,9 @@ export function deleteJobCode(id) {
 /** Units of measure; LTR, KG and MTR may hold decimals, the others are counted in whole numbers. */
 export const UOMS = ['PCS', 'SET', 'UNIT', 'PAIR', 'BOX', 'ROLL', 'TUBE', 'CAN', 'PAIL', 'DRUM', 'LTR', 'KG', 'MTR'];
 const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+/** Stock and minimum stock a new spare part starts with when none is given. */
+export const DEFAULT_STOCK = 99999;
+export const DEFAULT_MIN_STOCK = 15;
 
 /**
  * Part numbers as stored: upper case, single spaces, full-width characters (from Chinese keyboards) as ASCII and the
@@ -510,8 +513,9 @@ function validateSparepart(body, existing) {
     category_id: str(body.category_id) ? Number(body.category_id) : null,
     brand: optional(body.brand),
     uom: str(body.uom).toUpperCase() || 'PCS',
-    stock: num(body.stock) ?? 0,
-    min_stock: num(body.min_stock) ?? 0,
+    // Left empty: a new part gets the defaults, an edited one keeps its value.
+    stock: num(body.stock) ?? existing?.stock ?? DEFAULT_STOCK,
+    min_stock: num(body.min_stock) ?? existing?.min_stock ?? DEFAULT_MIN_STOCK,
     location: optional(body.location)?.toUpperCase() ?? null,
     unit_price: num(body.unit_price),
     is_active: flag(body.is_active, existing?.is_active ?? 1),

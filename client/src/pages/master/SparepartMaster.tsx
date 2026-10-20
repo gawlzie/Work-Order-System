@@ -17,6 +17,9 @@ const FILTERS = ['status', 'category_id', 'stock'] as const;
 /** Units of measure (same list as the server); LTR, KG and MTR may hold decimals. */
 const UOMS = ['PCS', 'SET', 'UNIT', 'PAIR', 'BOX', 'ROLL', 'TUBE', 'CAN', 'PAIL', 'DRUM', 'LTR', 'KG', 'MTR'];
 const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+/** Stock and minimum stock a new spare part starts with (same as the server). */
+const DEFAULT_STOCK = 99999;
+const DEFAULT_MIN_STOCK = 15;
 
 const qty = (value: number, lang: string) => new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-GB', { maximumFractionDigits: 2 }).format(value);
 const rupiah = (value: number | null) => (value == null ? '-' : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value));
@@ -231,8 +234,8 @@ function SparepartForm({ part, categories, defaultCategory, onClose }: { part: M
     category_id: part?.category_id ? String(part.category_id) : defaultCategory,
     brand: part?.brand ?? '',
     uom: part?.uom ?? 'PCS',
-    stock: part ? String(part.stock) : '0',
-    min_stock: part ? String(part.min_stock) : '0',
+    stock: String(part ? part.stock : DEFAULT_STOCK),
+    min_stock: String(part ? part.min_stock : DEFAULT_MIN_STOCK),
     location: part?.location ?? '',
     unit_price: part?.unit_price != null ? String(part.unit_price) : '',
     is_active: part ? !!part.is_active : true,
