@@ -18,6 +18,7 @@ export interface WoListParams {
   category_id?: string;
   job_code_id?: string;
   created_by?: string;
+  site?: string;
 }
 
 /** Pass `refetchInterval` (ms) to keep a list fresh, e.g. the mechanic job list. */

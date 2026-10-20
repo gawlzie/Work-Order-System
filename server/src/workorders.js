@@ -187,7 +187,7 @@ function decorate(row) {
   return { ...rest, step_information: stepInfo, total_time: totalSec, repair_time: repairTime };
 }
 
-const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'job_code_list', 'total_time'];
+const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'site', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'job_code_list', 'total_time'];
 
 function buildFilters(q) {
   const where = [];
@@ -197,6 +197,11 @@ function buildFilters(q) {
       OR EXISTS (SELECT 1 FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid AND (jc.job_code LIKE ? OR jc.job_name LIKE ?)))`);
     const s = `%${q.search}%`;
     params.push(s, s, s, s, s, s);
+  }
+  // Site names may hold commas, so this filter takes one exact name.
+  if (q.site) {
+    where.push('wo.site = ? COLLATE NOCASE');
+    params.push(String(q.site));
   }
   for (const [key, col] of [
     ['status', 'wo.status'],
@@ -373,10 +378,10 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
   const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
-      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, hm, km,
+      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, hm, km, site,
         status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.hm, data.km,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT site FROM units WHERE id = ?), 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.hm, data.km, data.unit_id,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
   });
@@ -390,9 +395,11 @@ export function updateWorkOrder(woUuid, body) {
   assertRefs(data, wo);
   assertMeters(data, wo);
   db.prepare(
-    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?
+    // The site follows the unit only when the unit is changed; otherwise the WO keeps the site it was raised at.
+    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?,
+       site = CASE WHEN unit_id = ? THEN site ELSE (SELECT site FROM units WHERE id = ?) END
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.hm, data.km, now(), woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.hm, data.km, now(), data.unit_id, data.unit_id, woUuid);
   return getWorkOrder(woUuid);
 }
 

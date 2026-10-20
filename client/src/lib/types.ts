@@ -42,6 +42,8 @@ export interface Unit {
   model: string | null;
   serial_number: string | null;
   year: number | null;
+  /** Site name (site master). */
+  site: string | null;
   is_active: number;
   /** Last recorded readings (WO form hint); only on the unit lookup. */
   last_hm?: number | null;
@@ -166,6 +168,8 @@ export interface WorkOrder {
   /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
   repair_time: number | null;
   problem: string;
+  /** Site of the unit when the WO was raised. */
+  site: string | null;
   /** Hour meter and odometer readings when the WO was raised (null on older WOs). */
   hm: number | null;
   km: number | null;
@@ -244,6 +248,8 @@ export interface MasterSite {
   location: string | null;
   is_active: number;
   employee_count: number;
+  unit_count: number;
+  wo_count: number;
 }
 
 /** Site for dropdowns (employee form, filters). */

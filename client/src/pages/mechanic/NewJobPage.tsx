@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm';
 import { MeterFields, meterErrors } from '../../components/MeterFields';
+import { UnitSite } from '../../components/UnitSite';
 import { useToast } from '../../components/toast';
 import { Button, Card, Field, Select, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
@@ -73,6 +74,7 @@ export function NewJobPage() {
               <option value="">{t('select_unit')}</option>
               {units.data?.map((u) => <option key={u.id} value={u.id}>{u.unit_number} · {u.unit_code}</option>)}
             </Select>
+            <UnitSite site={units.data?.find((u) => String(u.id) === form.unit_id)?.site} />
           </Field>
           <Field label={t('driver')} required error={errors.driver_id}>
             <Select value={form.driver_id} onChange={set('driver_id')} invalid={!!errors.driver_id} className="h-12">

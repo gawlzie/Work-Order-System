@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS units (
   model         TEXT,
   serial_number TEXT,
   year          INTEGER,
+  site          TEXT, -- site name (sites.site_name)
   is_active     INTEGER NOT NULL DEFAULT 1
 );
 
@@ -107,6 +108,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   category_id      INTEGER REFERENCES repair_categories(id),
   job_code_id      INTEGER REFERENCES job_codes(id), -- no longer used: job codes are in wo_job_codes
   problem          TEXT NOT NULL,
+  site             TEXT, -- site of the unit when the WO was raised (sites.site_name)
   hm               REAL, -- hour meter reading when the WO was raised
   km               REAL, -- odometer reading when the WO was raised
   status           TEXT NOT NULL DEFAULT 'OPEN',
@@ -247,6 +249,22 @@ const unitCols = columns('units');
 if (!unitCols.includes('serial_number')) db.exec('ALTER TABLE units ADD COLUMN serial_number TEXT');
 if (!unitCols.includes('year')) db.exec('ALTER TABLE units ADD COLUMN year INTEGER');
 if (!unitCols.includes('is_active')) db.exec('ALTER TABLE units ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+if (!unitCols.includes('site')) db.exec('ALTER TABLE units ADD COLUMN site TEXT');
+if (!columns('work_orders').includes('site')) db.exec('ALTER TABLE work_orders ADD COLUMN site TEXT');
+
+/**
+ * Units without a site go to the site most employees work at (else the first site); work orders without one take
+ * their unit's site. Run on start (units and work orders from before the site master) and after a seed.
+ */
+export function fillMissingSites() {
+  const main = db.prepare(`SELECT s.site_name FROM sites s
+                            ORDER BY (SELECT COUNT(*) FROM employees e WHERE e.site = s.site_name COLLATE NOCASE) DESC, s.id LIMIT 1`).get()?.site_name;
+  const units = main ? db.prepare("UPDATE units SET site = ? WHERE site IS NULL OR site = ''").run(main).changes : 0;
+  const wos = db.prepare(`UPDATE work_orders SET site = (SELECT u.site FROM units u WHERE u.id = work_orders.unit_id)
+                          WHERE site IS NULL OR site = ''`).run().changes;
+  return { units, wos };
+}
+fillMissingSites();
 if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE work_orders ADD COLUMN approval_remarks TEXT');
 const categoryCols = columns('repair_categories');
 if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');

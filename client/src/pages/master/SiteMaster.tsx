@@ -26,8 +26,12 @@ export function SiteMasterPage() {
   const [deleting, setDeleting] = useState<MasterSite | null>(null);
   const rows = list.data?.data ?? [];
   // The employee count links to the employee list of that site when the user may see it.
-  const employees = (s: MasterSite) =>
-    can('master.employee') && s.employee_count ? <Link to={`/master/employee?site=${encodeURIComponent(s.site_name)}`} className="text-primary hover:underline">{s.employee_count}</Link> : s.employee_count;
+  const count = (n: number, to: string, allowed: boolean) => (allowed && n ? <Link to={to} className="text-primary hover:underline">{n}</Link> : n);
+  const q = (s: MasterSite) => `site=${encodeURIComponent(s.site_name)}`;
+  const employees = (s: MasterSite) => count(s.employee_count, `/master/employee?${q(s)}`, can('master.employee'));
+  const units = (s: MasterSite) => count(s.unit_count, `/master/unit?${q(s)}`, can('master.unit'));
+  const wos = (s: MasterSite) => count(s.wo_count, `/transaction/work-order?${q(s)}`, true);
+  const used = (s: MasterSite) => s.employee_count + s.unit_count + s.wo_count > 0;
 
   return (
     <div>
@@ -72,10 +76,12 @@ export function SiteMasterPage() {
                 <ActiveBadge active={s.is_active} />
               </div>
               <div className="mt-2 -mr-2 flex items-center justify-between gap-1">
-                <span className="text-xs text-muted-foreground">{t('employees')}: <span className="font-medium text-foreground tabular-nums">{employees(s)}</span></span>
+                <span className="text-xs text-muted-foreground">
+                  {t('employees')}: <span className="font-medium text-foreground tabular-nums">{employees(s)}</span> · {t('units')}: <span className="font-medium text-foreground tabular-nums">{units(s)}</span> · {t('work_order')}: <span className="font-medium text-foreground tabular-nums">{wos(s)}</span>
+                </span>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(s)}><Pencil className="size-4" /></Button>
-                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={s.employee_count > 0} onClick={() => setDeleting(s)}><Trash2 className="size-4" /></Button>
+                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={used(s)} onClick={() => setDeleting(s)}><Trash2 className="size-4" /></Button>
                 </div>
               </div>
             </li>
@@ -92,6 +98,8 @@ export function SiteMasterPage() {
                 <Th><SortHeader field="company" label="company" state={state} /></Th>
                 <Th>{t('location')}</Th>
                 <Th><SortHeader field="employee_count" label="employees" state={state} /></Th>
+                <Th><SortHeader field="unit_count" label="units" state={state} /></Th>
+                <Th><SortHeader field="wo_count" label="work_order" state={state} /></Th>
                 <Th>{t('status')}</Th>
                 <Th className="text-right">{t('action')}</Th>
               </tr>
@@ -105,11 +113,13 @@ export function SiteMasterPage() {
                   <td className="px-4 py-3">{s.company}</td>
                   <td className="px-4 py-3 text-muted-foreground">{s.location ?? '-'}</td>
                   <td className="px-4 py-3 tabular-nums">{employees(s)}</td>
+                  <td className="px-4 py-3 tabular-nums">{units(s)}</td>
+                  <td className="px-4 py-3 tabular-nums">{wos(s)}</td>
                   <td className="px-4 py-3"><ActiveBadge active={s.is_active} /></td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" title={t('edit')} onClick={() => setEditing(s)}><Pencil className="size-4" /></Button>
-                      <Button size="icon" variant="ghost" title={t('delete')} className="text-destructive" disabled={s.employee_count > 0} onClick={() => setDeleting(s)}><Trash2 className="size-4" /></Button>
+                      <Button size="icon" variant="ghost" title={t('delete')} className="text-destructive" disabled={used(s)} onClick={() => setDeleting(s)}><Trash2 className="size-4" /></Button>
                     </div>
                   </td>
                 </tr>

@@ -121,7 +121,7 @@ app.get('/api/dashboard', wrap((req) => dashboard(req.query)));
 app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
 
 const CSV_COLUMNS = [
-  ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
+  ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['site', 'Site'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
   ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (h:mm:ss)'], ['proof_count', 'Proof Files'],

@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MeterFields, meterErrors } from '../components/MeterFields';
+import { UnitSite } from '../components/UnitSite';
 import { useToast } from '../components/toast';
 import { Button, Card, Field, Modal, PageHeader, Select, Spinner, Textarea } from '../components/ui';
 import { api, ApiError } from '../lib/api';
@@ -98,6 +99,7 @@ export function WorkOrderFormPage() {
                 <option key={u.id} value={u.id}>{u.unit_number} · {u.unit_code} · {u.brand} {u.model}</option>
               ))}
             </Select>
+            <UnitSite site={units.data?.find((u) => String(u.id) === form.unit_id)?.site ?? (wo && String(wo.unit_id) === form.unit_id ? wo.site : null)} />
           </Field>
           <Field label={t('driver')} required error={errors.driver_id}>
             <Select value={form.driver_id} onChange={set('driver_id')} invalid={!!errors.driver_id}>

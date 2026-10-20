@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { db, ensureSitesFromEmployees, ensureSystemRoles, tx } from './db.js';
+import { db, ensureSitesFromEmployees, ensureSystemRoles, fillMissingSites, tx } from './db.js';
 import { hashPassword } from './auth.js';
 import { ensureStepTemplates, insertSteps, recomputeStatus } from './workorders.js';
 import { fillMeterReadings } from './meter-examples.js';
@@ -201,6 +201,7 @@ export function seed({ reset = false } = {}) {
     ensureSparepartExamples();
     ensureSitesFromEmployees();
     ensureSiteExamples();
+    fillMissingSites();
   });
   return true;
 }

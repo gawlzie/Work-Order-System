@@ -9,6 +9,7 @@ import { DateRange } from '../components/DateRange';
 import { Pagination } from '../components/Pagination';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton } from '../components/ui';
+import { SiteFilter } from '../components/SiteSelect';
 import { api, download, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatDateTime, formatDuration } from '../lib/format';
@@ -16,7 +17,7 @@ import { useI18n, type TKey } from '../lib/i18n';
 import { useCategories, useEmployees, useJobCodeOptions, useUnits, useWorkOrders, type WoListParams } from '../lib/queries';
 import type { WorkOrder } from '../lib/types';
 
-const FILTER_KEYS = ['status', 'approval_status', 'channel_source', 'unit_id', 'mechanic_id', 'category_id', 'job_code_id', 'created_start', 'created_end'] as const;
+const FILTER_KEYS = ['status', 'approval_status', 'channel_source', 'site', 'unit_id', 'mechanic_id', 'category_id', 'job_code_id', 'created_start', 'created_end'] as const;
 
 type Dialog = { kind: 'approve' | 'reject' | 'delete'; wo: WorkOrder } | null;
 
@@ -204,6 +205,9 @@ export function WorkOrderListPage() {
                 <option value="WHATSAPP">{t('whatsapp')}</option>
               </Select>
             </Field>
+            <Field label={t('site')}>
+              <SiteFilter value={String(params.site ?? '')} onChange={(site) => update({ site })} />
+            </Field>
             <Field label={t('unit')}>
               <Select value={params.unit_id} onChange={(e) => update({ unit_id: e.target.value })}>
                 <option value="">{t('all')}</option>
@@ -258,7 +262,7 @@ export function WorkOrderListPage() {
                 )}
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3 md:grid-cols-6">
-                <MetaItem label={t('unit')}>{wo.unit_number}</MetaItem>
+                <MetaItem label={t('unit')}>{wo.unit_number}{wo.site && <span className="block text-muted-foreground">{wo.site}</span>}</MetaItem>
                 <MetaItem label={t('driver')}>{wo.driver_name}</MetaItem>
                 <MetaItem label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</MetaItem>
                 <MetaItem label={t('category')}>{wo.category ?? '-'}</MetaItem>
@@ -303,7 +307,10 @@ export function WorkOrderListPage() {
                     <Link to={`/transaction/work-order/details/${wo.wo_uuid}`} className="text-primary hover:underline">{wo.wo_number}</Link>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDateTime(wo.created_at)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{wo.unit_number}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {wo.unit_number}
+                    {wo.site && <span className="block text-xs text-muted-foreground">{wo.site}</span>}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.driver_name}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.mechanic_name ?? '-'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.category ?? '-'}</td>

@@ -164,9 +164,9 @@ function validateEmployee(body, existing, user) {
   if (!data.role_id || !db.prepare('SELECT 1 FROM roles WHERE id = ?').get(data.role_id)) errors.role_id = 'Role is required';
   if (data.phone && !/^\+?[0-9 -]{6,20}$/.test(data.phone)) errors.phone = 'Phone number is not valid';
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errors.email = 'Email is not valid';
-  const site = db.prepare('SELECT site_name, is_active FROM sites WHERE site_name = ? COLLATE NOCASE').get(data.site);
-  if (site && (site.is_active || site.site_name === existing?.site)) data.site = site.site_name;
-  else if (data.site !== existing?.site) errors.site = 'Choose an active site from the site master';
+  const site = siteName(data.site, existing?.site);
+  if (site) data.site = site;
+  else errors.site = 'Choose an active site from the site master';
 
   const hasAccount = flag(body.has_account, existing?.has_account ?? 0) === 1;
   const password = String(body.password ?? '');
@@ -237,6 +237,15 @@ export function assignableEmployees({ search, role }) {
   ).all(...(permission ? [s, s, permission] : [s, s]));
 }
 
+/* ---------- Shared: site of an employee / unit ---------- */
+
+/** Canonical site name for `value`, or null when it is not an active site (keeping `current` is always allowed). */
+function siteName(value, current) {
+  const site = db.prepare('SELECT site_name, is_active FROM sites WHERE site_name = ? COLLATE NOCASE').get(str(value));
+  if (site && (site.is_active || site.site_name === current)) return site.site_name;
+  return str(value) && str(value) === current ? current : null;
+}
+
 /* ---------- Units ---------- */
 
 const UNIT_COLUMNS = `u.*,
@@ -251,12 +260,16 @@ export function listUnits(q = {}) {
     where.push('u.unit_type = ?');
     params.push(str(q.unit_type));
   }
+  if (q.site) {
+    where.push('u.site = ? COLLATE NOCASE');
+    params.push(str(q.site));
+  }
   if (q.status === 'active' || q.status === 'inactive') where.push(`u.is_active = ${q.status === 'active' ? 1 : 0}`);
   return pagedQuery({
     select: UNIT_COLUMNS,
     from: `FROM units u WHERE ${where.join(' AND ')}`,
     params,
-    order: orderBy(q, { unit_code: 'u.unit_code', unit_number: 'u.unit_number', unit_type: 'u.unit_type', brand: 'u.brand', year: 'u.year' }, 'unit_code'),
+    order: orderBy(q, { unit_code: 'u.unit_code', unit_number: 'u.unit_number', unit_type: 'u.unit_type', brand: 'u.brand', year: 'u.year', site: 'u.site' }, 'unit_code'),
     q,
   });
 }
@@ -267,7 +280,7 @@ export function getUnit(id) {
   return row;
 }
 
-function validateUnit(body, existing) {
+function validateUnit(body, existing, user) {
   const errors = {};
   const yearRaw = str(body.year);
   const data = {
@@ -278,6 +291,7 @@ function validateUnit(body, existing) {
     model: optional(body.model),
     serial_number: optional(body.serial_number)?.toUpperCase() ?? null,
     year: yearRaw ? Number(yearRaw) : null,
+    site: str(body.site) || existing?.site || user?.site || '',
     is_active: flag(body.is_active, existing?.is_active ?? 1),
   };
   if (!/^[A-Z0-9-]{2,20}$/.test(data.unit_code)) errors.unit_code = 'Unit code must be 2-20 characters: A-Z, 0-9 or -';
@@ -290,23 +304,27 @@ function validateUnit(body, existing) {
   if (data.year !== null && !(Number.isInteger(data.year) && data.year >= 1950 && data.year <= maxYear))
     errors.year = `Year must be between 1950 and ${maxYear}`;
   if (existing?.active_wo && !data.is_active) errors.is_active = `Unit has an active work order (${existing.active_wo})`;
+  const site = siteName(data.site, existing?.site);
+  if (site) data.site = site;
+  else errors.site = 'Choose an active site from the site master';
   fail(errors);
   return data;
 }
 
-export function createUnit(body) {
-  const d = validateUnit(body);
+export function createUnit(body, user) {
+  const d = validateUnit(body, null, user);
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO units (unit_code, unit_number, unit_type, brand, model, serial_number, year, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(d.unit_code, d.unit_number, d.unit_type, d.brand, d.model, d.serial_number, d.year, d.is_active);
+    .prepare('INSERT INTO units (unit_code, unit_number, unit_type, brand, model, serial_number, year, site, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(d.unit_code, d.unit_number, d.unit_type, d.brand, d.model, d.serial_number, d.year, d.site, d.is_active);
   return getUnit(lastInsertRowid);
 }
 
-export function updateUnit(id, body) {
+/** Moving a unit to another site does not change its work orders: they keep the site they were raised at. */
+export function updateUnit(id, body, user) {
   const existing = getUnit(id);
-  const d = validateUnit(body, existing);
-  db.prepare('UPDATE units SET unit_code = ?, unit_number = ?, unit_type = ?, brand = ?, model = ?, serial_number = ?, year = ?, is_active = ? WHERE id = ?')
-    .run(d.unit_code, d.unit_number, d.unit_type, d.brand, d.model, d.serial_number, d.year, d.is_active, id);
+  const d = validateUnit(body, existing, user);
+  db.prepare('UPDATE units SET unit_code = ?, unit_number = ?, unit_type = ?, brand = ?, model = ?, serial_number = ?, year = ?, site = ?, is_active = ? WHERE id = ?')
+    .run(d.unit_code, d.unit_number, d.unit_type, d.brand, d.model, d.serial_number, d.year, d.site, d.is_active, id);
   return getUnit(id);
 }
 
@@ -456,7 +474,9 @@ export function deleteJobCode(id) {
 
 /* ---------- Sites ---------- */
 
-const SITE_COLUMNS = 's.*, (SELECT COUNT(*) FROM employees e WHERE e.site = s.site_name COLLATE NOCASE) AS employee_count';
+const SITE_COLUMNS = `s.*, (SELECT COUNT(*) FROM employees e WHERE e.site = s.site_name COLLATE NOCASE) AS employee_count,
+  (SELECT COUNT(*) FROM units u WHERE u.site = s.site_name COLLATE NOCASE) AS unit_count,
+  (SELECT COUNT(*) FROM work_orders w WHERE w.site = s.site_name COLLATE NOCASE) AS wo_count`;
 
 export function listSites(q = {}) {
   const s = `%${str(q.search)}%`;
@@ -466,7 +486,7 @@ export function listSites(q = {}) {
     select: SITE_COLUMNS,
     from: `FROM sites s WHERE ${where.join(' AND ')}`,
     params: [s, s, s, s],
-    order: orderBy(q, { site_code: 's.site_code', site_name: 's.site_name', company: 's.company', employee_count: 'employee_count' }, 'site_code'),
+    order: orderBy(q, { site_code: 's.site_code', site_name: 's.site_name', company: 's.company', employee_count: 'employee_count', unit_count: 'unit_count', wo_count: 'wo_count' }, 'site_code'),
     q,
   });
 }
@@ -504,21 +524,23 @@ export function createSite(body) {
   return getSite(lastInsertRowid);
 }
 
-/** A renamed site stays assigned to its employees: their site name is updated with it. */
+/** A renamed site stays assigned to its employees, units and work orders: their site name is updated with it. */
 export function updateSite(id, body) {
   const existing = getSite(id);
   const d = validateSite(body, existing);
   tx(() => {
     db.prepare('UPDATE sites SET site_code = ?, site_name = ?, company = ?, location = ?, is_active = ? WHERE id = ?')
       .run(d.site_code, d.site_name, d.company, d.location, d.is_active, id);
-    if (d.site_name !== existing.site_name) db.prepare('UPDATE employees SET site = ? WHERE site = ? COLLATE NOCASE').run(d.site_name, existing.site_name);
+    if (d.site_name !== existing.site_name)
+      for (const table of ['employees', 'units', 'work_orders']) db.prepare(`UPDATE ${table} SET site = ? WHERE site = ? COLLATE NOCASE`).run(d.site_name, existing.site_name);
   });
   return getSite(id);
 }
 
 export function deleteSite(id) {
   const site = getSite(id);
-  if (site.employee_count) throw new HttpError(409, `Site has ${site.employee_count} employee(s). Move them to another site or deactivate the site instead`);
+  const used = [[site.employee_count, 'employee(s)'], [site.unit_count, 'unit(s)'], [site.wo_count, 'work order(s)']].filter(([n]) => n).map(([n, what]) => `${n} ${what}`);
+  if (used.length) throw new HttpError(409, `Site has ${used.join(', ')}. Deactivate the site instead`);
   db.prepare('DELETE FROM sites WHERE id = ?').run(id);
 }
 

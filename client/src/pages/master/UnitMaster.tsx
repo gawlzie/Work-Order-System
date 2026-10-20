@@ -9,11 +9,13 @@ import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
+import { SiteFilter, SiteSelect } from '../../components/SiteSelect';
+import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
 import { usePaged, useUnitTypes } from '../../lib/queries';
 import type { MasterUnit } from '../../lib/types';
 
-const FILTERS = ['status', 'unit_type'] as const;
+const FILTERS = ['status', 'unit_type', 'site'] as const;
 
 export function UnitMasterPage() {
   const { t } = useI18n();
@@ -45,18 +47,19 @@ export function UnitMasterPage() {
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
           <SearchBox state={state} placeholder={t('search_unit')} />
-          <div className="grid grid-cols-2 gap-3 sm:flex">
+          <div className="grid grid-cols-2 gap-3 sm:flex [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
             <Select value={params.unit_type} onChange={(e) => update({ unit_type: e.target.value })} className="sm:w-44" aria-label={t('unit_type')}>
               <option value="">{t('all_types')}</option>
               {types.data?.map((ty) => <option key={ty} value={ty}>{ty}</option>)}
             </Select>
+            <SiteFilter value={String(params.site)} onChange={(site) => update({ site })} className="sm:w-48" />
             <Select value={params.status} onChange={(e) => update({ status: e.target.value })} className="sm:w-40" aria-label={t('status')}>
               <option value="">{t('all_status')}</option>
               <option value="active">{t('active')}</option>
               <option value="inactive">{t('inactive')}</option>
             </Select>
           </div>
-          {(params.search || params.status || params.unit_type) && (
+          {(params.search || params.status || params.unit_type || params.site) && (
             <Button variant="ghost" onClick={state.reset}><X className="size-4" /> {t('reset')}</Button>
           )}
         </div>
@@ -67,7 +70,7 @@ export function UnitMasterPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium">{u.unit_code} <span className="font-normal text-muted-foreground">· {u.unit_number}</span></p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{u.unit_type}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{[u.unit_type, u.site].filter(Boolean).join(' · ')}</p>
                 </div>
                 <ActiveBadge active={u.is_active} />
               </div>
@@ -98,7 +101,6 @@ export function UnitMasterPage() {
                 <Th><SortHeader field="unit_number" label="unit_number" state={state} /></Th>
                 <Th><SortHeader field="unit_type" label="unit_type" state={state} /></Th>
                 <Th><SortHeader field="brand" label="brand" state={state} /></Th>
-                <Th>{t('serial_number')}</Th>
                 <Th><SortHeader field="year" label="year" state={state} /></Th>
                 <Th>{t('active_wo')}</Th>
                 <Th>{t('status')}</Th>
@@ -110,10 +112,15 @@ export function UnitMasterPage() {
                 <tr key={u.id} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-3 text-muted-foreground">{(params.page - 1) * params.limit + i + 1}</td>
                   <td className="px-4 py-3 font-medium whitespace-nowrap">{u.unit_code}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{u.unit_number}</td>
+                  <td className="min-w-32 px-4 py-3">
+                    <span className="whitespace-nowrap">{u.unit_number}</span>
+                    {u.site && <span className="block text-xs text-muted-foreground">{u.site}</span>}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap">{u.unit_type}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{[u.brand, u.model].filter(Boolean).join(' ') || '-'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{u.serial_number ?? '-'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {[u.brand, u.model].filter(Boolean).join(' ') || '-'}
+                    {u.serial_number && <span className="block text-xs text-muted-foreground" title={t('serial_number')}>{u.serial_number}</span>}
+                  </td>
                   <td className="px-4 py-3 tabular-nums">{u.year ?? '-'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {u.active_wo ? (
@@ -157,6 +164,7 @@ export function UnitMasterPage() {
 
 function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: string[]; onClose: () => void }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
@@ -168,6 +176,7 @@ function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: st
     model: unit?.model ?? '',
     serial_number: unit?.serial_number ?? '',
     year: unit?.year ? String(unit.year) : '',
+    site: unit?.site ?? user?.site ?? '',
     is_active: unit ? !!unit.is_active : true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -232,6 +241,14 @@ function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: st
         </Field>
         <Field label={t('model')} error={errors.model}>
           <Input value={form.model} onChange={set('model')} maxLength={50} />
+        </Field>
+        <Field label={t('site')} required error={errors.site} className="sm:col-span-2">
+          <SiteSelect
+            value={form.site}
+            invalid={!!errors.site}
+            onChange={(s) => { setForm((f) => ({ ...f, site: s.site_name })); setErrors((er) => ({ ...er, site: '' })); }}
+          />
+          {unit && unit.wo_count > 0 && <span className="text-xs text-muted-foreground">{t('unit_site_hint')}</span>}
         </Field>
         <Field label={t('serial_number')} error={errors.serial_number} className="sm:col-span-2">
           <Input value={form.serial_number} onChange={set('serial_number')} maxLength={50} invalid={!!errors.serial_number} className="uppercase" />
