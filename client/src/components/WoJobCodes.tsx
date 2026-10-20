@@ -7,15 +7,16 @@ import { useAuth } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useOnline } from '../lib/pwa';
-import { useEmployees, useJobCodeOptions } from '../lib/queries';
+import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
 import type { WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
 import { useToast } from './toast';
 import { Button, Select } from './ui';
 
 /**
- * Job codes of a work order. They are added in the repair step (Step 7): mechanics while it runs (pre-filled with
- * themselves, but they can pick the colleague they help), approvers (admin) once it has started and must pick the mechanic.
+ * Repair category and job codes of a work order, filled in during the repair step (Step 7), never at creation:
+ * mechanics while it runs (mechanic pre-filled with themselves, or the colleague they help), approvers (admin) once it
+ * has started, to correct. The category comes first and the job code list only offers job codes of that category.
  */
 export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; className?: string; compact?: boolean }) {
   const { t } = useI18n();
@@ -29,6 +30,8 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
   const editable = approved && !!repair?.started_at && (admin || (can('wo.progress') && !repair.finished_at));
   const jobs = useJobCodeOptions();
   const mechanics = useEmployees('mechanic');
+  const categories = useCategories();
+  const jobOptions = (jobs.data ?? []).filter((j) => j.category_id === wo.category_id);
   const [jobId, setJobId] = useState('');
   const [mechanicId, setMechanicId] = useState(() => (!admin && can('wo.as_mechanic') && user ? String(user.id) : ''));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -48,6 +51,15 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
       setErrors(err instanceof ApiError && err.errors ? err.errors : {});
       toast('error', (err as Error).message);
     },
+  });
+  const setCategory = useMutation({
+    mutationFn: (categoryId: string) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/category`, { method: 'PUT', body: { category_id: categoryId } }),
+    onSuccess: (data) => {
+      done(data);
+      setJobId('');
+      setErrors({});
+    },
+    onError: (err) => toast('error', (err as Error).message),
   });
   const remove = useMutation({
     mutationFn: (id: number) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes/${id}`, { method: 'DELETE' }),
@@ -69,7 +81,7 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
       {!compact && (
         <div className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 font-semibold"><Hash className="size-4" /> {t('job_codes')}</h2>
+            <h2 className="flex items-center gap-2 font-semibold"><Hash className="size-4" /> {t('category_job_codes')}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {repair ? t('job_codes_when', { step: `${repair.step_no} · ${repair.step_name}` }) : t('job_codes_no_step')}
             </p>
@@ -81,7 +93,25 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
           )}
         </div>
       )}
-      {compact && <p className="mb-2 text-sm font-medium">{t('job_codes')}</p>}
+      {compact && <p className="mb-2 text-sm font-medium">{t('category_job_codes')}</p>}
+
+      <div className={clsx(compact ? 'mb-3' : 'border-b border-border px-4 py-3')}>
+        <p className="mb-1 text-xs text-muted-foreground">{t('category')}</p>
+        {editable ? (
+          <Select
+            value={wo.category_id ? String(wo.category_id) : ''}
+            onChange={(e) => e.target.value && setCategory.mutate(e.target.value)}
+            disabled={!online || setCategory.isPending}
+            aria-label={t('category')}
+          >
+            <option value="">{t('choose_category_first')}</option>
+            {wo.category_id && categories.data && !categories.data.some((c) => c.id === wo.category_id) && <option value={wo.category_id}>{wo.category}</option>}
+            {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        ) : (
+          <p className="text-sm font-medium">{wo.category ?? '-'}</p>
+        )}
+      </div>
 
       {wo.job_codes.length > 0 ? (
         <ul className={clsx('divide-y divide-border', compact && 'rounded-xl border border-border')}>
@@ -106,11 +136,12 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
         <p className={clsx('text-sm text-muted-foreground', !compact && 'px-4 py-3')}>{t('job_codes_none')}</p>
       )}
 
-      {editable && (
+      {editable && !wo.category_id && <p className={clsx('no-print text-xs text-muted-foreground', compact ? 'mt-2' : 'border-t border-border px-4 py-3')}>{t('job_codes_need_category')}</p>}
+      {editable && !!wo.category_id && (
         <div className={clsx('no-print grid gap-2 sm:grid-cols-[1fr_14rem_auto]', compact ? 'mt-2' : 'border-t border-border p-4')}>
           <div>
             <JobCodePicker
-              options={jobs.data ?? []}
+              options={jobOptions}
               value={jobId}
               invalid={!!errors.job_code_id}
               onChange={(j) => {

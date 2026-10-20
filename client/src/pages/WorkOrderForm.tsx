@@ -6,10 +6,10 @@ import { useToast } from '../components/toast';
 import { Button, Card, Field, Modal, PageHeader, Select, Spinner, Textarea } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import { useI18n } from '../lib/i18n';
-import { useCategories, useEmployees, useUnits, useWorkOrder } from '../lib/queries';
+import { useEmployees, useUnits, useWorkOrder } from '../lib/queries';
 import type { WorkOrderDetail } from '../lib/types';
 
-const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', category_id: '', problem: '' };
+const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', problem: '' };
 type Form = typeof EMPTY;
 
 export function WorkOrderFormPage() {
@@ -23,7 +23,6 @@ export function WorkOrderFormPage() {
   const units = useUnits();
   const drivers = useEmployees('driver');
   const mechanics = useEmployees('mechanic');
-  const categories = useCategories();
 
   const [form, setForm] = useState<Form>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
@@ -36,7 +35,6 @@ export function WorkOrderFormPage() {
         unit_id: String(wo.unit_id),
         driver_id: String(wo.driver_id),
         mechanic_id: wo.mechanic_id ? String(wo.mechanic_id) : '',
-        category_id: wo.category_id ? String(wo.category_id) : '',
         problem: wo.problem,
       });
     }
@@ -109,13 +107,6 @@ export function WorkOrderFormPage() {
               <option value="">{t('select_mechanic')}</option>
               {wo?.mechanic_id && mechanics.data && !mechanics.data.some((m) => m.id === wo.mechanic_id) && <option value={wo.mechanic_id}>{wo.mechanic_name}</option>}
               {mechanics.data?.map((m) => <option key={m.id} value={m.id}>{m.full_name} ({m.employee_id})</option>)}
-            </Select>
-          </Field>
-          <Field label={t('category')} error={errors.category_id}>
-            <Select value={form.category_id} onChange={set('category_id')}>
-              <option value="">{t('select_category')}</option>
-              {wo?.category_id && categories.data && !categories.data.some((c) => c.id === wo.category_id) && <option value={wo.category_id}>{wo.category}</option>}
-              {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>
           <Field label={t('problem')} required error={errors.problem} className="sm:col-span-2">

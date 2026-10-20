@@ -8,10 +8,10 @@ import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
 import { useOnline } from '../../lib/pwa';
-import { useCategories, useEmployees, useUnits } from '../../lib/queries';
+import { useEmployees, useUnits } from '../../lib/queries';
 import type { WorkOrderDetail } from '../../lib/types';
 
-type Form = { unit_id: string; driver_id: string; mechanic_id: string; category_id: string; problem: string };
+type Form = { unit_id: string; driver_id: string; mechanic_id: string; problem: string };
 
 /** Raise a work order from the field. Mechanics are set as PIC by default; the admin approves it on the web. */
 export function NewJobPage() {
@@ -24,10 +24,9 @@ export function NewJobPage() {
   const units = useUnits();
   const drivers = useEmployees('driver');
   const mechanics = useEmployees('mechanic');
-  const categories = useCategories();
   const self = can('wo.as_mechanic') && user ? String(user.id) : '';
 
-  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, category_id: '', problem: '' });
+  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, problem: '' });
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
 
   const save = useMutation({
@@ -83,12 +82,6 @@ export function NewJobPage() {
               {mechanics.data?.map((m) => (
                 <option key={m.id} value={m.id}>{m.id === user?.id ? t('m_me', { name: m.full_name }) : `${m.full_name} (${m.employee_id})`}</option>
               ))}
-            </Select>
-          </Field>
-          <Field label={t('category')}>
-            <Select value={form.category_id} onChange={set('category_id')} className="h-12">
-              <option value="">{t('select_category')}</option>
-              {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>
           <Field label={t('problem')} required error={errors.problem}>

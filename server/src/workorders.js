@@ -293,14 +293,12 @@ const assignable = (employeeId, permission) =>
     .get(employeeId, permission);
 
 /** Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records. */
-function assertRefs({ unit_id, driver_id, mechanic_id, category_id }, current = {}) {
+function assertRefs({ unit_id, driver_id, mechanic_id }, current = {}) {
   if (!db.prepare('SELECT 1 FROM units WHERE id = ? AND (is_active = 1 OR id = ?)').get(unit_id, current.unit_id ?? null))
     throw new HttpError(422, 'Unit not found or inactive');
   if (driver_id !== current.driver_id && !assignable(driver_id, 'wo.as_driver')) throw new HttpError(422, 'Driver not found');
   if (mechanic_id && mechanic_id !== current.mechanic_id && !assignable(mechanic_id, 'wo.as_mechanic'))
     throw new HttpError(422, 'Mechanic not found');
-  if (category_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(category_id, current.category_id ?? null))
-    throw new HttpError(422, 'Repair category not found or inactive');
 }
 
 function validatePayload(body) {
@@ -322,7 +320,6 @@ function validatePayload(body) {
     driver_id,
     problem,
     mechanic_id: body.mechanic_id ? Number(body.mechanic_id) : null,
-    category_id: body.category_id ? Number(body.category_id) : null,
   };
 }
 
@@ -343,7 +340,7 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
       `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem,
         status, approval_status, channel_source, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.problem,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
   });
@@ -356,9 +353,9 @@ export function updateWorkOrder(woUuid, body) {
   const data = validatePayload(body);
   assertRefs(data, wo);
   db.prepare(
-    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, category_id = ?, problem = ?, updated_at = ?
+    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, updated_at = ?
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.problem, now(), woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, now(), woUuid);
   return getWorkOrder(woUuid);
 }
 
@@ -455,28 +452,44 @@ export function addSubStep(woUuid, stepId, name) {
 }
 
 /**
- * Job codes are added in the repair step (Step 7, the step where mechanics add their own sub-steps):
- * a mechanic while that step runs, an approver (admin) any time after it started, also to correct a finished WO.
- * Each entry names the mechanic who did the job.
+ * Repair category and job codes are filled in during the repair step (Step 7, the step where mechanics add their own
+ * sub-steps), never when the WO is created: by a mechanic while that step runs, by an approver (admin) any time after
+ * it started, also to correct a finished WO. The category comes first; job codes must belong to it.
+ * Each job code entry names the mechanic who did the job.
  */
 function jobCodeGate(wo, user) {
   if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved first');
   const repair = wo.steps.find((s) => s.allow_add_sub);
-  if (!repair) throw new HttpError(409, 'This work order has no repair step for job codes');
+  if (!repair) throw new HttpError(409, 'This work order has no repair step for category and job codes');
   const admin = hasPermission(user, 'wo.approve');
-  if (!repair.started_at) throw new HttpError(409, `Job codes can be added from Step ${repair.step_no} · ${repair.step_name}`);
-  if (!admin && repair.finished_at) throw new HttpError(409, `Step ${repair.step_no} · ${repair.step_name} is finished; ask the admin to change job codes`);
+  if (!repair.started_at) throw new HttpError(409, `Repair category and job codes are filled in from Step ${repair.step_no} · ${repair.step_name}`);
+  if (!admin && repair.finished_at) throw new HttpError(409, `Step ${repair.step_no} · ${repair.step_name} is finished; ask the admin to change the category or job codes`);
   return admin;
+}
+
+export function setWoCategory(woUuid, body, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  const categoryId = Number(body?.category_id);
+  if (!categoryId || !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(categoryId, wo.category_id ?? 0))
+    throw Object.assign(new HttpError(422, 'Choose an active repair category'), { errors: { category_id: 'Choose an active repair category' } });
+  const other = db.prepare(`SELECT COUNT(*) AS n FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id
+                             WHERE x.wo_uuid = ? AND j.category_id != ?`).get(woUuid, categoryId).n;
+  if (other) throw new HttpError(409, `Remove the ${other} job code(s) of the current category first`);
+  db.prepare('UPDATE work_orders SET category_id = ?, updated_at = ? WHERE wo_uuid = ?').run(categoryId, now(), woUuid);
+  return getWorkOrder(woUuid);
 }
 
 export function addWoJobCode(woUuid, body, user) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);
+  if (!wo.category_id) throw Object.assign(new HttpError(422, 'Choose the repair category first'), { errors: { category_id: 'Choose the repair category first' } });
   const jobId = Number(body?.job_code_id);
   const mechanicId = Number(body?.mechanic_id);
   const errors = {};
-  if (!jobId || !db.prepare('SELECT 1 FROM job_codes j JOIN repair_categories c ON c.id = j.category_id WHERE j.id = ? AND j.is_active = 1').get(jobId))
-    errors.job_code_id = 'Choose an active job code';
+  const job = jobId ? db.prepare('SELECT category_id FROM job_codes WHERE id = ? AND is_active = 1').get(jobId) : null;
+  if (!job) errors.job_code_id = 'Choose an active job code';
+  else if (job.category_id !== wo.category_id) errors.job_code_id = 'This job code is not in the repair category of the work order';
   if (!mechanicId || !assignable(mechanicId, 'wo.as_mechanic')) errors.mechanic_id = 'Choose the mechanic who does this job';
   else if (jobId && db.prepare('SELECT 1 FROM wo_job_codes WHERE wo_uuid = ? AND job_code_id = ? AND mechanic_id = ?').get(woUuid, jobId, mechanicId))
     errors.job_code_id = 'This job code is already added for this mechanic';
