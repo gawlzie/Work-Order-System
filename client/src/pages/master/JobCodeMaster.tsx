@@ -77,7 +77,7 @@ export function JobCodeMasterPage() {
                 <span className="text-xs text-muted-foreground">{t('standard_duration')}: <span className="font-medium text-foreground tabular-nums">{duration(j.standard_duration)}</span></span>
                 <div className="flex gap-1">
                   <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(j)}><Pencil className="size-4" /></Button>
-                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" onClick={() => setDeleting(j)}><Trash2 className="size-4" /></Button>
+                  <Button size="icon" variant="ghost" title={t('delete')} aria-label={t('delete')} className="text-destructive" disabled={j.wo_count > 0} onClick={() => setDeleting(j)}><Trash2 className="size-4" /></Button>
                 </div>
               </div>
             </li>
@@ -93,6 +93,7 @@ export function JobCodeMasterPage() {
                 <Th><SortHeader field="job_name" label="job_name" state={state} /></Th>
                 <Th><SortHeader field="category" label="category" state={state} /></Th>
                 <Th><SortHeader field="standard_duration" label="standard_duration" state={state} /></Th>
+                <Th>{t('wo_used')}</Th>
                 <Th>{t('status')}</Th>
                 <Th className="text-right">{t('action')}</Th>
               </tr>
@@ -108,11 +109,12 @@ export function JobCodeMasterPage() {
                     {!j.category_active && <span className="ml-1.5 text-xs text-muted-foreground">({t('inactive')})</span>}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap tabular-nums">{duration(j.standard_duration)}</td>
+                  <td className="px-4 py-3 tabular-nums">{j.wo_count}</td>
                   <td className="px-4 py-3"><ActiveBadge active={j.is_active} /></td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" title={t('edit')} onClick={() => setEditing(j)}><Pencil className="size-4" /></Button>
-                      <Button size="icon" variant="ghost" title={t('delete')} className="text-destructive" onClick={() => setDeleting(j)}><Trash2 className="size-4" /></Button>
+                      <Button size="icon" variant="ghost" title={t('delete')} className="text-destructive" disabled={j.wo_count > 0} onClick={() => setDeleting(j)}><Trash2 className="size-4" /></Button>
                     </div>
                   </td>
                 </tr>

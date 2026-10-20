@@ -151,18 +151,23 @@ const LIST_SELECT = `
   SELECT wo.*, u.unit_number, u.unit_code, u.unit_type,
          d.full_name AS driver_name, m.full_name AS mechanic_name,
          c.name AS category, cb.full_name AS created_by_name,
+         jc.job_code, jc.job_name, jc.standard_duration AS job_standard_duration,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NOT NULL AND s.finished_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS current_step,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS next_step,
-         (SELECT COUNT(*) FROM wo_proofs p WHERE p.wo_uuid = wo.wo_uuid) AS proof_count
+         (SELECT COUNT(*) FROM wo_proofs p WHERE p.wo_uuid = wo.wo_uuid) AS proof_count,
+         -- Repair time: the repair step(s) (where mechanics add their own sub-steps, i.e. Repair Process), still counting if running.
+         (SELECT SUM(julianday(COALESCE(s.finished_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))) - julianday(s.started_at)) * 86400
+            FROM wo_steps s WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.allow_add_sub = 1 AND s.started_at IS NOT NULL) AS repair_seconds
   FROM work_orders wo
   JOIN units u ON u.id = wo.unit_id
   JOIN employees d ON d.id = wo.driver_id
   LEFT JOIN employees m ON m.id = wo.mechanic_id
   LEFT JOIN repair_categories c ON c.id = wo.category_id
+  LEFT JOIN job_codes jc ON jc.id = wo.job_code_id
   LEFT JOIN employees cb ON cb.id = wo.created_by`;
 
 function decorate(row) {
@@ -174,19 +179,20 @@ function decorate(row) {
     else if (row.status === STATUS.WAITING) stepInfo = `Next: ${row.next_step ?? '-'}`;
     else stepInfo = 'Not started';
   }
-  const { current_step, next_step, ...rest } = row;
-  return { ...rest, step_information: stepInfo, total_time: totalSec };
+  const { current_step, next_step, repair_seconds, ...rest } = row;
+  const repairTime = repair_seconds == null ? null : Math.max(0, Math.round(repair_seconds));
+  return { ...rest, step_information: stepInfo, total_time: totalSec, repair_time: repairTime };
 }
 
-const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'total_time'];
+const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'job_code', 'total_time'];
 
 function buildFilters(q) {
   const where = [];
   const params = [];
   if (q.search) {
-    where.push('(wo.wo_number LIKE ? OR u.unit_number LIKE ? OR d.full_name LIKE ? OR wo.problem LIKE ?)');
+    where.push('(wo.wo_number LIKE ? OR u.unit_number LIKE ? OR d.full_name LIKE ? OR wo.problem LIKE ? OR IFNULL(jc.job_code, \'\') LIKE ? OR IFNULL(jc.job_name, \'\') LIKE ?)');
     const s = `%${q.search}%`;
-    params.push(s, s, s, s);
+    params.push(s, s, s, s, s, s);
   }
   for (const [key, col] of [
     ['status', 'wo.status'],
@@ -196,6 +202,7 @@ function buildFilters(q) {
     ['driver_id', 'wo.driver_id'],
     ['mechanic_id', 'wo.mechanic_id'],
     ['category_id', 'wo.category_id'],
+    ['job_code_id', 'wo.job_code_id'],
     ['created_by', 'wo.created_by'],
   ]) {
     if (q[key]) {
@@ -271,14 +278,24 @@ const assignable = (employeeId, permission) =>
   db.prepare(`SELECT 1 FROM employees e JOIN roles r ON r.id = e.role_id WHERE e.id = ? AND e.is_active = 1 AND ${roleHas()}`)
     .get(employeeId, permission);
 
-/** Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records. */
-function assertRefs({ unit_id, driver_id, mechanic_id, category_id }, current = {}) {
+/**
+ * Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records.
+ * A job code decides the category: the WO's category is set to the job code's category.
+ */
+function assertRefs(data, current = {}) {
+  const { unit_id, driver_id, mechanic_id } = data;
+  if (data.job_code_id) {
+    const job = db.prepare('SELECT category_id FROM job_codes WHERE id = ? AND (is_active = 1 OR id = ?)').get(data.job_code_id, current.job_code_id ?? null);
+    if (!job) throw new HttpError(422, 'Job code not found or inactive');
+    data.category_id = job.category_id;
+  }
+  const { category_id } = data;
   if (!db.prepare('SELECT 1 FROM units WHERE id = ? AND (is_active = 1 OR id = ?)').get(unit_id, current.unit_id ?? null))
     throw new HttpError(422, 'Unit not found or inactive');
   if (driver_id !== current.driver_id && !assignable(driver_id, 'wo.as_driver')) throw new HttpError(422, 'Driver not found');
   if (mechanic_id && mechanic_id !== current.mechanic_id && !assignable(mechanic_id, 'wo.as_mechanic'))
     throw new HttpError(422, 'Mechanic not found');
-  if (category_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(category_id, current.category_id ?? null))
+  if (category_id && !data.job_code_id && !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(category_id, current.category_id ?? null))
     throw new HttpError(422, 'Repair category not found or inactive');
 }
 
@@ -302,6 +319,7 @@ function validatePayload(body) {
     problem,
     mechanic_id: body.mechanic_id ? Number(body.mechanic_id) : null,
     category_id: body.category_id ? Number(body.category_id) : null,
+    job_code_id: body.job_code_id ? Number(body.job_code_id) : null,
   };
 }
 
@@ -319,10 +337,10 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
   const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
-      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem,
+      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, job_code_id, problem,
         status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.problem,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.job_code_id, data.problem,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
   });
@@ -335,9 +353,9 @@ export function updateWorkOrder(woUuid, body) {
   const data = validatePayload(body);
   assertRefs(data, wo);
   db.prepare(
-    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, category_id = ?, problem = ?, updated_at = ?
+    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, category_id = ?, job_code_id = ?, problem = ?, updated_at = ?
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.problem, now(), woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.category_id, data.job_code_id, data.problem, now(), woUuid);
   return getWorkOrder(woUuid);
 }
 

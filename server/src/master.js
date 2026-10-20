@@ -374,7 +374,8 @@ export function deleteCategory(id) {
 
 /* ---------- Job codes ---------- */
 
-const JOB_COLUMNS = 'j.*, c.name AS category_name, c.is_active AS category_active';
+const JOB_COLUMNS = `j.*, c.name AS category_name, c.is_active AS category_active,
+  (SELECT COUNT(*) FROM work_orders w WHERE w.job_code_id = j.id) AS wo_count`;
 
 export function listJobCodes(q = {}) {
   const s = `%${str(q.search)}%`;
@@ -439,7 +440,8 @@ export function updateJobCode(id, body) {
 }
 
 export function deleteJobCode(id) {
-  getJobCode(id);
+  const job = getJobCode(id);
+  if (job.wo_count) throw new HttpError(409, 'Job code is used on work orders. Deactivate it instead');
   db.prepare('DELETE FROM job_codes WHERE id = ?').run(id);
 }
 

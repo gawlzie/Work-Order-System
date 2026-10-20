@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, qs } from './api';
-import type { Category, DashboardStats, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail } from './types';
+import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail } from './types';
 
 export interface WoListParams {
   search?: string;
@@ -16,6 +16,7 @@ export interface WoListParams {
   unit_id?: string;
   mechanic_id?: string;
   category_id?: string;
+  job_code_id?: string;
   created_by?: string;
 }
 
@@ -51,6 +52,10 @@ export const useEmployees = (role: 'driver' | 'mechanic') =>
 /** Categories for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
 export const useCategories = (all = false) =>
   useQuery({ queryKey: ['categories', 'options', all], queryFn: () => api<Category[]>(`/master/repair-categories${all ? '?all=1' : ''}`), staleTime: 300_000 });
+
+/** Job codes for the work order picker. Pass `all` to include inactive ones (e.g. list filters). */
+export const useJobCodeOptions = (all = false) =>
+  useQuery({ queryKey: ['job-codes', 'options', all], queryFn: () => api<JobCodeOption[]>(`/master/job-codes${all ? '?all=1' : ''}`), staleTime: 300_000 });
 
 export const useRoleOptions = () =>
   useQuery({ queryKey: ['roles', 'options'], queryFn: () => api<RoleOption[]>('/master/roles'), staleTime: 300_000 });

@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
   driver_id        INTEGER NOT NULL REFERENCES employees(id),
   mechanic_id      INTEGER REFERENCES employees(id),
   category_id      INTEGER REFERENCES repair_categories(id),
+  job_code_id      INTEGER REFERENCES job_codes(id),
   problem          TEXT NOT NULL,
   status           TEXT NOT NULL DEFAULT 'OPEN',
   approval_status  TEXT NOT NULL DEFAULT 'WAITING',
@@ -212,6 +213,7 @@ if (db.prepare('PRAGMA table_info(job_codes)').all().find((c) => c.name === 'sta
     db.exec('DROP TABLE job_codes; ALTER TABLE job_codes_new RENAME TO job_codes;');
   });
 }
+if (!columns('work_orders').includes('job_code_id')) db.exec('ALTER TABLE work_orders ADD COLUMN job_code_id INTEGER REFERENCES job_codes(id)');
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 

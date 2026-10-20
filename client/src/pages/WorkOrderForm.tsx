@@ -2,14 +2,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { JobCodePicker, jobDuration } from '../components/JobCodePicker';
 import { useToast } from '../components/toast';
 import { Button, Card, Field, Modal, PageHeader, Select, Spinner, Textarea } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import { useI18n } from '../lib/i18n';
-import { useCategories, useEmployees, useUnits, useWorkOrder } from '../lib/queries';
+import { useCategories, useEmployees, useJobCodeOptions, useUnits, useWorkOrder } from '../lib/queries';
 import type { WorkOrderDetail } from '../lib/types';
 
-const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', category_id: '', problem: '' };
+const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', job_code_id: '', category_id: '', problem: '' };
 type Form = typeof EMPTY;
 
 export function WorkOrderFormPage() {
@@ -24,6 +25,7 @@ export function WorkOrderFormPage() {
   const drivers = useEmployees('driver');
   const mechanics = useEmployees('mechanic');
   const categories = useCategories();
+  const jobCodes = useJobCodeOptions(true);
 
   const [form, setForm] = useState<Form>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
@@ -36,6 +38,7 @@ export function WorkOrderFormPage() {
         unit_id: String(wo.unit_id),
         driver_id: String(wo.driver_id),
         mechanic_id: wo.mechanic_id ? String(wo.mechanic_id) : '',
+        job_code_id: wo.job_code_id ? String(wo.job_code_id) : '',
         category_id: wo.category_id ? String(wo.category_id) : '',
         problem: wo.problem,
       });
@@ -76,6 +79,9 @@ export function WorkOrderFormPage() {
 
   // Keep the saved unit / driver / mechanic selectable when it has been deactivated since.
   const wo = existing.data;
+  // Active job codes, plus the WO's own one if it was deactivated since.
+  const jobOptions = (jobCodes.data ?? []).filter((j) => j.is_active || String(j.id) === String(wo?.job_code_id ?? ''));
+  const selectedJob = jobOptions.find((j) => String(j.id) === form.job_code_id) ?? null;
 
   if (isEdit && existing.isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
 
@@ -111,10 +117,25 @@ export function WorkOrderFormPage() {
               {mechanics.data?.map((m) => <option key={m.id} value={m.id}>{m.full_name} ({m.employee_id})</option>)}
             </Select>
           </Field>
+          <Field label={t('job_code')} error={errors.job_code_id} className="sm:col-span-2">
+            <JobCodePicker
+              options={jobOptions}
+              value={form.job_code_id}
+              invalid={!!errors.job_code_id}
+              onChange={(job) => {
+                setForm((f) => ({ ...f, job_code_id: job ? String(job.id) : '', category_id: job ? String(job.category_id) : f.category_id }));
+                setErrors((er) => ({ ...er, job_code_id: undefined, category_id: undefined }));
+              }}
+            />
+            <span className="text-xs text-muted-foreground">
+              {selectedJob ? `${t('standard_duration')}: ${jobDuration(selectedJob.standard_duration)} · ${selectedJob.category_name}` : t('job_code_hint')}
+            </span>
+          </Field>
           <Field label={t('category')} error={errors.category_id}>
-            <Select value={form.category_id} onChange={set('category_id')}>
+            <Select value={form.category_id} onChange={set('category_id')} disabled={!!selectedJob} title={selectedJob ? t('category_from_job') : undefined}>
               <option value="">{t('select_category')}</option>
               {wo?.category_id && categories.data && !categories.data.some((c) => c.id === wo.category_id) && <option value={wo.category_id}>{wo.category}</option>}
+              {selectedJob && categories.data && !categories.data.some((c) => c.id === selectedJob.category_id) && <option value={selectedJob.category_id}>{selectedJob.category_name}</option>}
               {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>

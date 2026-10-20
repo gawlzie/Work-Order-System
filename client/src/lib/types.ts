@@ -125,6 +125,18 @@ export interface MasterJobCode {
   /** Planned repair time in minutes; null when unknown (shown as "-"). */
   standard_duration: number | null;
   is_active: number;
+  wo_count: number;
+}
+
+/** Job code entry for the work order picker. */
+export interface JobCodeOption {
+  id: number;
+  job_code: string;
+  job_name: string;
+  category_id: number;
+  category_name: string;
+  standard_duration: number | null;
+  is_active: number;
 }
 
 export interface WorkOrder {
@@ -140,6 +152,14 @@ export interface WorkOrder {
   mechanic_name: string | null;
   category_id: number | null;
   category: string | null;
+  /** Standard repair job of this work order (optional); its category is the WO's category. */
+  job_code_id: number | null;
+  job_code: string | null;
+  job_name: string | null;
+  /** Standard duration of the job code in minutes, null when unknown. */
+  job_standard_duration: number | null;
+  /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
+  repair_time: number | null;
   problem: string;
   status: WoStatus;
   approval_status: ApprovalStatus;

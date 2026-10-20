@@ -69,6 +69,12 @@ app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
 app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
 
 // Inactive categories stay visible to filters (?all=1) but cannot be picked for new work orders.
+// Job codes for the work order picker; inactive ones only with ?all=1 (filters).
+app.get('/api/master/job-codes', wrap((req) =>
+  db.prepare(`SELECT j.id, j.job_code, j.job_name, j.category_id, c.name AS category_name, j.standard_duration, j.is_active
+              FROM job_codes j JOIN repair_categories c ON c.id = j.category_id
+              ${req.query.all ? '' : 'WHERE j.is_active = 1 AND c.is_active = 1'} ORDER BY j.job_code`).all()));
+
 app.get('/api/master/repair-categories', wrap((req) =>
   db.prepare(`SELECT id, name, is_active FROM repair_categories ${req.query.all ? '' : 'WHERE is_active = 1'} ORDER BY name`).all()));
 
@@ -105,7 +111,7 @@ app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
 
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
-  ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['problem', 'Problem'], ['status', 'Status'],
+  ['mechanic_name', 'PIC Mechanic'], ['category', 'Category'], ['job_code', 'Job Code'], ['job_name', 'Job Name'], ['job_standard_duration', 'Standard Duration (minutes)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (minutes)'], ['proof_count', 'Proof Files'],
 ];
