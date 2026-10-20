@@ -8,6 +8,7 @@ import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
 import { jobDuration } from '../components/JobCodePicker';
 import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
+import { useConfirm } from '../components/confirm';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Spinner, Textarea } from '../components/ui';
 import { api } from '../lib/api';
@@ -54,6 +55,7 @@ export function WorkOrderDetailPage() {
   const { t } = useI18n();
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
@@ -103,13 +105,13 @@ export function WorkOrderDetailPage() {
     const startable = parent ? !!parent.started_at && !parent.finished_at : nextTop?.id === step.id;
     if (!step.started_at) {
       return startable ? (
-        <Button size="sm" variant="outline" loading={progress.isPending && progress.variables?.step.id === step.id} onClick={() => progress.mutate({ step, action: 'start' })}>
+        <Button size="sm" variant="outline" loading={progress.isPending && progress.variables?.step.id === step.id} onClick={() => confirm({ message: t('confirm_start_step', { step: `${step.step_no}. ${step.step_name}` }) }, () => progress.mutate({ step, action: 'start' }))}>
           <Play className="size-3.5" /> {t('start')}
         </Button>
       ) : null;
     }
     return (
-      <Button size="sm" variant="success" onClick={() => (parent ? progress.mutate({ step, action: 'finish' }) : setFinishing(step))}>
+      <Button size="sm" variant="success" onClick={() => (parent ? confirm({ message: t('confirm_finish_step', { step: step.step_name }), tone: 'success' }, () => progress.mutate({ step, action: 'finish' })) : setFinishing(step))}>
         <Check className="size-3.5" /> {t('finish')}
       </Button>
     );
@@ -266,7 +268,7 @@ export function WorkOrderDetailPage() {
         {canProgress && (
           <form
             className="no-print flex gap-2 border-t border-border p-4"
-            onSubmit={(e) => { e.preventDefault(); if (extra.trim().length >= 3) addExtra.mutate(); }}
+            onSubmit={(e) => { e.preventDefault(); if (extra.trim().length >= 3) confirm({ message: t('confirm_add_extra', { name: extra.trim() }) }, () => addExtra.mutate()); }}
           >
             <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={t('add_additional_work')} maxLength={120} />
             <Button type="submit" variant="outline" loading={addExtra.isPending} disabled={extra.trim().length < 3} title={t('create')}>

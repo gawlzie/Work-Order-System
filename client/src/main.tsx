@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
+import { ConfirmProvider } from './components/confirm';
 import { ToastProvider } from './components/toast';
 import { AuthProvider } from './lib/auth';
 import { I18nProvider } from './lib/i18n';
@@ -20,11 +21,13 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
         <ToastProvider>
+          <ConfirmProvider>
           <BrowserRouter>
             <AuthProvider>
               <App />
             </AuthProvider>
           </BrowserRouter>
+          </ConfirmProvider>
         </ToastProvider>
       </I18nProvider>
     </QueryClientProvider>

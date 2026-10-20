@@ -10,6 +10,7 @@ import { useOnline } from '../lib/pwa';
 import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
 import type { WoJobCode, WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
+import { useConfirm } from './confirm';
 import { useToast } from './toast';
 import { Button, Select } from './ui';
 
@@ -22,6 +23,7 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
   const { t } = useI18n();
   const { user, can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const online = useOnline();
   const repair = [...wo.steps, ...wo.additional_work].find((s) => s.allow_add_sub);
@@ -90,7 +92,10 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
     if (!jobId) next.job_code_id = t('choose_job_code');
     if (!mechanicId) next.mechanic_id = t('choose_job_mechanic');
     setErrors(next);
-    if (!Object.keys(next).length) add.mutate();
+    if (Object.keys(next).length) return;
+    const job = jobOptions.find((j) => String(j.id) === jobId);
+    const mechanic = mechanics.data?.find((m) => String(m.id) === mechanicId);
+    confirm({ message: t('confirm_add_job', { job: job ? `${job.job_code} · ${job.job_name}` : '', mechanic: mechanic?.full_name ?? '' }) }, () => add.mutate());
   };
 
   return (
@@ -122,7 +127,11 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
         {editable ? (
           <Select
             value={wo.category_id ? String(wo.category_id) : ''}
-            onChange={(e) => e.target.value && setCategory.mutate(e.target.value)}
+            onChange={(e) => {
+              const id = e.target.value;
+              const name = categories.data?.find((c) => String(c.id) === id)?.name ?? '';
+              if (id) confirm({ message: t('confirm_category', { name }) }, () => setCategory.mutate(id));
+            }}
             disabled={!online || setCategory.isPending}
             aria-label={t('category')}
           >
@@ -162,17 +171,17 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
               </div>
               {canTime && !j.finished_at && (
                 j.started_at ? (
-                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'finish')} onClick={() => timer.mutate({ entry: j, action: 'finish' })}>
+                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'finish')} onClick={() => confirm({ message: t('confirm_job_finish', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'success' }, () => timer.mutate({ entry: j, action: 'finish' }))}>
                     <Check className="size-4" /> {t('finish')}
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'start')} onClick={() => timer.mutate({ entry: j, action: 'start' })}>
+                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'start')} onClick={() => confirm({ message: t('confirm_job_start', { job: j.job_code, mechanic: j.mechanic_name }) }, () => timer.mutate({ entry: j, action: 'start' }))}>
                     <Play className="size-4" /> {t('start')}
                   </Button>
                 )
               )}
               {editable && (
-                <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!online} loading={remove.isPending && remove.variables === j.id} onClick={() => remove.mutate(j.id)}>
+                <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!online} loading={remove.isPending && remove.variables === j.id} onClick={() => confirm({ message: t('confirm_remove_job', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'destructive', confirmLabel: t('delete') }, () => remove.mutate(j.id))}>
                   <Trash2 className="size-4" />
                 </Button>
               )}

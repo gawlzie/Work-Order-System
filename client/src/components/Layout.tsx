@@ -7,6 +7,7 @@ import { initials } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import type { Permission } from '../lib/types';
+import { useConfirm } from './confirm';
 import { useBodyLock } from './ui';
 
 const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; permission?: Permission }[] = [
@@ -26,6 +27,7 @@ const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; 
 export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { user, logout, can } = useAuth();
+  const confirm = useConfirm();
   const nav = NAV.filter((item) => !item.permission || can(item.permission));
   const navigate = useNavigate();
   const location = useLocation();
@@ -155,7 +157,7 @@ export function Layout() {
                   <button onClick={() => { setMenuOpen(false); navigate('/profile'); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
                     <UserIcon className="size-4" /> {t('profile')}
                   </button>
-                  <button onClick={() => { logout(); navigate('/login'); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-muted">
+                  <button onClick={() => { setMenuOpen(false); confirm({ message: t('confirm_logout'), tone: 'destructive', confirmLabel: t('logout') }, () => { logout(); navigate('/login'); }); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-muted">
                     <LogOut className="size-4" /> {t('logout')}
                   </button>
                 </div>

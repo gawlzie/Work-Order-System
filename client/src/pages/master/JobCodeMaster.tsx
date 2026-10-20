@@ -4,6 +4,7 @@ import { Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ActiveBadge, DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -153,6 +154,7 @@ export function JobCodeMasterPage() {
 function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: MasterJobCode | null; categories: Category[]; defaultCategory: string; onClose: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [form, setForm] = useState({
     job_code: job?.job_code ?? '',
@@ -199,7 +201,7 @@ function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: Maste
     if (Number(form.minutes) > 59) next.standard_duration = 'Minutes must be 0-59';
     else if (totalMinutes > 60000) next.standard_duration = 'Standard duration must be at most 1000 hours';
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t(job ? 'confirm_save_edit' : 'confirm_save_new', { name: form.job_code.trim() }) }, () => save.mutate());
   };
 
   return (

@@ -2,6 +2,7 @@ import { clsx } from 'clsx';
 import { CheckCircle2, ChevronRight, Download, KeyRound, LogOut, Monitor, Share } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useConfirm } from '../../components/confirm';
 import { Button, Card, Switch } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
@@ -49,6 +50,7 @@ export function AccountPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [dark, setDark] = useTheme();
+  const confirm = useConfirm();
   if (!user) return null;
 
   return (
@@ -89,7 +91,7 @@ export function AccountPage() {
         <Row to="/transaction/work-order" icon={<Monitor className="size-5" />}>{t('m_full_web')}</Row>
       </Card>
 
-      <Button variant="outline" className="h-12 w-full text-destructive" onClick={() => { logout(); navigate('/login', { state: { from: '/m' } }); }}>
+      <Button variant="outline" className="h-12 w-full text-destructive" onClick={() => confirm({ message: t('confirm_logout'), tone: 'destructive', confirmLabel: t('logout') }, () => { logout(); navigate('/login', { state: { from: '/m' } }); })}>
         <LogOut className="size-4" /> {t('logout')}
       </Button>
     </div>

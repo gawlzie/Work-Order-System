@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { KeyRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { useConfirm } from '../components/confirm';
 import { useToast } from '../components/toast';
 import { Button, Card, Field, Input, Modal, PageHeader } from '../components/ui';
 import { api } from '../lib/api';
@@ -12,6 +13,7 @@ export function ProfilePage() {
   const { t } = useI18n();
   const { user } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -74,7 +76,7 @@ export function ProfilePage() {
           </>
         }
       >
-        <form id="pw-form" className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); change.mutate(); }}>
+        <form id="pw-form" className="space-y-4" onSubmit={(e: FormEvent) => { e.preventDefault(); confirm({ message: t('confirm_password') }, () => change.mutate()); }}>
           <Field label={t('current_password')} required>
             <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
           </Field>

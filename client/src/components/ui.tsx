@@ -1,6 +1,6 @@
 import { clsx } from 'clsx';
 import { Inbox, Loader2, X } from 'lucide-react';
-import { forwardRef, useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 
 type Variant = 'primary' | 'outline' | 'ghost' | 'destructive' | 'success';
 
@@ -148,13 +148,23 @@ export function MetaItem({ label, children, className }: { label: string; childr
 /** Button text that collapses to an icon-only button (still read by screen readers) on phones. */
 export const BtnLabel = ({ children }: { children: ReactNode }) => <span className="max-sm:sr-only">{children}</span>;
 
+/** Open modals, newest last: Escape only closes the top one (e.g. a confirmation over a form). */
+const openModals: symbol[] = [];
+
 export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: { open: boolean; onClose: () => void; title: string; description?: string; children?: ReactNode; footer?: ReactNode; size?: 'md' | 'lg' }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const id = Symbol('modal');
+    openModals.push(id);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && openModals.at(-1) === id && closeRef.current();
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      openModals.splice(openModals.indexOf(id), 1);
+    };
+  }, [open]);
   useBodyLock(open);
   if (!open) return null;
   // Bottom sheet on phones, centered dialog from `sm` up.

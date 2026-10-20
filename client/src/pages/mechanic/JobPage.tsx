@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
 import { WoJobCodes } from '../../components/WoJobCodes';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Button, Card, EmptyState, Input, Spinner, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -44,6 +45,7 @@ export function JobPage() {
   const { t } = useI18n();
   const { user, can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const online = useOnline();
@@ -90,7 +92,11 @@ export function JobPage() {
   const current = allTop.find((s) => !s.finished_at);
   const doneCount = allTop.filter((s) => s.finished_at).length;
   const busy = (step: Step, action: 'start' | 'finish') => progress.isPending && progress.variables?.step.id === step.id && progress.variables.action === action;
-  const run = (step: Step, action: 'start' | 'finish') => progress.mutate({ step, action });
+  const run = (step: Step, action: 'start' | 'finish') =>
+    confirm(
+      { message: t(action === 'start' ? 'confirm_start_step' : 'confirm_finish_step', { step: `${step.step_no}. ${step.step_name}` }), tone: action === 'finish' ? 'success' : 'primary' },
+      () => progress.mutate({ step, action }),
+    );
   // The job code step (Step 7) can only be finished when it has job codes and all of them are finished.
   const jobsBlock = current?.allow_add_sub
     ? !wo.job_codes.length ? t('add_job_first') : wo.job_codes.some((j) => !j.finished_at) ? t('finish_jobs_first') : null
@@ -239,7 +245,7 @@ export function JobPage() {
             className="flex gap-2 border-t border-border p-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (extra.trim().length >= 3) addExtra.mutate();
+              if (extra.trim().length >= 3) confirm({ message: t('confirm_add_extra', { name: extra.trim() }) }, () => addExtra.mutate());
             }}
           >
             <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={t('add_additional_work')} maxLength={120} className="h-11" />

@@ -4,6 +4,7 @@ import { Lock, Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Skeleton, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -144,6 +145,7 @@ function RoleForm({ role, defs, onClose }: { role: MasterRole | null; defs: Perm
   const { t } = useI18n();
   const { user, refresh } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const isAdmin = role?.code === 'admin';
   // Mirrors the server: admin always keeps every access permission; only assignment flags are optional.
@@ -185,7 +187,7 @@ function RoleForm({ role, defs, onClose }: { role: MasterRole | null; defs: Perm
     if (!/^[a-z0-9_]{2,30}$/.test(form.code)) next.code = 'Code must be 2-30 characters: a-z, 0-9 or _';
     if (form.name.trim().length < 2) next.name = 'Name is required';
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t(role ? 'confirm_save_edit' : 'confirm_save_new', { name: form.name.trim() }) }, () => save.mutate());
   };
 
   return (

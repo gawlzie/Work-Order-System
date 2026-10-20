@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ActiveBadge, DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -157,6 +158,7 @@ export function UnitMasterPage() {
 function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: string[]; onClose: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [form, setForm] = useState({
     unit_code: unit?.unit_code ?? '',
@@ -195,7 +197,7 @@ function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: st
     if (!form.unit_number.trim()) next.unit_number = 'Unit number is required';
     if (form.unit_type.trim().length < 2) next.unit_type = 'Unit type is required';
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t(unit ? 'confirm_save_edit' : 'confirm_save_new', { name: form.unit_code.trim() }) }, () => save.mutate());
   };
 
   return (

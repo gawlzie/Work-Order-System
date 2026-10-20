@@ -4,6 +4,7 @@ import { KeyRound, Pencil, Plus, RefreshCcw, Trash2, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ActiveBadge, DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton, Switch } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -171,6 +172,7 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
   const { t } = useI18n();
   const { user } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const isSelf = !!employee && employee.id === user?.id;
   const [form, setForm] = useState({
@@ -221,7 +223,7 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
       if (form.password && form.password.length < 8) next.password = 'Password must be at least 8 characters';
     }
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t(employee ? 'confirm_save_edit' : 'confirm_save_new', { name: form.full_name.trim() }) }, () => save.mutate());
   };
 
   return (

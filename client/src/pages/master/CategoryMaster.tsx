@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ActiveBadge, DeleteDialog, SearchBox, SortHeader, Th, fieldErrors, useListState } from '../../components/master';
 import { Pagination } from '../../components/Pagination';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select, Skeleton, Switch, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -149,6 +150,7 @@ export function CategoryMasterPage() {
 function CategoryForm({ category, onClose }: { category: MasterCategory | null; onClose: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [form, setForm] = useState({
     name: category?.name ?? '',
@@ -176,7 +178,7 @@ function CategoryForm({ category, onClose }: { category: MasterCategory | null; 
     const next: Record<string, string> = {};
     if (form.name.trim().length < 2) next.name = 'Category name must be 2-50 characters';
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t(category ? 'confirm_save_edit' : 'confirm_save_new', { name: form.name.trim() }) }, () => save.mutate());
   };
 
   return (

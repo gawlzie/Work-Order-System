@@ -3,6 +3,7 @@ import { clsx } from 'clsx';
 import { ArrowDown, ArrowUp, Info, Pencil, Plus, RefreshCcw, Search, Trash2, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { DeleteDialog, fieldErrors } from '../../components/master';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Skeleton, Switch, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -14,6 +15,7 @@ const useSteps = () => useQuery({ queryKey: ['steps'], queryFn: () => api<StepTe
 export function StepMasterPage() {
   const { t } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const list = useSteps();
   const [search, setSearch] = useState('');
@@ -101,10 +103,10 @@ export function StepMasterPage() {
                   </div>
                 </div>
                 <div className="-mr-2 flex shrink-0 justify-end gap-1 max-sm:-mt-1">
-                  <Button size="icon" variant="ghost" title={t('move_up')} aria-label={t('move_up')} disabled={!canMove || index === 0} onClick={() => move.mutate({ id: s.id, direction: 'up' })}>
+                  <Button size="icon" variant="ghost" title={t('move_up')} aria-label={t('move_up')} disabled={!canMove || index === 0} onClick={() => confirm({ message: t('confirm_move', { name: s.name, dir: t('move_up').toLowerCase() }) }, () => move.mutate({ id: s.id, direction: 'up' }))}>
                     <ArrowUp className="size-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" title={t('move_down')} aria-label={t('move_down')} disabled={!canMove || index === all.length - 1} onClick={() => move.mutate({ id: s.id, direction: 'down' })}>
+                  <Button size="icon" variant="ghost" title={t('move_down')} aria-label={t('move_down')} disabled={!canMove || index === all.length - 1} onClick={() => confirm({ message: t('confirm_move', { name: s.name, dir: t('move_down').toLowerCase() }) }, () => move.mutate({ id: s.id, direction: 'down' }))}>
                     <ArrowDown className="size-4" />
                   </Button>
                   <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(s)}>
@@ -132,6 +134,7 @@ export function StepMasterPage() {
 function StepForm({ step, lastActive, onClose }: { step: StepTemplate | null; lastActive: boolean; onClose: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const [form, setForm] = useState({
     name: step?.name ?? '',
@@ -179,7 +182,7 @@ function StepForm({ step, lastActive, onClose }: { step: StepTemplate | null; la
     if (names.some((n) => n.length < 2)) next.sub_steps = 'Each sub-step must be 2-60 characters';
     else if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) next.sub_steps = 'Sub-step names must be unique';
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t(step ? 'confirm_save_edit' : 'confirm_save_new', { name: form.name.trim() }) }, () => save.mutate());
   };
 
   return (

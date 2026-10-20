@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth';
 import { formatDateTime } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import type { Proof, WorkOrderDetail } from '../lib/types';
+import { useConfirm } from './confirm';
 import { useToast } from './toast';
 import { Button, Card, Modal } from './ui';
 
@@ -56,6 +57,7 @@ export function ProofSection({ wo }: { wo: WorkOrderDetail }) {
   const { t } = useI18n();
   const { can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -85,6 +87,7 @@ export function ProofSection({ wo }: { wo: WorkOrderDetail }) {
     if (valid.length > room) toast('error', t('proof_limit', { n: MAX_FILES }));
     const batch = valid.slice(0, Math.max(0, room));
     if (!batch.length) return;
+    if (!(await confirm({ message: t('confirm_upload', { n: batch.length, names: batch.map((f) => f.name).join(', ') }) }))) return;
     setProgress({ done: 0, total: batch.length });
     let saved = 0;
     for (const file of batch) {

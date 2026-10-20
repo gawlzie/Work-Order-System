@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Button, Card, Field, Select, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
@@ -18,6 +19,7 @@ export function NewJobPage() {
   const { t } = useI18n();
   const { user, can } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const online = useOnline();
@@ -55,7 +57,7 @@ export function NewJobPage() {
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
     setErrors(next);
-    if (!Object.keys(next).length) save.mutate();
+    if (!Object.keys(next).length) confirm({ message: t('confirm_submit_wo') }, () => save.mutate());
   };
 
   return (
