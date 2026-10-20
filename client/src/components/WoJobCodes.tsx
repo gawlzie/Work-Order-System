@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Hash, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Check, CheckCircle2, Circle, Hash, Loader, Play, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { formatDateTime } from '../lib/format';
+import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useOnline } from '../lib/pwa';
 import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
-import type { WorkOrderDetail } from '../lib/types';
+import type { WoJobCode, WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
 import { useToast } from './toast';
 import { Button, Select } from './ui';
@@ -28,6 +28,15 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
   const workable = wo.approval_status !== 'REJECT';
   const admin = can('wo.approve');
   const editable = workable && !!repair?.started_at && (admin || (can('wo.progress') && !repair.finished_at));
+  // Job code timers run while the job code step (Step 7) is in progress.
+  const canTime = workable && can('wo.progress') && !!repair?.started_at && !repair.finished_at;
+  const running = wo.job_codes.some((j) => j.started_at && !j.finished_at);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTick((n) => n + 1), 15_000);
+    return () => clearInterval(id);
+  }, [running]);
   const jobs = useJobCodeOptions();
   const mechanics = useEmployees('mechanic');
   const categories = useCategories();
@@ -61,6 +70,12 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
     },
     onError: (err) => toast('error', (err as Error).message),
   });
+  const timer = useMutation({
+    mutationFn: ({ entry, action }: { entry: WoJobCode; action: 'start' | 'finish' }) =>
+      api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes/${entry.id}/${action}`, { method: 'POST' }),
+    onSuccess: done,
+    onError: (err) => toast('error', (err as Error).message),
+  });
   const remove = useMutation({
     mutationFn: (id: number) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes/${id}`, { method: 'DELETE' }),
     onSuccess: done,
@@ -68,6 +83,8 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
   });
 
   const totalStd = wo.job_codes.reduce((sum, j) => sum + (j.standard_duration ?? 0), 0);
+  const finishedJobs = wo.job_codes.filter((j) => j.finished_at).length;
+  const busy = (j: WoJobCode, action: 'start' | 'finish') => timer.isPending && timer.variables?.entry.id === j.id && timer.variables.action === action;
   const submit = () => {
     const next: Record<string, string> = {};
     if (!jobId) next.job_code_id = t('choose_job_code');
@@ -93,7 +110,12 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
           )}
         </div>
       )}
-      {compact && <p className="mb-2 text-sm font-medium">{t('category_job_codes')}</p>}
+      {compact && (
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <p className="text-sm font-medium">{t('category_job_codes')}</p>
+          {wo.job_codes.length > 0 && <span className="text-xs text-muted-foreground tabular-nums">{t('jobs_done', { done: finishedJobs, total: wo.job_codes.length })}</span>}
+        </div>
+      )}
 
       <div className={clsx(compact ? 'mb-3' : 'border-b border-border px-4 py-3')}>
         <p className="mb-1 text-xs text-muted-foreground">{t('category')}</p>
@@ -116,14 +138,39 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
       {wo.job_codes.length > 0 ? (
         <ul className={clsx('divide-y divide-border', compact && 'rounded-xl border border-border')}>
           {wo.job_codes.map((j) => (
-            <li key={j.id} className={clsx('flex items-start gap-3', compact ? 'px-3 py-2' : 'px-4 py-3')}>
+            <li key={j.id} className={clsx('flex items-start gap-3', compact ? 'px-3 py-2.5' : 'px-4 py-3', j.started_at && !j.finished_at && 'bg-yellow-500/5')}>
+              <span className="pt-0.5">
+                {j.finished_at ? <CheckCircle2 className="size-5 text-emerald-500" /> : j.started_at ? <Loader className="size-5 animate-spin text-yellow-500 [animation-duration:3s]" /> : <Circle className="size-5 text-muted-foreground/50" />}
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm break-words"><span className="font-mono text-xs">{j.job_code}</span> · {j.job_name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {j.mechanic_name} · {jobDuration(j.standard_duration)} · {j.category_name}
-                  {!compact && <> · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
+                  {j.mechanic_name} · {t('standard_short')} {jobDuration(j.standard_duration)}
+                  {!compact && <> · {j.category_name} · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
                 </p>
+                {j.started_at && (
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
+                    <span className="font-medium tabular-nums">{formatDuration(durationBetween(j.started_at, j.finished_at))}</span>
+                    {!compact && <span className="text-muted-foreground">{formatDateTime(j.started_at)} – {j.finished_at ? formatDateTime(j.finished_at) : '…'}</span>}
+                    {j.finished_at && j.standard_duration ? (
+                      (durationBetween(j.started_at, j.finished_at) ?? 0) > j.standard_duration * 60
+                        ? <span className="rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration((durationBetween(j.started_at, j.finished_at) ?? 0) - j.standard_duration * 60) })}</span>
+                        : <span className="rounded-full bg-emerald-500/10 px-1.5 text-emerald-700 dark:text-emerald-400">{t('within_standard')}</span>
+                    ) : null}
+                  </p>
+                )}
               </div>
+              {canTime && !j.finished_at && (
+                j.started_at ? (
+                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'finish')} onClick={() => timer.mutate({ entry: j, action: 'finish' })}>
+                    <Check className="size-4" /> {t('finish')}
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'start')} onClick={() => timer.mutate({ entry: j, action: 'start' })}>
+                    <Play className="size-4" /> {t('start')}
+                  </Button>
+                )
+              )}
               {editable && (
                 <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!online} loading={remove.isPending && remove.variables === j.id} onClick={() => remove.mutate(j.id)}>
                   <Trash2 className="size-4" />

@@ -15,7 +15,7 @@ import { PERMISSIONS } from './permissions.js';
 import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.js';
 import { seed } from './seed.js';
 import {
-  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, setWoCategory, createWorkOrder, dashboard, deleteWorkOrder,
+  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, setWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
   getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 
@@ -183,6 +183,8 @@ app.post('/api/work-orders/:id/job-codes', canWorkJobs, wrap((req, res) => {
   res.status(201);
   return addWoJobCode(req.params.id, req.body ?? {}, req.user);
 }));
+app.post('/api/work-orders/:id/job-codes/:entryId(\\d+)/:action(start|finish)', requirePermission('wo.progress'), wrap((req) =>
+  timeWoJobCode(req.params.id, Number(req.params.entryId), req.params.action, req.user)));
 app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)', canWorkJobs, wrap((req) => removeWoJobCode(req.params.id, Number(req.params.entryId), req.user)));
 
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>

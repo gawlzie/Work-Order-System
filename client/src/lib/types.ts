@@ -214,6 +214,9 @@ export interface WoJobCode {
   mechanic_name: string;
   added_by_name: string | null;
   added_at: string;
+  /** Each job code has its own timer, run during Step 7. */
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface WorkOrderDetail extends WorkOrder {

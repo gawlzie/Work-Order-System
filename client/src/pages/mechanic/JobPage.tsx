@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Play, Plus, RefreshCcw, Timer, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareText, Play, Plus, RefreshCcw, Timer, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
 import { WoJobCodes } from '../../components/WoJobCodes';
 import { useToast } from '../../components/toast';
-import { BtnLabel, Button, Card, EmptyState, Input, Spinner, Textarea } from '../../components/ui';
+import { Button, Card, EmptyState, Input, Spinner, Textarea } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../../lib/format';
@@ -50,7 +50,6 @@ export function JobPage() {
   const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
   const [remarks, setRemarks] = useState('');
   const [extra, setExtra] = useState('');
-  const [subName, setSubName] = useState('');
   useTick(15_000);
 
   const onDone = (data: WorkOrderDetail) => {
@@ -68,15 +67,6 @@ export function JobPage() {
         setRemarks('');
         toast('success', `${step.step_name} · ${t('done')}`);
       }
-    },
-    onError: (err) => toast('error', (err as Error).message),
-  });
-
-  const addSub = useMutation({
-    mutationFn: (step: Step) => api<WorkOrderDetail>(`/work-orders/${id}/steps/${step.id}/sub-steps`, { method: 'POST', body: { name: subName } }),
-    onSuccess: (data) => {
-      onDone(data);
-      setSubName('');
     },
     onError: (err) => toast('error', (err as Error).message),
   });
@@ -101,6 +91,10 @@ export function JobPage() {
   const doneCount = allTop.filter((s) => s.finished_at).length;
   const busy = (step: Step, action: 'start' | 'finish') => progress.isPending && progress.variables?.step.id === step.id && progress.variables.action === action;
   const run = (step: Step, action: 'start' | 'finish') => progress.mutate({ step, action });
+  // The job code step (Step 7) can only be finished when it has job codes and all of them are finished.
+  const jobsBlock = current?.allow_add_sub
+    ? !wo.job_codes.length ? t('add_job_first') : wo.job_codes.some((j) => !j.finished_at) ? t('finish_jobs_first') : null
+    : null;
 
   return (
     <div className="space-y-4">
@@ -171,63 +165,16 @@ export function JobPage() {
                 <p className="mt-1 text-xs text-muted-foreground">{t('m_assigned_to', { name: wo.mechanic_name })}</p>
               )}
 
-              {current.started_at && (current.sub_steps.length > 0 || (!!current.allow_add_sub && canProgress)) && (
-                <div className="mt-4">
-                  <p className="mb-2 text-sm font-medium">{t('m_checklist')}</p>
-                  <ul className="divide-y divide-border rounded-xl border border-border empty:hidden">
-                    {current.sub_steps.map((sub) => (
-                      <li key={sub.id} className="flex min-h-14 items-center gap-3 px-3 py-2">
-                        <StateIcon step={sub} className="size-5 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm break-words">
-                            {sub.step_name}
-                            {!!sub.is_additional && <span className="ml-1.5 text-xs text-primary">· {t('added_in_app')}</span>}
-                          </p>
-                          {sub.started_at && <p className="text-xs text-muted-foreground tabular-nums">{formatDuration(durationBetween(sub.started_at, sub.finished_at))}</p>}
-                        </div>
-                        {canProgress && !sub.finished_at && (
-                          sub.started_at ? (
-                            <Button variant="success" className="h-10 min-w-24" disabled={!online} loading={busy(sub, 'finish')} onClick={() => run(sub, 'finish')}>
-                              <Check className="size-4" /> {t('done')}
-                            </Button>
-                          ) : (
-                            <Button variant="outline" className="h-10 min-w-24" disabled={!online} loading={busy(sub, 'start')} onClick={() => run(sub, 'start')}>
-                              <Play className="size-4" /> {t('m_start')}
-                            </Button>
-                          )
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  {!!current.allow_add_sub && canProgress && (
-                    <form
-                      className="mt-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (subName.trim().length >= 2) addSub.mutate(current);
-                      }}
-                    >
-                      <div className="flex gap-2">
-                        <Input value={subName} onChange={(e) => setSubName(e.target.value)} placeholder={t('m_add_sub_placeholder')} maxLength={60} className="h-11" aria-label={t('m_add_sub_step')} />
-                        <Button type="submit" variant="outline" className="h-11 shrink-0" loading={addSub.isPending} disabled={!online || subName.trim().length < 2}>
-                          <Plus className="size-5" /> <BtnLabel>{t('m_add_sub_step')}</BtnLabel>
-                        </Button>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{t('m_add_sub_hint')}</p>
-                    </form>
-                  )}
-                </div>
-              )}
-
               {!!current.allow_add_sub && current.started_at && <WoJobCodes wo={wo} compact className="mt-4" />}
 
               {canProgress && (
                 current.started_at ? (
                   <div className="mt-4 space-y-3">
                     <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={t('remarks_placeholder')} maxLength={500} className="min-h-20" />
-                    <Button variant="success" className="h-14 w-full text-base" disabled={!online} loading={busy(current, 'finish')} onClick={() => run(current, 'finish')}>
+                    <Button variant="success" className="h-14 w-full text-base" disabled={!online || !!jobsBlock} loading={busy(current, 'finish')} onClick={() => run(current, 'finish')}>
                       <CheckCircle2 className="size-5" /> {t('m_finish_current')}
                     </Button>
+                    {jobsBlock && <p className="text-center text-xs text-muted-foreground">{jobsBlock}</p>}
                   </div>
                 ) : (
                   <Button className="mt-4 h-14 w-full text-base" disabled={!online} loading={busy(current, 'start')} onClick={() => run(current, 'start')}>

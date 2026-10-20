@@ -141,7 +141,9 @@ CREATE TABLE IF NOT EXISTS wo_job_codes (
   job_code_id INTEGER NOT NULL REFERENCES job_codes(id),
   mechanic_id INTEGER NOT NULL REFERENCES employees(id),
   added_by    INTEGER REFERENCES employees(id),
-  added_at    TEXT NOT NULL
+  added_at    TEXT NOT NULL,
+  started_at  TEXT, -- each job code has its own timer, run during Step 7
+  finished_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_codes_wo ON wo_job_codes(wo_uuid);
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
@@ -235,6 +237,9 @@ if (db.prepare('SELECT 1 FROM work_orders WHERE job_code_id IS NOT NULL LIMIT 1'
     db.exec('UPDATE work_orders SET job_code_id = NULL WHERE job_code_id IS NOT NULL');
   });
 }
+const jobEntryCols = columns('wo_job_codes');
+if (!jobEntryCols.includes('started_at')) db.exec('ALTER TABLE wo_job_codes ADD COLUMN started_at TEXT');
+if (!jobEntryCols.includes('finished_at')) db.exec('ALTER TABLE wo_job_codes ADD COLUMN finished_at TEXT');
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 

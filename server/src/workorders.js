@@ -265,7 +265,7 @@ export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uui
 /** Job codes done on a work order, in the order they were added. */
 export const listWoJobCodes = (woUuid) =>
   db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, c.name AS category_name, j.standard_duration,
-                     x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at
+                     x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at, x.started_at, x.finished_at
               FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id JOIN repair_categories c ON c.id = j.category_id
               JOIN employees m ON m.id = x.mechanic_id LEFT JOIN employees a ON a.id = x.added_by
               WHERE x.wo_uuid = ? ORDER BY x.added_at, x.id`).all(woUuid);
@@ -423,6 +423,11 @@ export function progressStep(woUuid, stepId, action, user, remarks) {
     } else if (action === 'finish') {
       if (!step.started_at) throw new HttpError(409, 'Step has not started');
       if (step.finished_at) throw new HttpError(409, 'Step already finished');
+      if (step.parent_id === null && step.allow_add_sub) {
+        const { total, open } = db.prepare('SELECT COUNT(*) AS total, SUM(finished_at IS NULL) AS open FROM wo_job_codes WHERE wo_uuid = ?').get(woUuid);
+        if (!total) throw new HttpError(409, `Add at least one job code before finishing Step ${step.step_no} · ${step.step_name}`);
+        if (open) throw new HttpError(409, `Finish all job codes first (${open} still open)`);
+      }
       const note = remarks ? String(remarks).trim() : null;
       db.prepare('UPDATE wo_steps SET finished_at = ?, remarks = COALESCE(?, remarks) WHERE id = ?').run(ts, note, step.id);
       // Closing a step closes any of its sub-steps that were left open.
@@ -503,6 +508,29 @@ export function addWoJobCode(woUuid, body, user) {
   }
   db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at) VALUES (?, ?, ?, ?, ?)')
     .run(woUuid, jobId, mechanicId, user.id, now());
+  return getWorkOrder(woUuid);
+}
+
+/** Start or finish the timer of one job code entry; only while the job code step (Step 7) is running. */
+export function timeWoJobCode(woUuid, entryId, action, user) {
+  const wo = getWorkOrder(woUuid);
+  assertWorkable(wo);
+  const repair = wo.steps.find((s) => s.allow_add_sub);
+  if (!repair?.started_at || repair.finished_at) throw new HttpError(409, `Job code timers run while Step ${repair?.step_no ?? 7} · ${repair?.step_name ?? 'Repair Process'} is in progress`);
+  const entry = db.prepare('SELECT * FROM wo_job_codes WHERE id = ? AND wo_uuid = ?').get(entryId, woUuid);
+  if (!entry) throw new HttpError(404, 'Job code entry not found');
+  const ts = now();
+  if (action === 'start') {
+    if (entry.started_at) throw new HttpError(409, 'This job code has already started');
+    db.prepare('UPDATE wo_job_codes SET started_at = ? WHERE id = ?').run(ts, entryId);
+  } else if (action === 'finish') {
+    if (!entry.started_at) throw new HttpError(409, 'Start this job code first');
+    if (entry.finished_at) throw new HttpError(409, 'This job code is already finished');
+    db.prepare('UPDATE wo_job_codes SET finished_at = ? WHERE id = ?').run(ts, entryId);
+  } else {
+    throw new HttpError(422, 'Unknown action');
+  }
+  db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(ts, woUuid);
   return getWorkOrder(woUuid);
 }
 
