@@ -9,6 +9,7 @@ import { jobDuration } from '../components/JobCodePicker';
 import { formatMeter } from '../components/MeterFields';
 import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
+import { WoPrintForm } from '../components/WoPrintForm';
 import { useConfirm } from '../components/confirm';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Input, PageHeader, Spinner } from '../components/ui';
@@ -136,8 +137,11 @@ export function WorkOrderDetailPage() {
 
   const doneCount = allTop.filter((s) => s.finished_at).length;
 
+  // Print shows the Work Order Request Form instead of this page.
   return (
-    <div className="mx-auto max-w-5xl">
+    <>
+    <WoPrintForm wo={wo} />
+    <div className="mx-auto max-w-5xl print:hidden">
       <Button variant="ghost" size="sm" className="no-print mb-3 -ml-2" onClick={() => navigate('/transaction/work-order')}>
         <ArrowLeft className="size-4" /> {t('work_order')}
       </Button>
@@ -254,5 +258,6 @@ export function WorkOrderDetailPage() {
       {approval && <ApprovalDialog kind={approval} wo={wo} onClose={() => setApproval(null)} />}
 
     </div>
+    </>
   );
 }

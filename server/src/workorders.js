@@ -151,7 +151,8 @@ export function syncStatuses() {
 }
 
 const LIST_SELECT = `
-  SELECT wo.*, u.unit_number, u.unit_code, u.unit_type,
+  SELECT wo.*, u.unit_number, u.unit_code, u.unit_type, u.brand AS unit_brand, u.model AS unit_model, u.serial_number AS unit_serial,
+         (SELECT st.company FROM sites st WHERE st.site_name = wo.site COLLATE NOCASE) AS site_company,
          d.full_name AS driver_name, m.full_name AS mechanic_name,
          c.name AS category, cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,

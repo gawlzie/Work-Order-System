@@ -155,6 +155,12 @@ export interface WorkOrder {
   unit_number: string;
   unit_code: string;
   unit_type: string;
+  unit_brand: string | null;
+  unit_model: string | null;
+  /** Unit serial / VIN number. */
+  unit_serial: string | null;
+  /** Company of the WO's site (site master). */
+  site_company: string | null;
   driver_id: number;
   driver_name: string;
   mechanic_id: number | null;
