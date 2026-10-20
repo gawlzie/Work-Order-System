@@ -321,6 +321,8 @@ function assertRefs({ unit_id, driver_id, mechanic_id }, current = {}) {
 }
 
 /** `metersRequired`: HM / KM must be given (new WOs); on edit an empty value keeps the stored reading. */
+export const MAINTENANCE_TYPES = ['PREVENTIVE', 'REPAIR', 'WARRANTY', 'PDI', 'OTHERS'];
+
 function validatePayload(body, { metersRequired = true } = {}) {
   const unit_id = Number(body.unit_id);
   const driver_id = Number(body.driver_id);
@@ -330,6 +332,12 @@ function validatePayload(body, { metersRequired = true } = {}) {
   if (!driver_id) errors.driver_id = 'Driver is required';
   if (problem.length < 5) errors.problem = 'Problem description must be at least 5 characters';
   if (problem.length > 1000) errors.problem = 'Problem description is too long (max 1000)';
+  // Type of maintenance; "Others" needs its own description.
+  const maintenance_type = String(body.maintenance_type ?? '').trim().toUpperCase();
+  const maintenance_other = maintenance_type === 'OTHERS' ? String(body.maintenance_other ?? '').trim().replace(/\s+/g, ' ') : null;
+  if (!MAINTENANCE_TYPES.includes(maintenance_type)) errors.maintenance_type = 'Choose the type of maintenance';
+  else if (maintenance_type === 'OTHERS' && (maintenance_other.length < 2 || maintenance_other.length > 60))
+    errors.maintenance_other = 'Describe the type of maintenance (2-60 characters)';
   // HM (hour meter, one decimal) and KM (odometer, whole number) are required readings of the unit.
   const hmRaw = String(body.hm ?? '').trim().replace(',', '.');
   const kmRaw = String(body.km ?? '').trim().replace(',', '.');
@@ -348,6 +356,8 @@ function validatePayload(body, { metersRequired = true } = {}) {
     unit_id,
     driver_id,
     problem,
+    maintenance_type,
+    maintenance_other,
     hm: hmRaw ? Math.round(hm * 10) / 10 : null,
     km: kmRaw ? km : null,
     mechanic_id: body.mechanic_id ? Number(body.mechanic_id) : null,
@@ -389,10 +399,10 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
   const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
-      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, hm, km, site,
+      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, maintenance_type, maintenance_other, hm, km, site,
         status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT site FROM units WHERE id = ?), 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.hm, data.km, data.unit_id,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT site FROM units WHERE id = ?), 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, data.unit_id,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
   });
@@ -407,10 +417,11 @@ export function updateWorkOrder(woUuid, body) {
   assertMeters(data, wo);
   db.prepare(
     // The site follows the unit only when the unit is changed; otherwise the WO keeps the site it was raised at.
-    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?,
+    `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, maintenance_type = ?, maintenance_other = ?,
+       hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?,
        site = CASE WHEN unit_id = ? THEN site ELSE (SELECT site FROM units WHERE id = ?) END
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.hm, data.km, now(), data.unit_id, data.unit_id, woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, now(), data.unit_id, data.unit_id, woUuid);
   return getWorkOrder(woUuid);
 }
 

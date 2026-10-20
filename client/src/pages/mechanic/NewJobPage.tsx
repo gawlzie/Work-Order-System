@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm';
+import { MaintenanceTypeField, maintenanceErrors } from '../../components/MaintenanceType';
 import { MeterFields, meterErrors } from '../../components/MeterFields';
 import { UnitSite } from '../../components/UnitSite';
 import { useToast } from '../../components/toast';
@@ -14,7 +15,7 @@ import { useOnline } from '../../lib/pwa';
 import { useEmployees, useUnits } from '../../lib/queries';
 import type { WorkOrderDetail } from '../../lib/types';
 
-type Form = { unit_id: string; driver_id: string; mechanic_id: string; hm: string; km: string; problem: string };
+type Form = { unit_id: string; driver_id: string; mechanic_id: string; hm: string; km: string; maintenance_type: string; maintenance_other: string; problem: string };
 
 /** Raise a work order from the field. Mechanics are set as PIC by default; the admin approves it on the web. */
 export function NewJobPage() {
@@ -30,7 +31,7 @@ export function NewJobPage() {
   const mechanics = useEmployees('mechanic');
   const self = can('wo.as_mechanic') && user ? String(user.id) : '';
 
-  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, hm: '', km: '', problem: '' });
+  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, hm: '', km: '', maintenance_type: '', maintenance_other: '', problem: '' });
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
 
   const save = useMutation({
@@ -58,6 +59,7 @@ export function NewJobPage() {
     if (!form.unit_id) next.unit_id = 'Unit is required';
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
+    Object.assign(next, maintenanceErrors(form.maintenance_type, form.maintenance_other));
     Object.assign(next, meterErrors(form.hm, form.km, true, units.data?.find((u) => String(u.id) === form.unit_id), undefined, lang));
     setErrors(next);
     if (!Object.keys(next).length) confirm({ message: t('confirm_submit_wo') }, () => save.mutate());
@@ -69,6 +71,13 @@ export function NewJobPage() {
       <p className="mb-4 text-sm text-muted-foreground">{t('form_subtitle')}</p>
       <Card className="p-4">
         <form onSubmit={submit} className="space-y-4" noValidate>
+          <MaintenanceTypeField
+            type={form.maintenance_type}
+            other={form.maintenance_other}
+            errors={errors}
+            inputClassName="h-12"
+            onChange={(field, value) => set(field)({ target: { value } })}
+          />
           <Field label={t('unit')} required error={errors.unit_id}>
             <Select value={form.unit_id} onChange={set('unit_id')} invalid={!!errors.unit_id} className="h-12">
               <option value="">{t('select_unit')}</option>

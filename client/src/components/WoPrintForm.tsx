@@ -31,8 +31,7 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
   const opened = steps.map((s) => s.started_at).filter(Boolean).sort()[0] ?? null;
   // Closed when the last step was finished (the WO row itself may be touched later, e.g. by a proof upload).
   const closed = wo.status === 'FINISH' ? steps.map((s) => s.finished_at).filter(Boolean).sort().at(-1) ?? wo.finished_at : null;
-  // Preventive when a job code is a periodic maintenance / greasing job, otherwise a repair.
-  const preventive = wo.job_codes.some((j) => /periodic maintenance|\bpm ?\d|service berkala|greasing/i.test(`${j.job_code} ${j.job_name}`));
+  const type = wo.maintenance_type;
   const jobs = wo.job_codes;
   const parts = wo.job_codes.flatMap((j) => (j.parts ?? []).map((p) => ({ ...p, job_code: j.job_code })));
   // Step remarks; the approval remark is printed under Additional Instructions > Remark.
@@ -66,11 +65,11 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
         <tbody>
           <tr>
             <th className="w-[18%]">TYPE OF MAINTENANCE <span className="font-normal">(tick as applicable)</span></th>
-            <td>{box(preventive)} Preventive Maintenance</td>
-            <td>{box(!preventive)} Repair</td>
-            <td>{box(false)} Warranty</td>
-            <td>{box(false)} PDI</td>
-            <td className="whitespace-nowrap">{box(false)} Others: {line('2.5rem')}</td>
+            <td>{box(type === 'PREVENTIVE')} Preventive Maintenance</td>
+            <td>{box(type === 'REPAIR')} Repair</td>
+            <td>{box(type === 'WARRANTY')} Warranty</td>
+            <td>{box(type === 'PDI')} PDI</td>
+            <td>{box(type === 'OTHERS')} Others: {type === 'OTHERS' ? <span className="woform-filled !min-w-0">{wo.maintenance_other}</span> : <span className="whitespace-nowrap">{line('2.5rem')}</span>}</td>
           </tr>
         </tbody>
       </table>

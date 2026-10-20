@@ -108,6 +108,8 @@ CREATE TABLE IF NOT EXISTS work_orders (
   category_id      INTEGER REFERENCES repair_categories(id),
   job_code_id      INTEGER REFERENCES job_codes(id), -- no longer used: job codes are in wo_job_codes
   problem          TEXT NOT NULL,
+  maintenance_type TEXT, -- PREVENTIVE | REPAIR | WARRANTY | PDI | OTHERS
+  maintenance_other TEXT, -- free text when maintenance_type = OTHERS
   site             TEXT, -- site of the unit when the WO was raised (sites.site_name)
   hm               REAL, -- hour meter reading when the WO was raised
   km               REAL, -- odometer reading when the WO was raised
@@ -278,6 +280,23 @@ export function fillMissingSites() {
   return { units, wos };
 }
 fillMissingSites();
+
+const woCols2 = columns('work_orders');
+if (!woCols2.includes('maintenance_type')) db.exec('ALTER TABLE work_orders ADD COLUMN maintenance_type TEXT');
+if (!woCols2.includes('maintenance_other')) db.exec('ALTER TABLE work_orders ADD COLUMN maintenance_other TEXT');
+
+/**
+ * Work orders from before the type of maintenance was asked: Preventive when one of their job codes is a periodic
+ * maintenance / greasing job, otherwise Repair. Run on start and after a seed.
+ */
+export function fillMaintenanceTypes() {
+  return db.prepare(`UPDATE work_orders SET maintenance_type = CASE WHEN EXISTS (
+      SELECT 1 FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id WHERE x.wo_uuid = work_orders.wo_uuid
+        AND (j.job_name LIKE '%periodic maintenance%' OR j.job_name LIKE '%preventive maintenance%' OR j.job_name LIKE '%greasing%' OR j.job_name LIKE '%service berkala%')
+    ) OR problem LIKE '%servis berkala%' OR problem LIKE '%periodic%' THEN 'PREVENTIVE' ELSE 'REPAIR' END
+    WHERE maintenance_type IS NULL`).run().changes;
+}
+fillMaintenanceTypes();
 if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE work_orders ADD COLUMN approval_remarks TEXT');
 const categoryCols = columns('repair_categories');
 if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');

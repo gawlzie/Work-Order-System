@@ -15,6 +15,7 @@ export type Permission =
   | 'master.sparepart'
   | 'master.site';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
+export type MaintenanceType = 'PREVENTIVE' | 'REPAIR' | 'WARRANTY' | 'PDI' | 'OTHERS';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
 
@@ -176,6 +177,9 @@ export interface WorkOrder {
   /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
   repair_time: number | null;
   problem: string;
+  maintenance_type: MaintenanceType | null;
+  /** Description when maintenance_type is OTHERS. */
+  maintenance_other: string | null;
   /** Site of the unit when the WO was raised. */
   site: string | null;
   /** Hour meter and odometer readings when the WO was raised (null on older WOs). */

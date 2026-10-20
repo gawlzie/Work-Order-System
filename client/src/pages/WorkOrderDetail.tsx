@@ -10,6 +10,7 @@ import { formatMeter } from '../components/MeterFields';
 import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
 import { WoPrintForm } from '../components/WoPrintForm';
+import { maintenanceLabel } from '../components/MaintenanceType';
 import { useConfirm } from '../components/confirm';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Input, PageHeader, Spinner } from '../components/ui';
@@ -203,6 +204,7 @@ export function WorkOrderDetailPage() {
           <Info label={t('unit')}>{wo.unit_number} <span className="text-muted-foreground">({wo.unit_code})</span></Info>
           <Info label={t('driver')}>{wo.driver_name}</Info>
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
+          <Info label={t('maintenance_type')}>{maintenanceLabel(wo.maintenance_type, wo.maintenance_other, t)}</Info>
           <Info label={t('site')}>{wo.site ?? '-'}</Info>
           <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
           <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>

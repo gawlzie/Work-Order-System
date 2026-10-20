@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareTe
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
+import { maintenanceLabel } from '../../components/MaintenanceType';
 import { formatMeter } from '../../components/MeterFields';
 import { WoJobCodes } from '../../components/WoJobCodes';
 import { useConfirm } from '../../components/confirm';
@@ -215,6 +216,7 @@ export function JobPage() {
         <dl className="grid grid-cols-2 gap-4">
           <Info label={t('driver')}>{wo.driver_name}</Info>
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
+          <Info label={t('maintenance_type')}>{maintenanceLabel(wo.maintenance_type, wo.maintenance_other, t)}</Info>
           <Info label={t('site')}>{wo.site ?? '-'}</Info>
           <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
           <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>
