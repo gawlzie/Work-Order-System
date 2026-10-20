@@ -81,8 +81,8 @@ export function WorkOrderDetailPage() {
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
 
-  const approved = wo.approval_status === 'APPROVE';
-  const canProgress = can('wo.progress') && approved;
+  // Work can start before approval; a rejected WO cannot be worked on.
+  const canProgress = can('wo.progress') && wo.approval_status !== 'REJECT';
   const allTop = [...wo.steps, ...wo.additional_work];
   const nextTop = allTop.find((s) => !s.finished_at);
 

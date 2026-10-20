@@ -93,8 +93,9 @@ export function JobPage() {
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/m')}>{t('m_jobs')}</Button>} />;
 
-  const approved = wo.approval_status === 'APPROVE';
-  const canProgress = can('wo.progress') && approved && wo.status !== 'FINISH';
+  // Work can start before approval; a rejected WO cannot be worked on.
+  const workable = wo.approval_status !== 'REJECT';
+  const canProgress = can('wo.progress') && workable && wo.status !== 'FINISH';
   const allTop = [...wo.steps, ...wo.additional_work];
   const current = allTop.find((s) => !s.finished_at);
   const doneCount = allTop.filter((s) => s.finished_at).length;
@@ -118,7 +119,10 @@ export function JobPage() {
             <h1 className="text-2xl leading-tight font-semibold">{wo.unit_number}</h1>
             <p className="text-sm text-muted-foreground">{wo.wo_number} · {wo.unit_code}</p>
           </div>
-          {approved ? <StatusBadge status={wo.status} /> : <ApprovalBadge status={wo.approval_status} />}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <StatusBadge status={wo.status} />
+            {wo.approval_status !== 'APPROVE' && <ApprovalBadge status={wo.approval_status} />}
+          </div>
         </div>
         <p className="mt-3 rounded-xl bg-muted p-3 text-sm whitespace-pre-wrap">{wo.problem}</p>
       </div>
@@ -141,10 +145,10 @@ export function JobPage() {
           <p className="min-w-0 break-words whitespace-pre-wrap"><span className="font-medium">{t('approval_remarks')}:</span> {wo.approval_remarks}</p>
         </div>
       )}
-      {approved && !can('wo.progress') && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">{t('m_view_only')}</p>}
+      {workable && !can('wo.progress') && <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">{t('m_view_only')}</p>}
 
       {/* Current step: the one thing the mechanic works on right now. */}
-      {approved && (
+      {workable && (
         <Card className={clsx('overflow-hidden', current?.started_at && 'border-yellow-500/50')}>
           {current ? (
             <div className="p-4">

@@ -11,20 +11,20 @@ import { useWorkOrders, type WoListParams } from '../../lib/queries';
 import type { Permission, WorkOrder } from '../../lib/types';
 
 const NOT_FINISHED = 'OPEN,ON_PROGRESS,WAITING';
-const APPROVED = 'APPROVE';
+// Not rejected: work may start before the admin approves.
+const WORKABLE = 'APPROVE,WAITING';
 
 type TabId = 'active' | 'available' | 'requests' | 'done';
 
 const TABS: { id: TabId; key: TKey; empty: TKey; permission?: Permission; params: (me: string) => WoListParams }[] = [
-  { id: 'active', key: 'm_tab_active', empty: 'm_empty_active', params: (me) => ({ mechanic_id: me, status: NOT_FINISHED, approval_status: `${APPROVED},WAITING` }) },
-  { id: 'available', key: 'm_tab_available', empty: 'm_empty_available', permission: 'wo.progress', params: () => ({ mechanic_id: 'none', status: NOT_FINISHED, approval_status: APPROVED }) },
+  { id: 'active', key: 'm_tab_active', empty: 'm_empty_active', params: (me) => ({ mechanic_id: me, status: NOT_FINISHED, approval_status: WORKABLE }) },
+  { id: 'available', key: 'm_tab_available', empty: 'm_empty_available', permission: 'wo.progress', params: () => ({ mechanic_id: 'none', status: NOT_FINISHED, approval_status: WORKABLE }) },
   { id: 'requests', key: 'm_tab_requests', empty: 'm_empty_requests', permission: 'wo.create', params: (me) => ({ created_by: me, approval_status: 'WAITING,REJECT' }) },
   { id: 'done', key: 'm_tab_done', empty: 'm_empty_done', params: (me) => ({ mechanic_id: me, status: 'FINISH' }) },
 ];
 
 function JobCard({ wo }: { wo: WorkOrder }) {
   const { t } = useI18n();
-  const approved = wo.approval_status === 'APPROVE';
   return (
     <Link to={`/m/wo/${wo.wo_uuid}`} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition active:scale-[0.99] hover:border-primary/40">
       <div className="min-w-0 flex-1">
@@ -33,7 +33,10 @@ function JobCard({ wo }: { wo: WorkOrder }) {
             <p className="text-lg leading-tight font-semibold">{wo.unit_number}</p>
             <p className="text-xs text-muted-foreground">{wo.wo_number} · {wo.unit_code}</p>
           </div>
-          {approved ? <StatusBadge status={wo.status} /> : <ApprovalBadge status={wo.approval_status} />}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <StatusBadge status={wo.status} />
+            {wo.approval_status !== 'APPROVE' && <ApprovalBadge status={wo.approval_status} />}
+          </div>
         </div>
         <p className="mt-2 line-clamp-2 text-sm">{wo.problem}</p>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">

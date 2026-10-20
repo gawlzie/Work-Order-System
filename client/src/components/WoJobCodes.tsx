@@ -25,9 +25,9 @@ export function WoJobCodes({ wo, className, compact }: { wo: WorkOrderDetail; cl
   const qc = useQueryClient();
   const online = useOnline();
   const repair = [...wo.steps, ...wo.additional_work].find((s) => s.allow_add_sub);
-  const approved = wo.approval_status === 'APPROVE';
+  const workable = wo.approval_status !== 'REJECT';
   const admin = can('wo.approve');
-  const editable = approved && !!repair?.started_at && (admin || (can('wo.progress') && !repair.finished_at));
+  const editable = workable && !!repair?.started_at && (admin || (can('wo.progress') && !repair.finished_at));
   const jobs = useJobCodeOptions();
   const mechanics = useEmployees('mechanic');
   const categories = useCategories();

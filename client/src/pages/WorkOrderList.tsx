@@ -191,7 +191,7 @@ export function WorkOrderListPage() {
             <Field label={t('approval_status')}>
               <Select value={params.approval_status} onChange={(e) => update({ approval_status: e.target.value })}>
                 <option value="">{t('all')}</option>
-                <option value="WAITING">{t('status_waiting')}</option>
+                <option value="WAITING">{t('approval_waiting')}</option>
                 <option value="APPROVE">{t('approved_label')}</option>
                 <option value="REJECT">{t('rejected_label')}</option>
               </Select>

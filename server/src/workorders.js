@@ -40,7 +40,10 @@ export class HttpError extends Error {
 }
 
 const now = () => new Date().toISOString();
-const isApproved = (wo) => wo.approval_status === APPROVAL.APPROVE;
+// Work may start before the admin approves; only a rejected work order stops it.
+const assertWorkable = (wo) => {
+  if (wo.approval_status === APPROVAL.REJECT) throw new HttpError(409, 'This work order was rejected; work cannot continue');
+};
 
 export function nextWoNumber(date = new Date()) {
   const ym = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -395,7 +398,7 @@ function getStep(woUuid, stepId) {
 /** Mechanic progress: start or finish a step (top-level steps run strictly in order). */
 export function progressStep(woUuid, stepId, action, user, remarks) {
   const wo = getWorkOrder(woUuid);
-  if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved before work can start');
+  assertWorkable(wo);
   const step = getStep(woUuid, stepId);
   const ts = now();
   const isMechanic = hasPermission(user, 'wo.as_mechanic');
@@ -437,7 +440,7 @@ export function progressStep(woUuid, stepId, action, user, remarks) {
 /** Mechanic adds a sub-step to this work order only, on steps flagged allow_add_sub (e.g. Repair Process). */
 export function addSubStep(woUuid, stepId, name) {
   const wo = getWorkOrder(woUuid);
-  if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved first');
+  assertWorkable(wo);
   const step = getStep(woUuid, stepId);
   if (step.parent_id !== null || !step.allow_add_sub) throw new HttpError(409, 'Sub-steps cannot be added to this step');
   if (step.finished_at) throw new HttpError(409, 'Step is already finished');
@@ -458,7 +461,7 @@ export function addSubStep(woUuid, stepId, name) {
  * Each job code entry names the mechanic who did the job.
  */
 function jobCodeGate(wo, user) {
-  if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved first');
+  assertWorkable(wo);
   const repair = wo.steps.find((s) => s.allow_add_sub);
   if (!repair) throw new HttpError(409, 'This work order has no repair step for category and job codes');
   const admin = hasPermission(user, 'wo.approve');
@@ -513,7 +516,7 @@ export function removeWoJobCode(woUuid, entryId, user) {
 
 export function addAdditionalWork(woUuid, name) {
   const wo = getWorkOrder(woUuid);
-  if (!isApproved(wo)) throw new HttpError(409, 'Work order must be approved first');
+  assertWorkable(wo);
   const title = String(name ?? '').trim();
   if (title.length < 3) throw new HttpError(422, 'Additional work name is required');
   const { max } = db.prepare('SELECT MAX(step_no) AS max FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL').get(woUuid);
