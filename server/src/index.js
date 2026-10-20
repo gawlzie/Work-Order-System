@@ -17,7 +17,7 @@ import { PERMISSIONS } from './permissions.js';
 import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.js';
 import { seed } from './seed.js';
 import {
-  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, setWoJobCodeTimes, setWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
+  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, setWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
   getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 
@@ -73,6 +73,12 @@ app.get('/api/master/units', wrap((req) => {
 app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
 
 app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
+app.get('/api/master/spareparts', wrap((req) => {
+  const s = `%${String(req.query.search ?? '').trim()}%`;
+  return db.prepare(`SELECT id, part_number, part_name, uom, brand, stock FROM spareparts
+                     WHERE is_active = 1 AND (part_number LIKE ? OR part_name LIKE ? OR IFNULL(brand, '') LIKE ?)
+                     ORDER BY (part_number LIKE ?) DESC, part_number LIMIT 20`).all(s, s, s, `${String(req.query.search ?? '').trim()}%`);
+}));
 app.get('/api/master/sites', wrap((req) =>
   db.prepare(`SELECT id, site_code, site_name, company, is_active FROM sites ${req.query.all ? '' : 'WHERE is_active = 1'} ORDER BY site_name`).all()));
 
@@ -122,7 +128,7 @@ app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
 
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['site', 'Site'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
-  ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
+  ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['part_list', 'Spare Parts'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (h:mm:ss)'], ['proof_count', 'Proof Files'],
 ];
@@ -205,6 +211,15 @@ app.post('/api/work-orders/:id/job-codes/:entryId(\\d+)/:action(start|finish)', 
 app.put('/api/work-orders/:id/job-codes/:entryId(\\d+)', requirePermission('wo.approve'), wrap((req) =>
   setWoJobCodeTimes(req.params.id, Number(req.params.entryId), req.body ?? {}, req.user)));
 app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)', canWorkJobs, wrap((req) => removeWoJobCode(req.params.id, Number(req.params.entryId), req.user)));
+// Spare parts per job code entry.
+app.post('/api/work-orders/:id/job-codes/:entryId(\\d+)/parts', canWorkJobs, wrap((req, res) => {
+  res.status(201);
+  return addWoJobPart(req.params.id, Number(req.params.entryId), req.body ?? {}, req.user);
+}));
+app.put('/api/work-orders/:id/job-codes/:entryId(\\d+)/parts/:lineId(\\d+)', canWorkJobs, wrap((req) =>
+  updateWoJobPart(req.params.id, Number(req.params.entryId), Number(req.params.lineId), req.body ?? {}, req.user)));
+app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)/parts/:lineId(\\d+)', canWorkJobs, wrap((req) =>
+  removeWoJobPart(req.params.id, Number(req.params.entryId), Number(req.params.lineId), req.user)));
 
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));

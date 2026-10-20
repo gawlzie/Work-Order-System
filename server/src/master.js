@@ -663,6 +663,8 @@ export function updateSparepart(id, body) {
 
 export function deleteSparepart(id) {
   getSparepart(id);
+  const used = db.prepare('SELECT COUNT(DISTINCT x.wo_uuid) AS n FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id WHERE p.sparepart_id = ?').get(id).n;
+  if (used) throw new HttpError(409, `Spare part is used on ${used} work order(s). Deactivate it instead`);
   db.prepare('DELETE FROM spareparts WHERE id = ?').run(id);
 }
 

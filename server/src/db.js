@@ -177,6 +177,19 @@ CREATE TABLE IF NOT EXISTS wo_job_codes (
   finished_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_codes_wo ON wo_job_codes(wo_uuid);
+
+-- Spare parts used for one job code entry (job code + mechanic) of Step 7; uom is the part's unit when it was added.
+CREATE TABLE IF NOT EXISTS wo_job_parts (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  wo_job_code_id INTEGER NOT NULL REFERENCES wo_job_codes(id) ON DELETE CASCADE,
+  sparepart_id INTEGER NOT NULL REFERENCES spareparts(id),
+  qty          REAL NOT NULL,
+  uom          TEXT NOT NULL,
+  added_by     INTEGER REFERENCES employees(id),
+  added_at     TEXT NOT NULL,
+  updated_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wo_job_parts_entry ON wo_job_parts(wo_job_code_id);
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_wo ON wo_steps(wo_uuid);
 `);

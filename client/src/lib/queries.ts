@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, qs } from './api';
-import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, SiteOption } from './types';
+import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, SiteOption, SparepartOption } from './types';
 
 export interface WoListParams {
   search?: string;
@@ -49,6 +49,15 @@ export const useUnits = (all = false) =>
 
 export const useEmployees = (role: 'driver' | 'mechanic') =>
   useQuery({ queryKey: ['employees', role], queryFn: () => api<Employee[]>(`/master/employees?role=${role}`), staleTime: 300_000 });
+
+/** Active spare parts matching `search` (part number, name or brand), for the Step 7 picker; needs 2+ characters. */
+export const useSparepartSearch = (search: string) =>
+  useQuery({
+    queryKey: ['spareparts', 'search', search],
+    queryFn: () => api<SparepartOption[]>(`/master/spareparts${qs({ search })}`),
+    enabled: search.length >= 2,
+    staleTime: 60_000,
+  });
 
 /** Sites for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
 export const useSites = (all = false) =>

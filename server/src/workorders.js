@@ -156,6 +156,8 @@ const LIST_SELECT = `
          c.name AS category, cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
          (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
+         (SELECT GROUP_CONCAT(sp.part_number || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
+            JOIN spareparts sp ON sp.id = p.sparepart_id WHERE x.wo_uuid = wo.wo_uuid) AS part_list,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NOT NULL AND s.finished_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS current_step,
@@ -268,12 +270,20 @@ const PROOF_SELECT = `SELECT p.id, p.file_name, p.mime_type, p.size, p.uploaded_
 export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uuid = ? ORDER BY p.uploaded_at, p.id`).all(woUuid);
 
 /** Job codes done on a work order, in the order they were added. */
-export const listWoJobCodes = (woUuid) =>
-  db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, c.name AS category_name, j.standard_duration,
+/** Job code entries of a work order, each with the spare parts used for it. */
+export function listWoJobCodes(woUuid) {
+  const entries = db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, c.name AS category_name, j.standard_duration,
                      x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at, x.started_at, x.finished_at
               FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id JOIN repair_categories c ON c.id = j.category_id
               JOIN employees m ON m.id = x.mechanic_id LEFT JOIN employees a ON a.id = x.added_by
               WHERE x.wo_uuid = ? ORDER BY x.added_at, x.id`).all(woUuid);
+  const parts = db.prepare(`SELECT p.id, p.wo_job_code_id, p.sparepart_id, sp.part_number, sp.part_name, p.qty, p.uom,
+                                   a.full_name AS added_by_name, p.added_at, p.updated_at
+                            FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id JOIN spareparts sp ON sp.id = p.sparepart_id
+                            LEFT JOIN employees a ON a.id = p.added_by
+                            WHERE x.wo_uuid = ? ORDER BY p.added_at, p.id`).all(woUuid);
+  return entries.map((e) => ({ ...e, parts: parts.filter((p) => p.wo_job_code_id === e.id) }));
+}
 
 export function getWorkOrder(woUuid) {
   const row = db.prepare(`${LIST_SELECT} WHERE wo.wo_uuid = ?`).get(woUuid);
@@ -619,6 +629,67 @@ export function timeWoJobCode(woUuid, entryId, action, user) {
   return getWorkOrder(woUuid);
 }
 
+/* ---------- Spare parts per job code entry (Step 7) ---------- */
+
+const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+
+/** Quantity in the part's unit: above 0, at most 9,999,999; LTR / KG / MTR up to 2 decimals, other units whole numbers. */
+function partQty(raw, uom) {
+  const qty = Number(String(raw ?? '').trim().replace(',', '.'));
+  const decimals = DECIMAL_UOMS.includes(uom);
+  let error = null;
+  if (String(raw ?? '').trim() === '' || !Number.isFinite(qty) || qty <= 0 || qty > 9999999) error = 'Quantity must be more than 0 (max 9,999,999)';
+  else if (!decimals && !Number.isInteger(qty)) error = `Quantity must be a whole number for ${uom}`;
+  else if (decimals && Math.round(qty * 100) !== Math.round(qty * 100 * 1e6) / 1e6) error = 'Quantity can have at most 2 decimals';
+  if (error) throw Object.assign(new HttpError(422, error), { errors: { qty: error } });
+  return decimals ? Math.round(qty * 100) / 100 : qty;
+}
+
+function jobEntry(woUuid, entryId) {
+  const entry = db.prepare('SELECT * FROM wo_job_codes WHERE id = ? AND wo_uuid = ?').get(entryId, woUuid);
+  if (!entry) throw new HttpError(404, 'Job code entry not found');
+  return entry;
+}
+
+/** Body: sparepart_id, qty. Same people and moment as job codes: mechanics while Step 7 runs, approvers once it started. */
+export function addWoJobPart(woUuid, entryId, body, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  jobEntry(woUuid, entryId);
+  const part = db.prepare('SELECT id, part_number, uom, is_active FROM spareparts WHERE id = ?').get(Number(body?.sparepart_id));
+  if (!part || !part.is_active) throw Object.assign(new HttpError(422, 'Choose an active spare part'), { errors: { sparepart_id: 'Choose an active spare part' } });
+  if (db.prepare('SELECT 1 FROM wo_job_parts WHERE wo_job_code_id = ? AND sparepart_id = ?').get(entryId, part.id))
+    throw Object.assign(new HttpError(409, `${part.part_number} is already listed for this job code; change its quantity instead`), { errors: { sparepart_id: 'Already listed for this job code' } });
+  const qty = partQty(body?.qty, part.uom);
+  const ts = now();
+  db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, sparepart_id, qty, uom, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)').run(entryId, part.id, qty, part.uom, user.id, ts);
+  db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(ts, woUuid);
+  return getWorkOrder(woUuid);
+}
+
+/** Body: qty (in the unit stored on the line). */
+export function updateWoJobPart(woUuid, entryId, partLineId, body, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  jobEntry(woUuid, entryId);
+  const line = db.prepare('SELECT * FROM wo_job_parts WHERE id = ? AND wo_job_code_id = ?').get(partLineId, entryId);
+  if (!line) throw new HttpError(404, 'Spare part line not found');
+  const ts = now();
+  db.prepare('UPDATE wo_job_parts SET qty = ?, updated_at = ? WHERE id = ?').run(partQty(body?.qty, line.uom), ts, partLineId);
+  db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(ts, woUuid);
+  return getWorkOrder(woUuid);
+}
+
+export function removeWoJobPart(woUuid, entryId, partLineId, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  jobEntry(woUuid, entryId);
+  if (!db.prepare('DELETE FROM wo_job_parts WHERE id = ? AND wo_job_code_id = ?').run(partLineId, entryId).changes) throw new HttpError(404, 'Spare part line not found');
+  db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(now(), woUuid);
+  return getWorkOrder(woUuid);
+}
+
+/** Removing a job code entry also removes its spare part lines (ON DELETE CASCADE). */
 export function removeWoJobCode(woUuid, entryId, user) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);

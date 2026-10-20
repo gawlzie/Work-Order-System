@@ -163,6 +163,8 @@ export interface WorkOrder {
   category: string | null;
   /** Job codes done on this WO, comma separated (null when none). */
   job_code_list: string | null;
+  /** Spare parts used, e.g. "VG61000070005 x2 PCS; ..." (null when none). */
+  part_list: string | null;
   /** Sum of the standard durations of the WO's job codes in minutes, null when none is known. */
   job_standard_duration: number | null;
   /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
@@ -231,6 +233,32 @@ export interface WoJobCode {
   /** Each job code has its own timer, run during Step 7. */
   started_at: string | null;
   finished_at: string | null;
+  /** Spare parts used for this job code entry. */
+  parts: WoJobPart[];
+}
+
+/** One spare part line of a job code entry; uom is the part's unit when it was added. */
+export interface WoJobPart {
+  id: number;
+  wo_job_code_id: number;
+  sparepart_id: number;
+  part_number: string;
+  part_name: string;
+  qty: number;
+  uom: string;
+  added_by_name: string | null;
+  added_at: string;
+  updated_at: string | null;
+}
+
+/** Spare part in the Step 7 picker. */
+export interface SparepartOption {
+  id: number;
+  part_number: string;
+  part_name: string;
+  uom: string;
+  brand: string | null;
+  stock: number;
 }
 
 export interface WorkOrderDetail extends WorkOrder {

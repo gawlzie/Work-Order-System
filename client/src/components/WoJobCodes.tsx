@@ -10,6 +10,7 @@ import { useOnline } from '../lib/pwa';
 import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
 import type { WoJobCode, WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
+import { JobParts } from './JobParts';
 import { useConfirm } from './confirm';
 import { useToast } from './toast';
 import { Button, Field, Input, Modal, Select } from './ui';
@@ -230,6 +231,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                     ) : null}
                   </p>
                 )}
+                <JobParts wo={wo} entry={j} editable={editable} onDone={done} />
               </div>
               {canTime && !j.finished_at && (
                 j.started_at ? (
@@ -248,7 +250,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                 </Button>
               )}
               {editable && (
-                <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!online} loading={remove.isPending && remove.variables === j.id} onClick={() => confirm({ message: t('confirm_remove_job', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'destructive', confirmLabel: t('delete') }, () => remove.mutate(j.id))}>
+                <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!online} loading={remove.isPending && remove.variables === j.id} onClick={() => confirm({ message: j.parts?.length ? t('confirm_remove_job_parts', { job: j.job_code, mechanic: j.mechanic_name, n: j.parts.length }) : t('confirm_remove_job', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'destructive', confirmLabel: t('delete') }, () => remove.mutate(j.id))}>
                   <Trash2 className="size-4" />
                 </Button>
               )}

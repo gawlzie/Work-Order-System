@@ -4,6 +4,7 @@ import { db, ensureSitesFromEmployees, ensureSystemRoles, fillMissingSites, tx }
 import { hashPassword } from './auth.js';
 import { ensureStepTemplates, insertSteps, recomputeStatus } from './workorders.js';
 import { fillMeterReadings } from './meter-examples.js';
+import { ensureJobPartExamples } from './jobpart-examples.js';
 import { ensureSiteExamples, spreadExampleSites } from './site-examples.js';
 import { ensureSparepartExamples } from './sparepart-examples.js';
 
@@ -69,7 +70,7 @@ const minutes = (n) => n * 60_000;
 
 export function seed({ reset = false } = {}) {
   if (reset) {
-    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM job_codes; DELETE FROM spareparts; DELETE FROM sites; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
+    db.exec('DELETE FROM wo_steps; DELETE FROM work_orders; DELETE FROM units; DELETE FROM wo_job_parts; DELETE FROM job_codes; DELETE FROM spareparts; DELETE FROM sites; DELETE FROM repair_categories; DELETE FROM employees; DELETE FROM roles WHERE is_system = 0; DELETE FROM step_templates;');
     db.exec("DELETE FROM sqlite_sequence WHERE name != 'roles'");
     ensureSystemRoles({ reset: true });
   }
@@ -199,6 +200,7 @@ export function seed({ reset = false } = {}) {
     }
     fillMeterReadings();
     ensureSparepartExamples();
+    ensureJobPartExamples();
     ensureSitesFromEmployees();
     ensureSiteExamples();
     fillMissingSites();
