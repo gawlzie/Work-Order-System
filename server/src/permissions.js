@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   { key: 'master.category', group: 'master', label: 'Manage repair categories' },
   { key: 'master.job', group: 'master', label: 'Manage job codes' },
   { key: 'master.sparepart', group: 'master', label: 'Manage spare part inventory' },
+  { key: 'master.site', group: 'master', label: 'Manage sites' },
 ];
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);

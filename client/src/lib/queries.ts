@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, qs } from './api';
-import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail } from './types';
+import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, SiteOption } from './types';
 
 export interface WoListParams {
   search?: string;
@@ -49,6 +49,10 @@ export const useUnits = (all = false) =>
 export const useEmployees = (role: 'driver' | 'mechanic') =>
   useQuery({ queryKey: ['employees', role], queryFn: () => api<Employee[]>(`/master/employees?role=${role}`), staleTime: 300_000 });
 
+/** Sites for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
+export const useSites = (all = false) =>
+  useQuery({ queryKey: ['sites', 'options', all], queryFn: () => api<SiteOption[]>(`/master/sites${all ? '?all=1' : ''}`), staleTime: 300_000 });
+
 /** Categories for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
 export const useCategories = (all = false) =>
   useQuery({ queryKey: ['categories', 'options', all], queryFn: () => api<Category[]>(`/master/repair-categories${all ? '?all=1' : ''}`), staleTime: 300_000 });
@@ -66,7 +70,7 @@ export const usePermissionDefs = () =>
 export const useUnitTypes = () => useQuery({ queryKey: ['units', 'types'], queryFn: () => api<string[]>('/units/types') });
 
 /** Paged master-data list, e.g. usePaged<MasterUnit>('units', params). Query key starts with the path for invalidation. */
-export const usePaged = <T,>(path: 'units' | 'employees' | 'roles' | 'categories' | 'job-codes' | 'spareparts', params: Record<string, unknown>) =>
+export const usePaged = <T,>(path: 'units' | 'employees' | 'roles' | 'categories' | 'job-codes' | 'spareparts' | 'sites', params: Record<string, unknown>) =>
   useQuery({
     queryKey: [path, 'list', params],
     queryFn: () => api<Paged<T>>(`/${path}${qs(params)}`),

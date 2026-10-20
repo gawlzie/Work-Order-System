@@ -123,6 +123,10 @@ export function listEmployees(q = {}) {
   }
   if (q.status === 'active' || q.status === 'inactive') where.push(`e.is_active = ${q.status === 'active' ? 1 : 0}`);
   if (q.account === 'yes' || q.account === 'no') where.push(`e.username IS ${q.account === 'yes' ? 'NOT' : ''} NULL`);
+  if (q.site) {
+    where.push('e.site = ? COLLATE NOCASE');
+    params.push(str(q.site));
+  }
   return pagedQuery({
     select: EMPLOYEE_COLUMNS,
     from: `FROM employees e JOIN roles r ON r.id = e.role_id WHERE ${where.join(' AND ')}`,
@@ -160,6 +164,9 @@ function validateEmployee(body, existing, user) {
   if (!data.role_id || !db.prepare('SELECT 1 FROM roles WHERE id = ?').get(data.role_id)) errors.role_id = 'Role is required';
   if (data.phone && !/^\+?[0-9 -]{6,20}$/.test(data.phone)) errors.phone = 'Phone number is not valid';
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errors.email = 'Email is not valid';
+  const site = db.prepare('SELECT site_name, is_active FROM sites WHERE site_name = ? COLLATE NOCASE').get(data.site);
+  if (site && (site.is_active || site.site_name === existing?.site)) data.site = site.site_name;
+  else if (data.site !== existing?.site) errors.site = 'Choose an active site from the site master';
 
   const hasAccount = flag(body.has_account, existing?.has_account ?? 0) === 1;
   const password = String(body.password ?? '');
@@ -445,6 +452,74 @@ export function deleteJobCode(id) {
   const job = getJobCode(id);
   if (job.wo_count) throw new HttpError(409, 'Job code is used on work orders. Deactivate it instead');
   db.prepare('DELETE FROM job_codes WHERE id = ?').run(id);
+}
+
+/* ---------- Sites ---------- */
+
+const SITE_COLUMNS = 's.*, (SELECT COUNT(*) FROM employees e WHERE e.site = s.site_name COLLATE NOCASE) AS employee_count';
+
+export function listSites(q = {}) {
+  const s = `%${str(q.search)}%`;
+  const where = [`(s.site_code LIKE ? OR s.site_name LIKE ? OR s.company LIKE ? OR IFNULL(s.location, '') LIKE ?)`];
+  if (q.status === 'active' || q.status === 'inactive') where.push(`s.is_active = ${q.status === 'active' ? 1 : 0}`);
+  return pagedQuery({
+    select: SITE_COLUMNS,
+    from: `FROM sites s WHERE ${where.join(' AND ')}`,
+    params: [s, s, s, s],
+    order: orderBy(q, { site_code: 's.site_code', site_name: 's.site_name', company: 's.company', employee_count: 'employee_count' }, 'site_code'),
+    q,
+  });
+}
+
+export function getSite(id) {
+  const row = db.prepare(`SELECT ${SITE_COLUMNS} FROM sites s WHERE s.id = ?`).get(id);
+  if (!row) throw new HttpError(404, 'Site not found');
+  return row;
+}
+
+/** Body: site_code, site_name, company, location (optional), is_active. */
+function validateSite(body, existing) {
+  const errors = {};
+  const data = {
+    site_code: str(body.site_code).toUpperCase(),
+    site_name: str(body.site_name).replace(/\s+/g, ' '),
+    company: str(body.company).replace(/\s+/g, ' '),
+    location: optional(body.location),
+    is_active: flag(body.is_active, existing?.is_active ?? 1),
+  };
+  if (!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(data.site_code)) errors.site_code = 'Site code must be 2-20 characters: A-Z, 0-9, _ -';
+  else if (taken('sites', 'site_code', data.site_code, existing?.id)) errors.site_code = 'Site code is already used';
+  if (data.site_name.length < 2 || data.site_name.length > 100) errors.site_name = 'Site name must be 2-100 characters';
+  else if (taken('sites', 'site_name', data.site_name, existing?.id)) errors.site_name = 'Site name is already used';
+  if (data.company.length < 2 || data.company.length > 100) errors.company = 'Company must be 2-100 characters';
+  if (data.location && data.location.length > 200) errors.location = 'Location must be at most 200 characters';
+  fail(errors);
+  return data;
+}
+
+export function createSite(body) {
+  const d = validateSite(body);
+  const { lastInsertRowid } = db.prepare('INSERT INTO sites (site_code, site_name, company, location, is_active) VALUES (?, ?, ?, ?, ?)')
+    .run(d.site_code, d.site_name, d.company, d.location, d.is_active);
+  return getSite(lastInsertRowid);
+}
+
+/** A renamed site stays assigned to its employees: their site name is updated with it. */
+export function updateSite(id, body) {
+  const existing = getSite(id);
+  const d = validateSite(body, existing);
+  tx(() => {
+    db.prepare('UPDATE sites SET site_code = ?, site_name = ?, company = ?, location = ?, is_active = ? WHERE id = ?')
+      .run(d.site_code, d.site_name, d.company, d.location, d.is_active, id);
+    if (d.site_name !== existing.site_name) db.prepare('UPDATE employees SET site = ? WHERE site = ? COLLATE NOCASE').run(d.site_name, existing.site_name);
+  });
+  return getSite(id);
+}
+
+export function deleteSite(id) {
+  const site = getSite(id);
+  if (site.employee_count) throw new HttpError(409, `Site has ${site.employee_count} employee(s). Move them to another site or deactivate the site instead`);
+  db.prepare('DELETE FROM sites WHERE id = ?').run(id);
 }
 
 /* ---------- Spare parts ---------- */

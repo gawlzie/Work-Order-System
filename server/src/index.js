@@ -10,6 +10,7 @@ import {
   createCategory, deleteCategory, getCategory, listCategories, updateCategory,
   createJobCode, deleteJobCode, getJobCode, listJobCodes, updateJobCode,
   createSparepart, deleteSparepart, getSparepart, listSpareparts, updateSparepart, UOMS,
+  createSite, deleteSite, getSite, listSites, updateSite,
   createStepTemplate, deleteStepTemplate, getStepTemplate, listStepTemplates, moveStepTemplate, updateStepTemplate,
 } from './master.js';
 import { PERMISSIONS } from './permissions.js';
@@ -72,6 +73,8 @@ app.get('/api/master/units', wrap((req) => {
 app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
 
 app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
+app.get('/api/master/sites', wrap((req) =>
+  db.prepare(`SELECT id, site_code, site_name, company, is_active FROM sites ${req.query.all ? '' : 'WHERE is_active = 1'} ORDER BY site_name`).all()));
 
 // Inactive categories stay visible to filters (?all=1) but cannot be picked for new work orders.
 // Job codes for the work order picker; inactive ones only with ?all=1 (filters).
@@ -106,6 +109,7 @@ app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTyp
 crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
 crud('categories', 'master.category', { list: listCategories, get: getCategory, create: createCategory, update: updateCategory, remove: deleteCategory });
 crud('job-codes', 'master.job', { list: listJobCodes, get: getJobCode, create: createJobCode, update: updateJobCode, remove: deleteJobCode });
+crud('sites', 'master.site', { list: listSites, get: getSite, create: createSite, update: updateSite, remove: deleteSite });
 app.get('/api/spareparts/uoms', requirePermission('master.sparepart'), wrap(() => UOMS));
 crud('spareparts', 'master.sparepart', { list: listSpareparts, get: getSparepart, create: createSparepart, update: updateSparepart, remove: deleteSparepart });
 app.post('/api/steps/:id(\\d+)/move', requirePermission('master.step'), wrap((req) => moveStepTemplate(Number(req.params.id), req.body?.direction)));

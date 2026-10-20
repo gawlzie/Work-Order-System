@@ -10,15 +10,16 @@ import { Badge, BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Moda
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
-import { usePaged, useRoleOptions } from '../../lib/queries';
-import type { MasterEmployee, RoleOption } from '../../lib/types';
+import { usePaged, useRoleOptions, useSites } from '../../lib/queries';
+import type { MasterEmployee, RoleOption, SiteOption } from '../../lib/types';
 
-const FILTERS = ['role_id', 'status', 'account'] as const;
+const FILTERS = ['role_id', 'site', 'status', 'account'] as const;
 
 export function EmployeeMasterPage() {
   const { t } = useI18n();
   const { user } = useAuth();
   const state = useListState(FILTERS, 'full_name');
+  const sites = useSites(true);
   const { params, update } = state;
   const list = usePaged<MasterEmployee>('employees', params);
   const roles = useRoleOptions();
@@ -46,10 +47,15 @@ export function EmployeeMasterPage() {
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center">
           <SearchBox state={state} placeholder={t('search_employee')} />
-          <div className="grid gap-3 sm:grid-cols-3 lg:flex">
+          <div className="grid gap-3 sm:grid-cols-2 lg:flex">
             <Select value={params.role_id} onChange={(e) => update({ role_id: e.target.value })} className="lg:w-44" aria-label={t('role')}>
               <option value="">{t('all_roles')}</option>
               {roles.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </Select>
+            <Select value={params.site} onChange={(e) => update({ site: e.target.value })} className="lg:w-48" aria-label={t('site')}>
+              <option value="">{t('all_sites')}</option>
+              {params.site && !sites.data?.some((s) => s.site_name === params.site) && <option value={params.site}>{params.site}</option>}
+              {sites.data?.map((s) => <option key={s.id} value={s.site_name}>{s.site_name}</option>)}
             </Select>
             <Select value={params.account} onChange={(e) => update({ account: e.target.value })} className="lg:w-40" aria-label={t('account')}>
               <option value="">{t('account')}: {t('all')}</option>
@@ -62,7 +68,7 @@ export function EmployeeMasterPage() {
               <option value="inactive">{t('inactive')}</option>
             </Select>
           </div>
-          {(params.search || params.role_id || params.account || params.status) && (
+          {(params.search || params.role_id || params.site || params.account || params.status) && (
             <Button variant="ghost" onClick={state.reset}><X className="size-4" /> {t('reset')}</Button>
           )}
         </div>
@@ -264,7 +270,15 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
             <Input value={form.company} onChange={set('company')} maxLength={100} />
           </Field>
           <Field label={t('site')} error={errors.site} className="sm:col-span-2">
-            <Input value={form.site} onChange={set('site')} maxLength={100} />
+            <SiteSelect
+              value={form.site}
+              invalid={!!errors.site}
+              onChange={(s) => {
+                // Picking a site fills in its company; it can still be changed.
+                setForm((f) => ({ ...f, site: s.site_name, company: s.company }));
+                setErrors((er) => ({ ...er, site: '', company: '' }));
+              }}
+            />
           </Field>
           <div className="sm:col-span-2">
             <Switch checked={form.is_active} disabled={isSelf} onChange={(v) => patch({ is_active: v })} label={t('active')} description={t('employee_active_hint')} />
@@ -303,3 +317,23 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
 /** "Budi Santoso" -> "budi.santoso" */
 const suggestUsername = (name: string) =>
   name.trim().toLowerCase().split(/\s+/).slice(0, 2).join('.').replace(/[^a-z0-9._]/g, '').slice(0, 30);
+
+/** Active sites from the site master; an employee's current (inactive or renamed) site stays selectable. */
+function SiteSelect({ value, invalid, onChange }: { value: string; invalid?: boolean; onChange: (site: SiteOption) => void }) {
+  const { t } = useI18n();
+  const sites = useSites(true);
+  const options = (sites.data ?? []).filter((s) => s.is_active || s.site_name === value);
+  return (
+    <Select
+      value={options.some((s) => s.site_name === value) ? value : ''}
+      onChange={(e) => {
+        const site = options.find((s) => s.site_name === e.target.value);
+        if (site) onChange(site);
+      }}
+      invalid={invalid}
+    >
+      <option value="" disabled>{value && !options.some((s) => s.site_name === value) ? `${value} (${t('site_not_in_master')})` : t('select_site')}</option>
+      {options.map((s) => <option key={s.id} value={s.site_name}>{s.site_name}{s.is_active ? '' : ` (${t('inactive')})`}</option>)}
+    </Select>
+  );
+}

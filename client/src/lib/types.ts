@@ -12,7 +12,8 @@ export type Permission =
   | 'master.step'
   | 'master.category'
   | 'master.job'
-  | 'master.sparepart';
+  | 'master.sparepart'
+  | 'master.site';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
@@ -233,6 +234,25 @@ export interface WorkOrderDetail extends WorkOrder {
   additional_work: Step[];
   proofs: Proof[];
   job_codes: WoJobCode[];
+}
+
+export interface MasterSite {
+  id: number;
+  site_code: string;
+  site_name: string;
+  company: string;
+  location: string | null;
+  is_active: number;
+  employee_count: number;
+}
+
+/** Site for dropdowns (employee form, filters). */
+export interface SiteOption {
+  id: number;
+  site_code: string;
+  site_name: string;
+  company: string;
+  is_active: number;
 }
 
 export interface MasterSparepart {

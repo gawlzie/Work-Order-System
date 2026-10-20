@@ -10,6 +10,7 @@ import { RoleMasterPage } from './pages/master/RoleMaster';
 import { StepMasterPage } from './pages/master/StepMaster';
 import { CategoryMasterPage } from './pages/master/CategoryMaster';
 import { JobCodeMasterPage } from './pages/master/JobCodeMaster';
+import { SiteMasterPage } from './pages/master/SiteMaster';
 import { SparepartMasterPage } from './pages/master/SparepartMaster';
 import { UnitMasterPage } from './pages/master/UnitMaster';
 import { AccountPage } from './pages/mechanic/AccountPage';
@@ -83,6 +84,7 @@ export function App() {
         <Route path="/master/step" element={<RequireRole allowed={can('master.step')}><StepMasterPage /></RequireRole>} />
         <Route path="/master/category" element={<RequireRole allowed={can('master.category')}><CategoryMasterPage /></RequireRole>} />
         <Route path="/master/job-code" element={<RequireRole allowed={can('master.job')}><JobCodeMasterPage /></RequireRole>} />
+        <Route path="/master/site" element={<RequireRole allowed={can('master.site')}><SiteMasterPage /></RequireRole>} />
         <Route path="/master/sparepart" element={<RequireRole allowed={can('master.sparepart')}><SparepartMasterPage /></RequireRole>} />
         <Route path="/app/work-order" element={<AppDownloadPage />} />
         <Route path="/profile" element={<ProfilePage />} />

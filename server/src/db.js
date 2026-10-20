@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS repair_categories (
 
 ${jobCodesDdl('job_codes')}
 
+-- Sites (mine pits, workshops). Employees refer to their site by name (employees.site).
+CREATE TABLE IF NOT EXISTS sites (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  site_code   TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  site_name   TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  company     TEXT NOT NULL,
+  location    TEXT,
+  is_active   INTEGER NOT NULL DEFAULT 1
+);
+
 -- Spare part inventory: stock on hand per part; low stock when stock is at or below min_stock.
 CREATE TABLE IF NOT EXISTS spareparts (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -196,6 +206,27 @@ export function ensureSystemRoles({ reset = false } = {}) {
   if (missing.length) db.prepare("UPDATE roles SET permissions = ? WHERE code = 'admin'").run(JSON.stringify([...current, ...missing]));
 }
 ensureSystemRoles();
+
+/**
+ * Every site an employee works at is in the site master: missing ones are added as SITE-nn with that employee's
+ * company (first used once, when the master was introduced; also after a seed).
+ */
+export function ensureSitesFromEmployees() {
+  const codes = new Set(db.prepare('SELECT site_code FROM sites').all().map((r) => r.site_code));
+  const missing = db.prepare(`SELECT e.site, MIN(e.company) AS company FROM employees e
+                               WHERE e.site != '' AND NOT EXISTS (SELECT 1 FROM sites s WHERE s.site_name = e.site COLLATE NOCASE)
+                               GROUP BY e.site ORDER BY MIN(e.id)`).all();
+  const ins = db.prepare('INSERT INTO sites (site_code, site_name, company, is_active) VALUES (?, ?, ?, 1)');
+  for (const { site, company } of missing) {
+    let n = 1;
+    while (codes.has(`SITE-${String(n).padStart(2, '0')}`)) n++;
+    const code = `SITE-${String(n).padStart(2, '0')}`;
+    codes.add(code);
+    ins.run(code, site, company);
+  }
+  return missing.length;
+}
+ensureSitesFromEmployees();
 
 const columns = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
 
