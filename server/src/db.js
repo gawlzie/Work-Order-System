@@ -12,6 +12,17 @@ mkdirSync(dirname(DB_PATH), { recursive: true });
 export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
 
+/** Job codes: standard repair jobs within a category; standard_duration (minutes) is optional ("-" when unknown). */
+const jobCodesDdl = (name) => `
+CREATE TABLE IF NOT EXISTS ${name} (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_code          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  job_name          TEXT NOT NULL,
+  category_id       INTEGER NOT NULL REFERENCES repair_categories(id),
+  standard_duration INTEGER,
+  is_active         INTEGER NOT NULL DEFAULT 1
+);`;
+
 const employeesDdl = (name) => `
 CREATE TABLE IF NOT EXISTS ${name} (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,15 +69,7 @@ CREATE TABLE IF NOT EXISTS repair_categories (
   is_active   INTEGER NOT NULL DEFAULT 1
 );
 
-/* Job codes: standard repair jobs within a category, with their planned duration. */
-CREATE TABLE IF NOT EXISTS job_codes (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  job_code          TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  job_name          TEXT NOT NULL,
-  category_id       INTEGER NOT NULL REFERENCES repair_categories(id),
-  standard_duration INTEGER NOT NULL, -- planned repair time in minutes
-  is_active         INTEGER NOT NULL DEFAULT 1
-);
+${jobCodesDdl('job_codes')}
 
 CREATE TABLE IF NOT EXISTS work_orders (
   wo_uuid          TEXT PRIMARY KEY,
@@ -190,7 +193,7 @@ if (categoryCols.includes('job_code') || categoryCols.includes('standard_duratio
   tx(() => {
     if (categoryCols.includes('job_code') && categoryCols.includes('standard_duration')) {
       db.exec(`INSERT INTO job_codes (job_code, job_name, category_id, standard_duration, is_active)
-               SELECT UPPER(c.job_code), c.name, c.id, COALESCE(c.standard_duration, 60), c.is_active FROM repair_categories c
+               SELECT UPPER(c.job_code), c.name, c.id, c.standard_duration, c.is_active FROM repair_categories c
                WHERE c.job_code IS NOT NULL AND NOT EXISTS (SELECT 1 FROM job_codes j WHERE j.job_code = c.job_code)`);
     }
     db.exec('DROP INDEX IF EXISTS idx_category_job_code');
@@ -200,6 +203,15 @@ if (categoryCols.includes('job_code') || categoryCols.includes('standard_duratio
 }
 // "Approved by system" no longer exists: work orders that had it count as approved.
 db.exec("UPDATE work_orders SET approval_status = 'APPROVE' WHERE approval_status = 'APPROVE_BY_SYSTEM'");
+// Standard duration became optional; databases created before that have it NOT NULL, so rebuild the table.
+if (db.prepare('PRAGMA table_info(job_codes)').all().find((c) => c.name === 'standard_duration')?.notnull) {
+  tx(() => {
+    db.exec(jobCodesDdl('job_codes_new'));
+    db.exec(`INSERT INTO job_codes_new (id, job_code, job_name, category_id, standard_duration, is_active)
+             SELECT id, job_code, job_name, category_id, standard_duration, is_active FROM job_codes`);
+    db.exec('DROP TABLE job_codes; ALTER TABLE job_codes_new RENAME TO job_codes;');
+  });
+}
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 

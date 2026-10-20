@@ -122,8 +122,8 @@ export interface MasterJobCode {
   category_id: number;
   category_name: string;
   category_active: number;
-  /** Planned repair time in minutes. */
-  standard_duration: number;
+  /** Planned repair time in minutes; null when unknown (shown as "-"). */
+  standard_duration: number | null;
   is_active: number;
 }
 

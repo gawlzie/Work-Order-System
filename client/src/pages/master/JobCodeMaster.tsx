@@ -14,7 +14,7 @@ import type { Category, MasterJobCode } from '../../lib/types';
 
 const FILTERS = ['status', 'category_id'] as const;
 
-const duration = (minutes: number) => formatDuration(minutes * 60);
+const duration = (minutes: number | null) => (minutes ? formatDuration(minutes * 60) : '-');
 
 export function JobCodeMasterPage() {
   const { t } = useI18n();
@@ -156,8 +156,8 @@ function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: Maste
     job_code: job?.job_code ?? '',
     job_name: job?.job_name ?? '',
     category_id: job ? String(job.category_id) : defaultCategory,
-    hours: job ? String(Math.floor(job.standard_duration / 60)) : '',
-    minutes: job ? String(job.standard_duration % 60) : '',
+    hours: job?.standard_duration ? String(Math.floor(job.standard_duration / 60)) : '',
+    minutes: job?.standard_duration ? String(job.standard_duration % 60) : '',
     is_active: job ? !!job.is_active : true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -169,7 +169,7 @@ function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: Maste
     mutationFn: () =>
       api<MasterJobCode>(job ? `/job-codes/${job.id}` : '/job-codes', {
         method: job ? 'PUT' : 'POST',
-        body: { job_code: form.job_code, job_name: form.job_name, category_id: form.category_id, standard_duration: totalMinutes, is_active: form.is_active },
+        body: { job_code: form.job_code, job_name: form.job_name, category_id: form.category_id, standard_duration: totalMinutes || '', is_active: form.is_active },
       }),
     onSuccess: (saved) => {
       toast('success', t('data_saved'), `${saved.job_code} · ${saved.job_name}`);
@@ -192,10 +192,10 @@ function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: Maste
     e.preventDefault();
     const next: Record<string, string> = {};
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{1,19}$/.test(form.job_code.trim())) next.job_code = 'Job code must be 2-20 characters: A-Z, 0-9, . _ -';
-    if (form.job_name.trim().length < 2) next.job_name = 'Job name must be 2-100 characters';
+    if (form.job_name.trim().length < 2) next.job_name = 'Job name must be 2-200 characters';
     if (!form.category_id) next.category_id = 'Category is required';
     if (Number(form.minutes) > 59) next.standard_duration = 'Minutes must be 0-59';
-    else if (totalMinutes < 1 || totalMinutes > 60000) next.standard_duration = 'Standard duration must be between 1 minute and 1000 hours';
+    else if (totalMinutes > 60000) next.standard_duration = 'Standard duration must be at most 1000 hours';
     setErrors(next);
     if (!Object.keys(next).length) save.mutate();
   };
@@ -225,7 +225,7 @@ function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: Maste
           />
         </Field>
         <Field label={t('job_name')} required error={errors.job_name}>
-          <Input value={form.job_name} onChange={set('job_name')} placeholder="Replace hydraulic hose" maxLength={100} invalid={!!errors.job_name} />
+          <Input value={form.job_name} onChange={set('job_name')} placeholder="Replace hydraulic hose" maxLength={200} invalid={!!errors.job_name} />
         </Field>
         <Field label={t('category')} required error={errors.category_id}>
           <Select value={form.category_id} onChange={set('category_id')} invalid={!!errors.category_id}>
@@ -234,8 +234,8 @@ function JobCodeForm({ job, categories, defaultCategory, onClose }: { job: Maste
           </Select>
         </Field>
         <div>
-          <p className="text-sm font-medium">{t('standard_duration')} <span className="text-destructive">*</span></p>
-          <p className="mb-1.5 text-xs text-muted-foreground">{t('standard_duration_hint')}</p>
+          <p className="text-sm font-medium">{t('standard_duration')}</p>
+          <p className="mb-1.5 text-xs text-muted-foreground">{t('job_duration_hint')}</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t('hours')}>
               <Input type="number" inputMode="numeric" min={0} max={1000} value={form.hours} onChange={set('hours', 'standard_duration')} invalid={!!errors.standard_duration} placeholder="0" />

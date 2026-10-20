@@ -400,23 +400,23 @@ export function getJobCode(id) {
   return row;
 }
 
-/** Body: job_code, job_name, category_id, standard_duration (minutes), is_active. */
+/** Body: job_code, job_name, category_id, standard_duration (minutes, optional: empty = unknown), is_active. */
 function validateJobCode(body, existing) {
   const errors = {};
   const data = {
     job_code: str(body.job_code).toUpperCase(),
     job_name: str(body.job_name),
     category_id: Number(body.category_id),
-    standard_duration: Number(str(body.standard_duration)),
+    standard_duration: str(body.standard_duration) ? Number(str(body.standard_duration)) : null,
     is_active: flag(body.is_active, existing?.is_active ?? 1),
   };
   if (!/^[A-Z0-9][A-Z0-9._-]{1,19}$/.test(data.job_code)) errors.job_code = 'Job code must be 2-20 characters: A-Z, 0-9, . _ -';
   else if (taken('job_codes', 'job_code', data.job_code, existing?.id)) errors.job_code = 'Job code is already used';
-  if (data.job_name.length < 2 || data.job_name.length > 100) errors.job_name = 'Job name must be 2-100 characters';
+  if (data.job_name.length < 2 || data.job_name.length > 200) errors.job_name = 'Job name must be 2-200 characters';
   // A job code may keep a category that was deactivated since; new choices must be active.
   if (!data.category_id || !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(data.category_id, existing?.category_id ?? 0))
     errors.category_id = 'Category is required (active categories only)';
-  if (!(Number.isInteger(data.standard_duration) && data.standard_duration >= 1 && data.standard_duration <= 60000))
+  if (data.standard_duration !== null && !(Number.isInteger(data.standard_duration) && data.standard_duration >= 1 && data.standard_duration <= 60000))
     errors.standard_duration = 'Standard duration must be between 1 minute and 1000 hours';
   fail(errors);
   return data;
