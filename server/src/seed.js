@@ -4,7 +4,7 @@ import { db, ensureSitesFromEmployees, ensureSystemRoles, fillMissingSites, tx }
 import { hashPassword } from './auth.js';
 import { ensureStepTemplates, insertSteps, recomputeStatus } from './workorders.js';
 import { fillMeterReadings } from './meter-examples.js';
-import { ensureSiteExamples } from './site-examples.js';
+import { ensureSiteExamples, spreadExampleSites } from './site-examples.js';
 import { ensureSparepartExamples } from './sparepart-examples.js';
 
 const COMPANY = 'Inline Technology International';
@@ -202,6 +202,7 @@ export function seed({ reset = false } = {}) {
     ensureSitesFromEmployees();
     ensureSiteExamples();
     fillMissingSites();
+    spreadExampleSites();
   });
   return true;
 }

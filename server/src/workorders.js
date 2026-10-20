@@ -642,7 +642,7 @@ export function addAdditionalWork(woUuid, name) {
 }
 
 export function dashboard(q = {}) {
-  const { sql, params } = buildFilters({ created_start: q.start_date, created_end: q.end_date });
+  const { sql, params } = buildFilters({ created_start: q.start_date, created_end: q.end_date, site: q.site });
   const rows = db.prepare(`${LIST_SELECT}${sql}`).all(...params).map(decorate);
   const counts = { open: 0, on_progress: 0, waiting: 0, finish: 0 };
   for (const r of rows) {

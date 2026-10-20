@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { StatusBadge } from '../components/badges';
 import { DateRange } from '../components/DateRange';
+import { SiteFilter } from '../components/SiteSelect';
 import { Pagination } from '../components/Pagination';
 import { BtnLabel, Button, Card, EmptyState, MetaItem, PageHeader, Skeleton } from '../components/ui';
 import { formatDateTime, formatDuration, toDateInput } from '../lib/format';
@@ -25,11 +26,12 @@ export function DashboardPage() {
   const [start, setStart] = useState(defaultStart);
   const [end, setEnd] = useState(() => toDateInput(new Date()));
   const [status, setStatus] = useState('');
+  const [site, setSite] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const stats = useDashboard(start, end);
-  const list = useWorkOrders({ created_start: start, created_end: end, status, page, limit, sort_by: 'created_at', sort_order: 'desc' });
+  const stats = useDashboard(start, end, site);
+  const list = useWorkOrders({ created_start: start, created_end: end, status, site, page, limit, sort_by: 'created_at', sort_order: 'desc' });
   const s = stats.data;
 
   const statusCards = [
@@ -47,6 +49,7 @@ export function DashboardPage() {
         subtitle={t('dashboard_subtitle')}
         actions={
           <>
+            <SiteFilter value={site} onChange={(v) => { setSite(v); setPage(1); }} className="w-full sm:w-auto" />
             <DateRange start={start} end={end} onChange={(a, b) => { setStart(a); setEnd(b); setPage(1); }} className="flex-1 sm:flex-none" />
             <Button variant="outline" onClick={() => { stats.refetch(); list.refetch(); }} title={t('reload')}>
               <RefreshCcw className="size-4" /> <BtnLabel>{t('reload')}</BtnLabel>

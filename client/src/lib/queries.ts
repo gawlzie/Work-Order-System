@@ -37,10 +37,10 @@ export const useWorkOrder = (id: string | undefined) =>
     enabled: !!id,
   });
 
-export const useDashboard = (start: string, end: string) =>
+export const useDashboard = (start: string, end: string, site = '') =>
   useQuery({
-    queryKey: ['dashboard', start, end],
-    queryFn: () => api<DashboardStats>(`/dashboard${qs({ start_date: start, end_date: end })}`),
+    queryKey: ['dashboard', start, end, site],
+    queryFn: () => api<DashboardStats>(`/dashboard${qs({ start_date: start, end_date: end, site })}`),
   });
 
 /** Units for dropdowns. Pass `all` to include inactive units (e.g. list filters). */

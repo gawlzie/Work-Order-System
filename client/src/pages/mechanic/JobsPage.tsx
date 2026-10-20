@@ -3,6 +3,7 @@ import { ChevronRight, RefreshCcw, Search, Timer } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
+import { SiteFilter } from '../../components/SiteSelect';
 import { EmptyState, Input, Skeleton } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { formatDateTime, formatDuration } from '../../lib/format';
@@ -32,6 +33,7 @@ function JobCard({ wo }: { wo: WorkOrder }) {
           <div className="min-w-0">
             <p className="text-lg leading-tight font-semibold">{wo.unit_number}</p>
             <p className="text-xs text-muted-foreground">{wo.wo_number} · {wo.unit_code}</p>
+            {wo.site && <p className="text-xs text-muted-foreground">{wo.site}</p>}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <StatusBadge status={wo.status} />
@@ -65,14 +67,15 @@ export function JobsPage() {
   const tabs = TABS.filter((tab) => !tab.permission || can(tab.permission));
   const [tabId, setTabId] = useState<TabId>('active');
   const [search, setSearch] = useState('');
+  const [site, setSite] = useState('');
   const term = useDeferredValue(search.trim());
 
   // One small query per tab so every tab shows its count; lists refresh every 30 s for field use.
   const queries = {
-    active: useWorkOrders({ ...TABS[0].params(me), search: term, limit: 50 }, 30_000),
-    available: useWorkOrders({ ...TABS[1].params(me), search: term, limit: 50 }, 30_000),
-    requests: useWorkOrders({ ...TABS[2].params(me), search: term, limit: 50 }, 30_000),
-    done: useWorkOrders({ ...TABS[3].params(me), search: term, limit: 20 }, 30_000),
+    active: useWorkOrders({ ...TABS[0].params(me), search: term, site, limit: 50 }, 30_000),
+    available: useWorkOrders({ ...TABS[1].params(me), search: term, site, limit: 50 }, 30_000),
+    requests: useWorkOrders({ ...TABS[2].params(me), search: term, site, limit: 50 }, 30_000),
+    done: useWorkOrders({ ...TABS[3].params(me), search: term, site, limit: 20 }, 30_000),
   };
   const tab = tabs.find((x) => x.id === tabId) ?? tabs[0];
   const current = queries[tab.id];
@@ -94,9 +97,12 @@ export function JobsPage() {
         </button>
       </div>
 
-      <div className="relative mb-3">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search')} className="h-11 pl-9" />
+      <div className="mb-3 grid gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search')} className="h-11 pl-9" />
+        </div>
+        <SiteFilter value={site} onChange={setSite} className="h-11" />
       </div>
 
       <div className="sticky top-14 z-20 -mx-4 mb-3 bg-background/95 px-4 py-2 backdrop-blur">
