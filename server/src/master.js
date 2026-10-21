@@ -1,7 +1,7 @@
 import { hashPassword } from './auth.js';
 import { db, roleHas, tx } from './db.js';
 import { ADMIN_PERMISSIONS, PERMISSION_KEYS } from './permissions.js';
-import { HttpError } from './workorders.js';
+import { DECIMAL_UOMS, HttpError, UOMS } from './workorders.js';
 
 /* ---------- Shared helpers ---------- */
 
@@ -399,8 +399,11 @@ export function deleteCategory(id) {
   const category = getCategory(id);
   if (category.wo_count) throw new HttpError(409, 'Category is used in work order history. Deactivate the category instead');
   if (category.job_count) throw new HttpError(409, `Category has ${category.job_count} job code(s). Delete them or move them to another category first`);
-  if (category.part_count) throw new HttpError(409, `Category has ${category.part_count} spare part(s). Move them to another category first`);
-  db.prepare('DELETE FROM repair_categories WHERE id = ?').run(id);
+  // The spare part master is hidden, so its parts cannot be moved first: they just lose the category.
+  tx(() => {
+    db.prepare('UPDATE spareparts SET category_id = NULL WHERE category_id = ?').run(id);
+    db.prepare('DELETE FROM repair_categories WHERE id = ?').run(id);
+  });
 }
 
 /* ---------- Job codes ---------- */
@@ -550,9 +553,7 @@ export function deleteSite(id) {
 
 /* ---------- Spare parts ---------- */
 
-/** Units of measure; LTR, KG and MTR may hold decimals, the others are counted in whole numbers. */
-export const UOMS = ['PCS', 'SET', 'UNIT', 'PAIR', 'BOX', 'ROLL', 'TUBE', 'CAN', 'PAIL', 'DRUM', 'LTR', 'KG', 'MTR'];
-const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+export { UOMS };
 /** Stock and minimum stock a new spare part starts with when none is given. */
 export const DEFAULT_STOCK = 99999;
 export const DEFAULT_MIN_STOCK = 15;

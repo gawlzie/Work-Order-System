@@ -111,8 +111,8 @@ export function addUnitExamples() {
           const entry = pick('SELECT id FROM wo_job_codes WHERE wo_uuid = ? AND job_code_id = ? ORDER BY id DESC', wo.wo_uuid, job.id).id;
           timeWoJobCode(wo.wo_uuid, entry, 'start', mechanic, opts(jt));
           for (const [pn, qty] of parts) {
-            const part = pick('SELECT id FROM spareparts WHERE part_number = ?', pn);
-            if (part) addWoJobPart(wo.wo_uuid, entry, { sparepart_id: part.id, qty }, mechanic, opts(jt + 3 * MIN));
+            const part = pick('SELECT part_name, uom FROM spareparts WHERE part_number = ?', pn);
+            if (part) addWoJobPart(wo.wo_uuid, entry, { part_name: part.part_name, uom: part.uom, qty }, mechanic, opts(jt + 3 * MIN));
           }
           // A little under the standard time (60 min when it has none).
           const minutes = Math.round((job.standard_duration ?? 60) * 0.85);

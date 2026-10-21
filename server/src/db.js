@@ -180,16 +180,20 @@ CREATE TABLE IF NOT EXISTS wo_job_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_codes_wo ON wo_job_codes(wo_uuid);
 
--- Spare parts used for one job code entry (job code + mechanic) of Step 7; uom is the part's unit when it was added.
+-- Spare parts used for one job code entry (job code + mechanic) of Step 7, typed in freely (part_name, qty, uom).
+-- sparepart_id / part_number only on lines from before, when parts were picked from the spare part master.
 CREATE TABLE IF NOT EXISTS wo_job_parts (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   wo_job_code_id INTEGER NOT NULL REFERENCES wo_job_codes(id) ON DELETE CASCADE,
-  sparepart_id INTEGER NOT NULL REFERENCES spareparts(id),
+  sparepart_id INTEGER REFERENCES spareparts(id),
+  part_number  TEXT,
+  part_name    TEXT NOT NULL,
   qty          REAL NOT NULL,
   uom          TEXT NOT NULL,
   added_by     INTEGER REFERENCES employees(id),
   added_at     TEXT NOT NULL,
-  updated_at   TEXT
+  updated_at   TEXT,
+  client_ref   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_parts_entry ON wo_job_parts(wo_job_code_id);
 
@@ -325,6 +329,22 @@ fillMaintenanceTypes();
 
 // Things made offline in the mechanic app carry the phone's reference until they have a server id.
 for (const table of ['wo_steps', 'wo_job_codes', 'wo_job_parts']) if (!columns(table).includes('client_ref')) db.exec(`ALTER TABLE ${table} ADD COLUMN client_ref TEXT`);
+// Spare part lines became free text: rebuilt once without the required master link, keeping each line's part number and name.
+if (!columns('wo_job_parts').includes('part_name')) {
+  tx(() => {
+    db.exec(`CREATE TABLE wo_job_parts_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      wo_job_code_id INTEGER NOT NULL REFERENCES wo_job_codes(id) ON DELETE CASCADE,
+      sparepart_id INTEGER REFERENCES spareparts(id),
+      part_number TEXT, part_name TEXT NOT NULL, qty REAL NOT NULL, uom TEXT NOT NULL,
+      added_by INTEGER REFERENCES employees(id), added_at TEXT NOT NULL, updated_at TEXT, client_ref TEXT)`);
+    db.exec(`INSERT INTO wo_job_parts_new (id, wo_job_code_id, sparepart_id, part_number, part_name, qty, uom, added_by, added_at, updated_at, client_ref)
+             SELECT p.id, p.wo_job_code_id, p.sparepart_id, sp.part_number, COALESCE(sp.part_name, '-'), p.qty, p.uom, p.added_by, p.added_at, p.updated_at, p.client_ref
+             FROM wo_job_parts p LEFT JOIN spareparts sp ON sp.id = p.sparepart_id`);
+    db.exec(`DROP TABLE wo_job_parts; ALTER TABLE wo_job_parts_new RENAME TO wo_job_parts;
+             CREATE INDEX IF NOT EXISTS idx_wo_job_parts_entry ON wo_job_parts(wo_job_code_id);`);
+  });
+}
 if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE work_orders ADD COLUMN approval_remarks TEXT');
 const categoryCols = columns('repair_categories');
 if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');

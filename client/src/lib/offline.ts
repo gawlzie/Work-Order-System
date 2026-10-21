@@ -49,7 +49,10 @@ export interface OpInput {
   mechanic_id?: number;
   entry_id?: number;
   entry_ref?: string;
+  /** Older app versions sent a picked master part instead of a typed name. */
   sparepart_id?: number;
+  part_name?: string;
+  uom?: string;
   qty?: number | string;
   line_id?: number;
   line_ref?: string;
@@ -275,8 +278,8 @@ function applyOp(wo: WorkOrderDetail, op: OutboxOp): WorkOrderDetail {
       const e = findEntry(next, op);
       if (e && !e.parts.some((p) => p.client_ref === op.line_ref)) {
         e.parts.push({
-          id: tempId(op.line_ref!), client_ref: op.line_ref, wo_job_code_id: e.id, sparepart_id: op.sparepart_id!, part_number: v.part_number, part_name: v.part_name,
-          qty: Number(String(op.qty).replace(',', '.')), uom: v.uom, added_by_name: op.user_name, added_at: op.at, updated_at: null,
+          id: tempId(op.line_ref!), client_ref: op.line_ref, wo_job_code_id: e.id, sparepart_id: op.sparepart_id ?? null, part_number: op.part_name ? null : v.part_number ?? null,
+          part_name: op.part_name ?? v.part_name, qty: Number(String(op.qty).replace(',', '.')), uom: op.uom ?? v.uom, added_by_name: op.user_name, added_at: op.at, updated_at: null,
         } as WoJobPart);
       }
       break;
@@ -284,7 +287,10 @@ function applyOp(wo: WorkOrderDetail, op: OutboxOp): WorkOrderDetail {
     case 'part.update': {
       const e = findEntry(next, op);
       const line = e && findLine(e, op);
-      if (line) Object.assign(line, { qty: Number(String(op.qty).replace(',', '.')), updated_at: op.at });
+      if (line) {
+        if (op.part_name && op.part_name !== line.part_name) Object.assign(line, { part_name: op.part_name, part_number: null, sparepart_id: null });
+        Object.assign(line, { qty: Number(String(op.qty).replace(',', '.')), uom: op.uom ?? line.uom, updated_at: op.at });
+      }
       break;
     }
     case 'part.remove': {
@@ -363,7 +369,7 @@ export function overlayList(page: Paged<WorkOrder>, params: object, queue: Outbo
 
 const CACHE_KEY = 'query-cache';
 /** Queries kept on the phone for offline use. */
-const KEEP = new Set(['work-orders', 'work-order', 'units', 'employees', 'categories', 'job-codes', 'sites', 'step-template', 'spareparts', 'notifications']);
+const KEEP = new Set(['work-orders', 'work-order', 'units', 'employees', 'categories', 'job-codes', 'sites', 'step-template', 'notifications']);
 
 export async function restoreCache(qc: QueryClient, userId: number | undefined) {
   if (userId == null) return;

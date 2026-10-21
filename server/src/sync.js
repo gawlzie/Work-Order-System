@@ -111,13 +111,17 @@ export function applyOp(op, user) {
       break;
     case 'part.add': {
       need(user, 'wo.progress', 'wo.approve');
-      wo = addWoJobPart(woUuid, entryId(woUuid, op), { sparepart_id: op.sparepart_id, qty: op.qty }, user, { ...opts, client_ref: ref(op.line_ref) });
+      // Phones on the older app still send a picked master part; it is added under that part's name and unit.
+      const picked = op.part_name == null && op.sparepart_id != null
+        ? db.prepare('SELECT part_name, uom FROM spareparts WHERE id = ?').get(Number(op.sparepart_id)) : null;
+      wo = addWoJobPart(woUuid, entryId(woUuid, op), { part_name: picked?.part_name ?? op.part_name, uom: picked?.uom ?? op.uom, qty: op.qty }, user,
+        { ...opts, client_ref: ref(op.line_ref) });
       break;
     }
     case 'part.update': {
       need(user, 'wo.progress', 'wo.approve');
       const entry = entryId(woUuid, op);
-      wo = updateWoJobPart(woUuid, entry, lineId(entry, op), { qty: op.qty }, user);
+      wo = updateWoJobPart(woUuid, entry, lineId(entry, op), { qty: op.qty, part_name: op.part_name, uom: op.uom }, user);
       break;
     }
     case 'part.remove': {

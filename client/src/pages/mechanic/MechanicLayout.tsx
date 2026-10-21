@@ -6,7 +6,7 @@ import { SyncBar } from '../../components/SyncBar';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
 import { useI18n, type TKey } from '../../lib/i18n';
-import { useCategories, useEmployees, useJobCodeOptions, useSparepartsAll, useStepTemplate, useUnits } from '../../lib/queries';
+import { useCategories, useEmployees, useJobCodeOptions, useStepTemplate, useUnits } from '../../lib/queries';
 import type { Permission } from '../../lib/types';
 
 const TABS: { to: string; key: TKey; icon: typeof ClipboardList; end?: boolean; permission?: Permission }[] = [
@@ -30,7 +30,6 @@ export function MechanicLayout() {
   useCategories();
   useJobCodeOptions();
   useStepTemplate();
-  useSparepartsAll(can('wo.progress'));
 
   return (
     <div className="flex min-h-dvh flex-col">

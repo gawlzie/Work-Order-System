@@ -161,8 +161,8 @@ const LIST_SELECT = `
          c.name AS category, cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
          (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
-         (SELECT GROUP_CONCAT(sp.part_number || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
-            JOIN spareparts sp ON sp.id = p.sparepart_id WHERE x.wo_uuid = wo.wo_uuid) AS part_list,
+         (SELECT GROUP_CONCAT(p.part_name || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
+            WHERE x.wo_uuid = wo.wo_uuid) AS part_list,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
             WHERE s.wo_uuid = wo.wo_uuid AND s.parent_id IS NULL AND s.started_at IS NOT NULL AND s.finished_at IS NULL
             ORDER BY s.step_no LIMIT 1) AS current_step,
@@ -282,9 +282,9 @@ export function listWoJobCodes(woUuid) {
               FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id JOIN repair_categories c ON c.id = j.category_id
               JOIN employees m ON m.id = x.mechanic_id LEFT JOIN employees a ON a.id = x.added_by
               WHERE x.wo_uuid = ? ORDER BY x.added_at, x.id`).all(woUuid);
-  const parts = db.prepare(`SELECT p.id, p.wo_job_code_id, p.sparepart_id, sp.part_number, sp.part_name, p.qty, p.uom,
+  const parts = db.prepare(`SELECT p.id, p.wo_job_code_id, p.sparepart_id, p.part_number, p.part_name, p.qty, p.uom,
                                    a.full_name AS added_by_name, p.added_at, p.updated_at, p.client_ref
-                            FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id JOIN spareparts sp ON sp.id = p.sparepart_id
+                            FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
                             LEFT JOIN employees a ON a.id = p.added_by
                             WHERE x.wo_uuid = ? ORDER BY p.added_at, p.id`).all(woUuid);
   return entries.map((e) => ({ ...e, parts: parts.filter((p) => p.wo_job_code_id === e.id) }));
@@ -660,7 +660,22 @@ export function timeWoJobCode(woUuid, entryId, action, user, opts = {}) {
 
 /* ---------- Spare parts per job code entry (Step 7) ---------- */
 
-const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+/** Units of measure; LTR, KG and MTR may hold decimals, the others are counted in whole numbers. */
+export const UOMS = ['PCS', 'SET', 'UNIT', 'PAIR', 'BOX', 'ROLL', 'TUBE', 'CAN', 'PAIL', 'DRUM', 'LTR', 'KG', 'MTR'];
+export const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
+
+/** Typed spare part name and unit; a name is listed once per job code entry (any case). */
+function partFields(body, entryId, lineId = null) {
+  const name = String(body?.part_name ?? '').trim().replace(/\s+/g, ' ');
+  const uom = String(body?.uom ?? '').trim().toUpperCase();
+  const errors = {};
+  if (name.length < 2 || name.length > 120) errors.part_name = 'Spare part must be 2-120 characters';
+  else if (db.prepare('SELECT 1 FROM wo_job_parts WHERE wo_job_code_id = ? AND part_name = ? COLLATE NOCASE AND id IS NOT ?').get(entryId, name, lineId))
+    errors.part_name = 'Already listed for this job code; change its quantity instead';
+  if (!UOMS.includes(uom)) errors.uom = `Unit must be one of ${UOMS.join(', ')}`;
+  if (Object.keys(errors).length) throw Object.assign(new HttpError(errors.part_name?.startsWith('Already') ? 409 : 422, Object.values(errors)[0]), { errors });
+  return { name, uom };
+}
 
 /** Quantity in the part's unit: above 0, at most 9,999,999; LTR / KG / MTR up to 2 decimals, other units whole numbers. */
 function partQty(raw, uom) {
@@ -680,32 +695,34 @@ function jobEntry(woUuid, entryId) {
   return entry;
 }
 
-/** Body: sparepart_id, qty. Same people and moment as job codes: mechanics while Step 7 runs, approvers once it started. */
+/** Body: part_name (free text), qty, uom. Same people and moment as job codes: mechanics while Step 7 runs, approvers once it started. */
 export function addWoJobPart(woUuid, entryId, body, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);
   jobEntry(woUuid, entryId);
-  const part = db.prepare('SELECT id, part_number, uom, is_active FROM spareparts WHERE id = ?').get(Number(body?.sparepart_id));
-  if (!part || !part.is_active) throw Object.assign(new HttpError(422, 'Choose an active spare part'), { errors: { sparepart_id: 'Choose an active spare part' } });
-  if (db.prepare('SELECT 1 FROM wo_job_parts WHERE wo_job_code_id = ? AND sparepart_id = ?').get(entryId, part.id))
-    throw Object.assign(new HttpError(409, `${part.part_number} is already listed for this job code; change its quantity instead`), { errors: { sparepart_id: 'Already listed for this job code' } });
-  const qty = partQty(body?.qty, part.uom);
+  const { name, uom } = partFields(body, entryId);
+  const qty = partQty(body?.qty, uom);
   const ts = opts.at ?? now();
-  db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, sparepart_id, qty, uom, added_by, added_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(entryId, part.id, qty, part.uom, user.id, ts, opts.client_ref ?? null);
+  db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, part_name, qty, uom, added_by, added_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(entryId, name, qty, uom, user.id, ts, opts.client_ref ?? null);
   db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(ts, woUuid);
   return getWorkOrder(woUuid);
 }
 
-/** Body: qty (in the unit stored on the line). */
+/** Body: qty, and optionally part_name / uom (kept as they are when left out). */
 export function updateWoJobPart(woUuid, entryId, partLineId, body, user) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);
   jobEntry(woUuid, entryId);
   const line = db.prepare('SELECT * FROM wo_job_parts WHERE id = ? AND wo_job_code_id = ?').get(partLineId, entryId);
   if (!line) throw new HttpError(404, 'Spare part line not found');
+  const { name, uom } = partFields({ part_name: body?.part_name ?? line.part_name, uom: body?.uom ?? line.uom }, entryId, partLineId);
+  const qty = partQty(body?.qty, uom);
   const ts = now();
-  db.prepare('UPDATE wo_job_parts SET qty = ?, updated_at = ? WHERE id = ?').run(partQty(body?.qty, line.uom), ts, partLineId);
+  // A renamed line no longer is the master part it came from.
+  const renamed = name !== line.part_name;
+  db.prepare('UPDATE wo_job_parts SET part_name = ?, qty = ?, uom = ?, updated_at = ?, part_number = CASE WHEN ? THEN NULL ELSE part_number END, sparepart_id = CASE WHEN ? THEN NULL ELSE sparepart_id END WHERE id = ?')
+    .run(name, qty, uom, ts, renamed ? 1 : 0, renamed ? 1 : 0, partLineId);
   db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(ts, woUuid);
   return getWorkOrder(woUuid);
 }

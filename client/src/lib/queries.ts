@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 import { api, qs } from './api';
 import { useAuth } from './auth';
 import { createdDetail, overlayDetail, overlayList, useOutbox } from './offline';
-import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, NotificationList, SiteOption, SparepartOption } from './types';
+import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, NotificationList, SiteOption } from './types';
 
 export interface WoListParams {
   search?: string;
@@ -60,10 +60,6 @@ export function useWorkOrder(id: string | undefined) {
 export const useStepTemplate = () =>
   useQuery({ queryKey: ['step-template'], queryFn: () => api<{ name: string; waiting: boolean; addSub: boolean; subs: string[] }[]>('/master/step-template'), staleTime: 3_600_000 });
 
-/** Every active spare part, compact: the Step 7 picker searches it on the phone, also offline. */
-export const useSparepartsAll = (enabled = true) =>
-  useQuery({ queryKey: ['spareparts', 'all'], queryFn: () => api<SparepartOption[]>('/master/spareparts/all'), staleTime: 3_600_000, enabled });
-
 export const useDashboard = (start: string, end: string, site = '') =>
   useQuery({
     queryKey: ['dashboard', start, end, site],
@@ -76,15 +72,6 @@ export const useUnits = (all = false) =>
 
 export const useEmployees = (role: 'driver' | 'mechanic') =>
   useQuery({ queryKey: ['employees', role], queryFn: () => api<Employee[]>(`/master/employees?role=${role}`), staleTime: 300_000 });
-
-/** Active spare parts matching `search` (part number, name or brand), for the Step 7 picker; needs 2+ characters. */
-export const useSparepartSearch = (search: string) =>
-  useQuery({
-    queryKey: ['spareparts', 'search', search],
-    queryFn: () => api<SparepartOption[]>(`/master/spareparts${qs({ search })}`),
-    enabled: search.length >= 2,
-    staleTime: 60_000,
-  });
 
 /** Own notifications, refreshed every 30 s (also while the tab is in the background). */
 export const useNotifications = () =>

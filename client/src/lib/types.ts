@@ -252,12 +252,12 @@ export interface WoJobCode {
   client_ref?: string | null;
 }
 
-/** One spare part line of a job code entry; uom is the part's unit when it was added. */
+/** One spare part line of a job code entry, typed freely; part_number / sparepart_id only on lines from the former spare part master. */
 export interface WoJobPart {
   id: number;
   wo_job_code_id: number;
-  sparepart_id: number;
-  part_number: string;
+  sparepart_id: number | null;
+  part_number: string | null;
   part_name: string;
   qty: number;
   uom: string;

@@ -17,8 +17,8 @@ export function ensureJobPartExamples() {
   if (db.prepare('SELECT 1 FROM wo_job_parts LIMIT 1').get()) return 0;
   const entries = db.prepare(`SELECT x.id, x.added_by, x.added_at, x.finished_at, w.category_id FROM wo_job_codes x
                               JOIN work_orders w ON w.wo_uuid = x.wo_uuid ORDER BY x.id`).all();
-  const partsOf = db.prepare('SELECT id, uom FROM spareparts WHERE category_id = ? AND is_active = 1 ORDER BY part_number');
-  const ins = db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, sparepart_id, qty, uom, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)');
+  const partsOf = db.prepare('SELECT id, part_number, part_name, uom FROM spareparts WHERE category_id = ? AND is_active = 1 ORDER BY part_number');
+  const ins = db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, sparepart_id, part_number, part_name, qty, uom, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   let added = 0;
   for (const e of entries) {
     const parts = e.category_id ? partsOf.all(e.category_id) : [];
@@ -26,7 +26,7 @@ export function ensureJobPartExamples() {
     const picks = [parts[e.id % parts.length], parts.length > 1 && e.id % 2 === 0 ? parts[(e.id + 1) % parts.length] : null].filter(Boolean);
     for (const [i, p] of picks.entries()) {
       const options = QTY[p.uom] ?? [1];
-      ins.run(e.id, p.id, options[(e.id + i) % options.length], p.uom, e.added_by, e.finished_at ?? e.added_at);
+      ins.run(e.id, p.id, p.part_number, p.part_name, options[(e.id + i) % options.length], p.uom, e.added_by, e.finished_at ?? e.added_at);
       added++;
     }
   }
