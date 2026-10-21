@@ -195,7 +195,7 @@ export function seed({ reset = false } = {}) {
           });
           cursor = end + minutes(5 + rand() * 30);
         });
-        recomputeStatus(uuid);
+        recomputeStatus(uuid, { silent: true });
       }
     }
     fillMeterReadings();

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { hasPermission } from './auth.js';
 import { db, roleHas, tx } from './db.js';
+import { NOTIFICATION, notify } from './notifications.js';
 
 export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAITING', FINISH: 'FINISH' };
 export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', REJECT: 'REJECT' };
@@ -117,7 +118,9 @@ const topSteps = (woUuid) =>
   db.prepare('SELECT * FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL ORDER BY step_no').all(woUuid);
 
 /** Derive status, started_at and finished_at of a work order from its top-level steps. */
-export function recomputeStatus(woUuid) {
+/** `actorId`: who finished the last step (not notified); `silent` skips the WO_FINISHED notification (e.g. seeding). */
+export function recomputeStatus(woUuid, { actorId = null, silent = false } = {}) {
+  const before = db.prepare('SELECT status FROM work_orders WHERE wo_uuid = ?').get(woUuid)?.status;
   const steps = topSteps(woUuid);
   const status = deriveStatus(steps);
   const startedAt = steps.map((s) => s.started_at).filter(Boolean).sort()[0] ?? null;
@@ -129,6 +132,7 @@ export function recomputeStatus(woUuid) {
     now(),
     woUuid,
   );
+  if (!silent && status === STATUS.FINISH && before !== STATUS.FINISH) notify(NOTIFICATION.FINISHED, woUuid, { actorId });
 }
 
 /**
@@ -405,6 +409,7 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
     ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, data.unit_id,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
+    notify(NOTIFICATION.CREATED, wo_uuid, { actorId: user.id });
   });
   return getWorkOrder(wo_uuid);
 }
@@ -500,7 +505,7 @@ export function progressStep(woUuid, stepId, action, user, remarks) {
     } else {
       throw new HttpError(422, 'Unknown step action');
     }
-    recomputeStatus(woUuid);
+    recomputeStatus(woUuid, { actorId: user?.id ?? null });
   });
   return getWorkOrder(woUuid);
 }

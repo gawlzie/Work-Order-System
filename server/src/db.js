@@ -192,6 +192,20 @@ CREATE TABLE IF NOT EXISTS wo_job_parts (
   updated_at   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_parts_entry ON wo_job_parts(wo_job_code_id);
+
+-- In-app notifications, one row per recipient; data holds the work order details for the text (JSON).
+CREATE TABLE IF NOT EXISTS notifications (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL, -- WO_CREATED | WO_FINISHED | WO_OVERDUE
+  wo_uuid    TEXT REFERENCES work_orders(wo_uuid) ON DELETE CASCADE,
+  actor_id   INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+  data       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  read_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_wo ON notifications(wo_uuid, type);
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_wo ON wo_steps(wo_uuid);
 `);

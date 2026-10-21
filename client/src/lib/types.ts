@@ -326,6 +326,23 @@ export interface SparepartSummary {
   stock_value: number;
 }
 
+/** In-app notification (own); the text is built from type and data in the reader's language. */
+export interface AppNotification {
+  id: number;
+  type: 'WO_CREATED' | 'WO_FINISHED' | 'WO_OVERDUE';
+  wo_uuid: string | null;
+  data: { wo_number: string; unit_number: string; site: string | null; problem: string; hours: number };
+  created_at: string;
+  read_at: string | null;
+  /** Who caused it, e.g. the mechanic who raised the WO. */
+  actor_name: string | null;
+}
+
+export interface NotificationList {
+  data: AppNotification[];
+  unread: number;
+}
+
 export interface Paged<T> {
   data: T[];
   meta: { page: number; limit: number; total: number; total_pages: number };

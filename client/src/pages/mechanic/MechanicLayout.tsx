@@ -1,6 +1,7 @@
 import { clsx } from 'clsx';
 import { ClipboardList, PlusCircle, User as UserIcon, WifiOff, Wrench } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { NotificationBell } from '../../components/NotificationBell';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
 import { useI18n, type TKey } from '../../lib/i18n';
@@ -34,7 +35,8 @@ export function MechanicLayout() {
             <p className="text-sm font-semibold">WO ITI</p>
             <p className="truncate text-[11px] text-muted-foreground">{t('mechanic_app')}</p>
           </div>
-          <NavLink to="/m/account" className="ml-auto flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-white" aria-label={t('m_account')}>
+          <NotificationBell woLink={(id) => `/m/wo/${id}`} className="ml-auto" />
+          <NavLink to="/m/account" className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-white" aria-label={t('m_account')}>
             {initials(user?.full_name ?? '?')}
           </NavLink>
         </div>

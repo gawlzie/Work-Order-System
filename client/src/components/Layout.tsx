@@ -8,6 +8,7 @@ import { useI18n, type TKey } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import type { Permission } from '../lib/types';
 import { useConfirm } from './confirm';
+import { NotificationBell } from './NotificationBell';
 import { useBodyLock } from './ui';
 
 const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; permission?: Permission }[] = [
@@ -137,6 +138,7 @@ export function Layout() {
                 </button>
               ))}
             </div>
+            <NotificationBell woLink={(id) => `/transaction/work-order/details/${id}`} />
             <button onClick={() => setDark(!dark)} className="rounded-md p-2 hover:bg-muted" aria-label="Toggle theme">
               {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
             </button>

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, qs } from './api';
-import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, SiteOption, SparepartOption } from './types';
+import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, NotificationList, SiteOption, SparepartOption } from './types';
 
 export interface WoListParams {
   search?: string;
@@ -58,6 +58,10 @@ export const useSparepartSearch = (search: string) =>
     enabled: search.length >= 2,
     staleTime: 60_000,
   });
+
+/** Own notifications, refreshed every 30 s (also while the tab is in the background). */
+export const useNotifications = () =>
+  useQuery({ queryKey: ['notifications'], queryFn: () => api<NotificationList>('/notifications?limit=30'), refetchInterval: 30_000, refetchIntervalInBackground: true });
 
 /** Sites for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
 export const useSites = (all = false) =>

@@ -20,6 +20,7 @@ import {
   APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, setWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
   getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
+import { listNotifications, markAllRead, markRead, scanOverdue } from './notifications.js';
 
 seed();
 const resynced = syncStatuses();
@@ -225,6 +226,11 @@ app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)/parts/:lineId(\\d+)', 
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));
 
+/* ---------- Notifications (own only) ---------- */
+app.get('/api/notifications', wrap((req) => listNotifications(req.user.id, req.query)));
+app.post('/api/notifications/read-all', wrap((req) => markAllRead(req.user.id)));
+app.post('/api/notifications/:id(\\d+)/read', wrap((req) => markRead(req.user.id, Number(req.params.id))));
+
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
 
 /* ---------- Static client (production build) ---------- */
@@ -243,3 +249,15 @@ app.use((err, req, res, next) => {
 
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => console.log(`WOS API listening on http://localhost:${PORT}`));
+
+// Work orders open for more than a day are reported once; checked on start and every 5 minutes.
+const overdueCheck = () => {
+  try {
+    const n = scanOverdue();
+    if (n) console.log(`Reported ${n} work order(s) open for more than 1 day`);
+  } catch (err) {
+    console.error('Overdue check failed:', err.message);
+  }
+};
+overdueCheck();
+setInterval(overdueCheck, 5 * 60 * 1000).unref();
