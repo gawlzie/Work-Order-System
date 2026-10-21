@@ -336,6 +336,10 @@ export function deleteUnit(id) {
 
 export const unitTypes = () => db.prepare('SELECT DISTINCT unit_type FROM units ORDER BY unit_type').all().map((r) => r.unit_type);
 
+/** Brand / model pairs already used on units, as suggestions for the unit form. */
+export const unitModels = () =>
+  db.prepare("SELECT DISTINCT brand, model FROM units WHERE IFNULL(brand, '') != '' ORDER BY brand, model").all();
+
 /* ---------- Repair categories ---------- */
 
 const CATEGORY_COLUMNS = `c.*,

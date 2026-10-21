@@ -110,6 +110,10 @@ export const usePermissionDefs = () =>
 
 export const useUnitTypes = () => useQuery({ queryKey: ['units', 'types'], queryFn: () => api<string[]>('/units/types') });
 
+/** Brand / model pairs already used on units (suggestions in the unit form). */
+export const useUnitModels = () =>
+  useQuery({ queryKey: ['units', 'models'], queryFn: () => api<{ brand: string; model: string | null }[]>('/units/models') });
+
 /** Paged master-data list, e.g. usePaged<MasterUnit>('units', params). Query key starts with the path for invalidation. */
 export const usePaged = <T,>(path: 'units' | 'employees' | 'roles' | 'categories' | 'job-codes' | 'spareparts' | 'sites', params: Record<string, unknown>) =>
   useQuery({

@@ -6,7 +6,7 @@ import { db, loadUser } from './db.js';
 import { hasPermission, hashPassword, issueToken, publicUser, requireAuth, requirePermission, verifyPassword } from './auth.js';
 import {
   assignableEmployees, createEmployee, createRole, createUnit, deleteEmployee, deleteRole, deleteUnit, getEmployee, getRole,
-  getUnit, listEmployees, listRoles, listUnits, unitTypes, updateEmployee, updateRole, updateUnit,
+  getUnit, listEmployees, listRoles, listUnits, unitModels, unitTypes, updateEmployee, updateRole, updateUnit,
   createCategory, deleteCategory, getCategory, listCategories, updateCategory,
   createJobCode, deleteJobCode, getJobCode, listJobCodes, updateJobCode,
   createSparepart, deleteSparepart, getSparepart, listSpareparts, updateSparepart, UOMS,
@@ -118,6 +118,7 @@ app.get('/api/roles/permissions', requirePermission('master.role'), wrap(() => P
 crud('roles', 'master.role', { list: listRoles, get: getRole, create: createRole, update: updateRole, remove: deleteRole });
 crud('employees', 'master.employee', { list: listEmployees, get: getEmployee, create: createEmployee, update: updateEmployee, remove: deleteEmployee });
 app.get('/api/units/types', requirePermission('master.unit'), wrap(() => unitTypes()));
+app.get('/api/units/models', requirePermission('master.unit'), wrap(() => unitModels()));
 crud('units', 'master.unit', { list: listUnits, get: getUnit, create: createUnit, update: updateUnit, remove: deleteUnit });
 crud('categories', 'master.category', { list: listCategories, get: getCategory, create: createCategory, update: updateCategory, remove: deleteCategory });
 crud('job-codes', 'master.job', { list: listJobCodes, get: getJobCode, create: createJobCode, update: updateJobCode, remove: deleteJobCode });

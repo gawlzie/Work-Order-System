@@ -12,7 +12,7 @@ import { api } from '../../lib/api';
 import { SiteFilter, SiteSelect } from '../../components/SiteSelect';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
-import { usePaged, useUnitTypes } from '../../lib/queries';
+import { usePaged, useUnitModels, useUnitTypes } from '../../lib/queries';
 import type { MasterUnit } from '../../lib/types';
 
 const FILTERS = ['status', 'unit_type', 'site'] as const;
@@ -180,6 +180,11 @@ function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: st
     is_active: unit ? !!unit.is_active : true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Existing brands and models as suggestions; models follow the brand typed or picked.
+  const pairs = useUnitModels().data ?? [];
+  const brands = [...new Set(pairs.map((p) => p.brand))];
+  const brandKey = form.brand.trim().toLowerCase();
+  const models = [...new Set(pairs.filter((p) => p.model && (!brandKey || p.brand.toLowerCase() === brandKey)).map((p) => p.model as string))];
 
   const save = useMutation({
     mutationFn: () => api<MasterUnit>(unit ? `/units/${unit.id}` : '/units', { method: unit ? 'PUT' : 'POST', body: form }),
@@ -237,10 +242,12 @@ function UnitForm({ unit, types, onClose }: { unit: MasterUnit | null; types: st
           <Input type="number" inputMode="numeric" value={form.year} onChange={set('year')} min={1950} max={new Date().getFullYear() + 1} invalid={!!errors.year} />
         </Field>
         <Field label={t('brand')} error={errors.brand}>
-          <Input value={form.brand} onChange={set('brand')} maxLength={50} />
+          <Input value={form.brand} onChange={set('brand')} list="unit-brands" maxLength={50} autoComplete="off" />
+          <datalist id="unit-brands">{brands.map((b) => <option key={b} value={b} />)}</datalist>
         </Field>
         <Field label={t('model')} error={errors.model}>
-          <Input value={form.model} onChange={set('model')} maxLength={50} />
+          <Input value={form.model} onChange={set('model')} list="unit-models" maxLength={50} autoComplete="off" />
+          <datalist id="unit-models">{models.map((m) => <option key={m} value={m} />)}</datalist>
         </Field>
         <Field label={t('site')} required error={errors.site} className="sm:col-span-2">
           <SiteSelect
