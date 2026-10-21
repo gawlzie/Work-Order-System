@@ -266,7 +266,6 @@ export function WorkOrderListPage() {
                 <MetaItem label={t('driver')}>{wo.driver_name}</MetaItem>
                 <MetaItem label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</MetaItem>
                 <MetaItem label={t('category')}>{wo.category ?? '-'}</MetaItem>
-                <MetaItem label={t('job_codes')}>{wo.job_code_list ?? '-'}</MetaItem>
                 <MetaItem label={t('step_information')}>{wo.step_information}</MetaItem>
                 <MetaItem label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></MetaItem>
               </dl>
@@ -290,7 +289,6 @@ export function WorkOrderListPage() {
                 <th className="px-4 py-3 font-medium">{sortHeader('driver_name', 'driver')}</th>
                 <th className="px-4 py-3 font-medium">{sortHeader('mechanic_name', 'pic_mechanic')}</th>
                 <th className="px-4 py-3 font-medium">{sortHeader('category', 'category')}</th>
-                <th className="px-4 py-3 font-medium">{sortHeader('job_code_list', 'job_codes')}</th>
                 <th className="px-4 py-3 font-medium">{sortHeader('status', 'status')}</th>
                 <th className="px-4 py-3 font-medium">{sortHeader('approval_status', 'approval_status')}</th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">{t('step_information')}</th>
@@ -314,7 +312,6 @@ export function WorkOrderListPage() {
                   <td className="px-4 py-3 whitespace-nowrap">{wo.driver_name}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.mechanic_name ?? '-'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.category ?? '-'}</td>
-                  <td className="max-w-48 truncate px-4 py-3 font-mono text-xs whitespace-nowrap" title={wo.job_code_list ?? undefined}>{wo.job_code_list ?? '-'}</td>
                   <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={wo.status} />{wo.proof_count > 0 && (
                       <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-xs text-muted-foreground" title={t('proof_title')}>
                         <Paperclip className="size-3.5" />{wo.proof_count}
