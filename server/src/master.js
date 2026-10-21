@@ -1,6 +1,7 @@
 import { hashPassword } from './auth.js';
 import { db, roleHas, tx } from './db.js';
 import { ADMIN_PERMISSIONS, PERMISSION_KEYS } from './permissions.js';
+import { coversRole, inScope, siteCondition } from './scope.js';
 import { DECIMAL_UOMS, HttpError, UOMS } from './workorders.js';
 
 /* ---------- Shared helpers ---------- */
@@ -61,8 +62,10 @@ export function getRole(id) {
   return role;
 }
 
-function validateRole(body, existing) {
+function validateRole(body, existing, user) {
   const errors = {};
+  // Nobody can hand out (or edit a role with) permissions their own role does not have.
+  if (existing && user && !coversRole(user, existing.permissions)) throw new HttpError(403, 'This role has permissions your own role does not have');
   const code = existing?.is_system ? existing.code : str(body.code).toLowerCase();
   const name = str(body.name);
   const permissions = [...new Set(Array.isArray(body.permissions) ? body.permissions : [])];
@@ -72,18 +75,19 @@ function validateRole(body, existing) {
   else if (taken('roles', 'name', name, existing?.id)) errors.name = 'Name is already used';
   const unknown = permissions.filter((p) => !PERMISSION_KEYS.includes(p));
   if (unknown.length) errors.permissions = `Unknown permission: ${unknown.join(', ')}`;
+  else if (user && !coversRole(user, permissions)) errors.permissions = 'You can only give permissions your own role has';
   fail(errors);
   return {
     code,
     name,
     description: optional(body.description),
-    // The admin role is the recovery path for every other setting, so it always keeps full access.
-    permissions: PERMISSION_KEYS.filter((p) => permissions.includes(p) || (existing?.code === 'admin' && ADMIN_PERMISSIONS.includes(p))),
+    // Admin Company is the recovery path for every other setting, so it always keeps full access.
+    permissions: PERMISSION_KEYS.filter((p) => permissions.includes(p) || (existing?.code === 'admin_company' && ADMIN_PERMISSIONS.includes(p))),
   };
 }
 
-export function createRole(body) {
-  const data = validateRole(body);
+export function createRole(body, user) {
+  const data = validateRole(body, null, user);
   const { lastInsertRowid } = db
     .prepare('INSERT INTO roles (code, name, description, permissions, is_system) VALUES (?, ?, ?, ?, 0)')
     .run(data.code, data.name, data.description, JSON.stringify(data.permissions));
@@ -92,7 +96,7 @@ export function createRole(body) {
 
 export function updateRole(id, body, user) {
   const existing = getRole(id);
-  const data = validateRole(body, existing);
+  const data = validateRole(body, existing, user);
   if (existing.id === user.role_id && !data.permissions.includes('master.role'))
     throw new HttpError(409, 'You cannot remove "Manage roles" from your own role');
   db.prepare('UPDATE roles SET code = ?, name = ?, description = ?, permissions = ? WHERE id = ?')
@@ -100,8 +104,9 @@ export function updateRole(id, body, user) {
   return getRole(id);
 }
 
-export function deleteRole(id) {
+export function deleteRole(id, user) {
   const role = getRole(id);
+  if (user && !coversRole(user, role.permissions)) throw new HttpError(403, 'This role has permissions your own role does not have');
   if (role.is_system) throw new HttpError(409, 'Built-in roles cannot be deleted');
   const { n } = db.prepare('SELECT COUNT(*) AS n FROM employees WHERE role_id = ?').get(id);
   if (n) throw new HttpError(409, `Role is assigned to ${n} employee(s). Move them to another role first`);
@@ -113,10 +118,15 @@ export function deleteRole(id) {
 const EMPLOYEE_COLUMNS = `e.id, e.employee_id, e.full_name, e.role_id, r.code AS role, r.name AS role_name, e.company, e.site,
   e.phone, e.email, e.username, e.username IS NOT NULL AS has_account, e.is_active`;
 
-export function listEmployees(q = {}) {
+export function listEmployees(q = {}, user = null) {
   const s = `%${str(q.search)}%`;
   const where = ['(e.employee_id LIKE ? OR e.full_name LIKE ? OR IFNULL(e.username, \'\') LIKE ?)'];
   const params = [s, s, s];
+  if (user) {
+    const scope = siteCondition(user, 'e.site');
+    where.push(scope.sql);
+    params.push(...scope.params);
+  }
   if (q.role_id) {
     where.push('e.role_id = ?');
     params.push(Number(q.role_id));
@@ -136,9 +146,10 @@ export function listEmployees(q = {}) {
   });
 }
 
-export function getEmployee(id) {
+/** With `user`: only employees within the user's site scope. */
+export function getEmployee(id, user = null) {
   const row = db.prepare(`SELECT ${EMPLOYEE_COLUMNS} FROM employees e JOIN roles r ON r.id = e.role_id WHERE e.id = ?`).get(id);
-  if (!row) throw new HttpError(404, 'Employee not found');
+  if (!row || (user && !inScope(user, row.site))) throw new HttpError(404, 'Employee not found');
   return row;
 }
 
@@ -167,6 +178,9 @@ function validateEmployee(body, existing, user) {
   const site = siteName(data.site, existing?.site);
   if (site) data.site = site;
   else errors.site = 'Choose an active site from the site master';
+  if (site && !inScope(user, site)) errors.site = 'You can only place employees at your own site';
+  const role = data.role_id && db.prepare('SELECT permissions FROM roles WHERE id = ?').get(data.role_id);
+  if (role && !coversRole(user, JSON.parse(role.permissions))) errors.role_id = 'You cannot give a role with more rights than your own';
 
   const hasAccount = flag(body.has_account, existing?.has_account ?? 0) === 1;
   const password = String(body.password ?? '');
@@ -205,7 +219,8 @@ export function createEmployee(body, user) {
 }
 
 export function updateEmployee(id, body, user) {
-  const existing = getEmployee(id);
+  const existing = getEmployee(id, user);
+  assertCovers(user, existing);
   const d = validateEmployee(body, existing, user);
   db.prepare(`UPDATE employees SET employee_id = ?, full_name = ?, role_id = ?, company = ?, site = ?, phone = ?, email = ?,
               username = ?, is_active = ? ${d.password_hash === undefined ? '' : ', password_hash = ?'} WHERE id = ?`)
@@ -215,7 +230,7 @@ export function updateEmployee(id, body, user) {
 }
 
 export function deleteEmployee(id, user) {
-  getEmployee(id);
+  assertCovers(user, getEmployee(id, user));
   if (Number(id) === user.id) throw new HttpError(409, 'You cannot delete your own account');
   const { n } = db.prepare(
     `SELECT (SELECT COUNT(*) FROM work_orders WHERE driver_id = ? OR mechanic_id = ? OR created_by = ?)
@@ -226,15 +241,22 @@ export function deleteEmployee(id, user) {
   db.prepare('DELETE FROM employees WHERE id = ?').run(id);
 }
 
-/** Active employees whose role may be assigned as driver / mechanic on a work order. */
-export function assignableEmployees({ search, role }) {
+/** Accounts with more rights than the user's own (e.g. Admin Company for an Admin Site) cannot be changed by them. */
+function assertCovers(user, employee) {
+  const role = db.prepare('SELECT permissions FROM roles WHERE id = ?').get(employee.role_id);
+  if (role && !coversRole(user, JSON.parse(role.permissions))) throw new HttpError(403, 'This employee has more rights than your own role');
+}
+
+/** Active employees whose role may be assigned as driver / mechanic on a work order; with `user`, within their site scope. */
+export function assignableEmployees({ search, role }, user = null) {
   const s = `%${str(search)}%`;
   const permission = { driver: 'wo.as_driver', mechanic: 'wo.as_mechanic' }[role];
+  const scope = user ? siteCondition(user, 'e.site') : { sql: '1', params: [] };
   return db.prepare(
-    `SELECT e.id, e.employee_id, e.full_name, r.code AS role FROM employees e JOIN roles r ON r.id = e.role_id
-     WHERE e.is_active = 1 AND (e.full_name LIKE ? OR e.employee_id LIKE ?) ${permission ? `AND ${roleHas()}` : ''}
+    `SELECT e.id, e.employee_id, e.full_name, r.code AS role, e.site FROM employees e JOIN roles r ON r.id = e.role_id
+     WHERE e.is_active = 1 AND (e.full_name LIKE ? OR e.employee_id LIKE ?) ${permission ? `AND ${roleHas()}` : ''} AND ${scope.sql}
      ORDER BY e.full_name`,
-  ).all(...(permission ? [s, s, permission] : [s, s]));
+  ).all(...(permission ? [s, s, permission] : [s, s]), ...scope.params);
 }
 
 /* ---------- Shared: site of an employee / unit ---------- */
@@ -252,10 +274,15 @@ const UNIT_COLUMNS = `u.*,
   (SELECT COUNT(*) FROM work_orders w WHERE w.unit_id = u.id) AS wo_count,
   (SELECT w.wo_number FROM work_orders w WHERE w.unit_id = u.id AND w.status != 'FINISH' AND w.approval_status != 'REJECT') AS active_wo`;
 
-export function listUnits(q = {}) {
+export function listUnits(q = {}, user = null) {
   const s = `%${str(q.search)}%`;
   const where = ['(u.unit_code LIKE ? OR u.unit_number LIKE ? OR IFNULL(u.brand, \'\') LIKE ? OR IFNULL(u.model, \'\') LIKE ? OR IFNULL(u.serial_number, \'\') LIKE ?)'];
   const params = [s, s, s, s, s];
+  if (user) {
+    const scope = siteCondition(user, 'u.site');
+    where.push(scope.sql);
+    params.push(...scope.params);
+  }
   if (q.unit_type) {
     where.push('u.unit_type = ?');
     params.push(str(q.unit_type));
@@ -274,9 +301,10 @@ export function listUnits(q = {}) {
   });
 }
 
-export function getUnit(id) {
+/** With `user`: only units within the user's site scope. */
+export function getUnit(id, user = null) {
   const row = db.prepare(`SELECT ${UNIT_COLUMNS} FROM units u WHERE u.id = ?`).get(id);
-  if (!row) throw new HttpError(404, 'Unit not found');
+  if (!row || (user && !inScope(user, row.site))) throw new HttpError(404, 'Unit not found');
   return row;
 }
 
@@ -307,6 +335,7 @@ function validateUnit(body, existing, user) {
   const site = siteName(data.site, existing?.site);
   if (site) data.site = site;
   else errors.site = 'Choose an active site from the site master';
+  if (site && user && !inScope(user, site)) errors.site = 'You can only place units at your own site';
   fail(errors);
   return data;
 }
@@ -321,15 +350,15 @@ export function createUnit(body, user) {
 
 /** Moving a unit to another site does not change its work orders: they keep the site they were raised at. */
 export function updateUnit(id, body, user) {
-  const existing = getUnit(id);
+  const existing = getUnit(id, user);
   const d = validateUnit(body, existing, user);
   db.prepare('UPDATE units SET unit_code = ?, unit_number = ?, unit_type = ?, brand = ?, model = ?, serial_number = ?, year = ?, site = ?, is_active = ? WHERE id = ?')
     .run(d.unit_code, d.unit_number, d.unit_type, d.brand, d.model, d.serial_number, d.year, d.site, d.is_active, id);
   return getUnit(id);
 }
 
-export function deleteUnit(id) {
-  const unit = getUnit(id);
+export function deleteUnit(id, user) {
+  const unit = getUnit(id, user);
   if (unit.wo_count) throw new HttpError(409, 'Unit is used in work order history. Deactivate the unit instead');
   db.prepare('DELETE FROM units WHERE id = ?').run(id);
 }

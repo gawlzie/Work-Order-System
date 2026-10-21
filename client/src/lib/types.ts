@@ -13,7 +13,8 @@ export type Permission =
   | 'master.category'
   | 'master.job'
   | 'master.sparepart'
-  | 'master.site';
+  | 'master.site'
+  | 'site.all';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type MaintenanceType = 'PREVENTIVE' | 'REPAIR' | 'WARRANTY' | 'PDI' | 'OTHERS';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
@@ -75,7 +76,7 @@ export interface MasterRole extends RoleOption {
 
 export interface PermissionDef {
   key: Permission;
-  group: 'work_order' | 'assignment' | 'master';
+  group: 'work_order' | 'assignment' | 'master' | 'scope';
   label: string;
 }
 

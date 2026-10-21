@@ -11,6 +11,7 @@
  */
 import { hasPermission } from './auth.js';
 import { db } from './db.js';
+import { canSeeWo } from './scope.js';
 import {
   CHANNEL, HttpError, addAdditionalWork, addWoJobCode, addWoJobPart, createWorkOrder, getWorkOrder, progressStep, removeWoJobCode,
   removeWoJobPart, setWoCategory, timeWoJobCode, updateWoJobPart,
@@ -75,6 +76,9 @@ export function applyOp(op, user) {
   const done = db.prepare('SELECT 1 FROM sync_ops WHERE op_id = ?').get(opId);
   if (done) return { duplicate: true, work_order: getWorkOrder(woUuid) };
 
+  // Work orders outside the user's site scope cannot be changed (a new one is checked when it is made).
+  if (op.type !== 'wo.create' && db.prepare('SELECT 1 FROM work_orders WHERE wo_uuid = ?').get(woUuid) && !canSeeWo(user, woUuid))
+    throw new HttpError(404, 'Work order not found');
   const at = actionTime(op.at);
   const opts = { at };
   let wo;

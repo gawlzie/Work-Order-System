@@ -13,7 +13,7 @@ import { useI18n, type TKey } from '../../lib/i18n';
 import { usePaged, usePermissionDefs } from '../../lib/queries';
 import type { MasterRole, Permission, PermissionDef } from '../../lib/types';
 
-const GROUPS: PermissionDef['group'][] = ['work_order', 'assignment', 'master'];
+const GROUPS: PermissionDef['group'][] = ['scope', 'work_order', 'assignment', 'master'];
 const permLabel = (key: Permission) => `perm_${key}` as TKey;
 
 export function RoleMasterPage() {
@@ -147,7 +147,8 @@ function RoleForm({ role, defs, onClose }: { role: MasterRole | null; defs: Perm
   const toast = useToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
-  const isAdmin = role?.code === 'admin';
+  // Admin Company always keeps full access (the server enforces it too).
+  const isAdmin = role?.code === 'admin_company';
   // Mirrors the server: admin always keeps every access permission; only assignment flags are optional.
   const locked = (d: PermissionDef) => isAdmin && d.group !== 'assignment';
   const [form, setForm] = useState({ code: role?.code ?? '', name: role?.name ?? '', description: role?.description ?? '' });

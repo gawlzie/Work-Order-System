@@ -244,12 +244,18 @@ export function ensureSystemRoles({ reset = false } = {}) {
     `INSERT INTO roles (code, name, description, permissions, is_system) VALUES (?, ?, ?, ?, 1)
      ON CONFLICT(code) DO ${reset ? 'UPDATE SET name = excluded.name, description = excluded.description, permissions = excluded.permissions, is_system = 1' : 'NOTHING'}`,
   );
+  // Admin Company came after Admin Plant: when it is added, Admin Plant becomes Admin Site (own site only) once.
+  const firstCompanyAdmin = !db.prepare("SELECT 1 FROM roles WHERE code = 'admin_company'").get();
   for (const r of SYSTEM_ROLES) upsert.run(r.code, r.name, r.description, JSON.stringify(r.permissions));
-  // Admin keeps every access permission, including ones added in later versions (e.g. master.step).
-  const admin = db.prepare("SELECT permissions FROM roles WHERE code = 'admin'").get();
+  if (firstCompanyAdmin && !reset) {
+    const site = SYSTEM_ROLES.find((r) => r.code === 'admin');
+    db.prepare("UPDATE roles SET name = ?, description = ?, permissions = ? WHERE code = 'admin'").run(site.name, site.description, JSON.stringify(site.permissions));
+  }
+  // Admin Company keeps every access permission, including ones added in later versions.
+  const admin = db.prepare("SELECT permissions FROM roles WHERE code = 'admin_company'").get();
   const current = JSON.parse(admin.permissions);
   const missing = ADMIN_PERMISSIONS.filter((p) => !current.includes(p));
-  if (missing.length) db.prepare("UPDATE roles SET permissions = ? WHERE code = 'admin'").run(JSON.stringify([...current, ...missing]));
+  if (missing.length) db.prepare("UPDATE roles SET permissions = ? WHERE code = 'admin_company'").run(JSON.stringify([...current, ...missing]));
 }
 ensureSystemRoles();
 

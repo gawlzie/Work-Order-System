@@ -21,6 +21,7 @@ import {
   activeStepTemplate, getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 import { listNotifications, markAllRead, markRead, scanOverdue } from './notifications.js';
+import { canSeeWo, coversRole, siteCondition } from './scope.js';
 import { applyOp } from './sync.js';
 
 seed();
@@ -67,14 +68,19 @@ app.get('/api/master/units', wrap((req) => {
   // Inactive units stay visible to filters (?all=1) but cannot be picked for new work orders.
   // Last recorded HM / KM per unit, shown as a hint on the WO form.
   const last = (col) => `(SELECT w.${col} FROM work_orders w WHERE w.unit_id = u.id AND w.${col} IS NOT NULL ORDER BY w.created_at DESC LIMIT 1)`;
+  const scope = siteCondition(req.user, 'u.site');
   const lastWo = (col) => `(SELECT w.wo_number FROM work_orders w WHERE w.unit_id = u.id AND w.${col} IS NOT NULL ORDER BY w.created_at DESC LIMIT 1)`;
   return db.prepare(`SELECT u.*, ${last('hm')} AS last_hm, ${lastWo('hm')} AS last_hm_wo, ${last('km')} AS last_km, ${lastWo('km')} AS last_km_wo
-                     FROM units u WHERE (u.unit_number LIKE ? OR u.unit_code LIKE ?) ${req.query.all ? '' : 'AND u.is_active = 1'} ORDER BY u.unit_code`).all(s, s);
+                     FROM units u WHERE (u.unit_number LIKE ? OR u.unit_code LIKE ?) ${req.query.all ? '' : 'AND u.is_active = 1'} AND ${scope.sql}
+                     ORDER BY u.unit_code`).all(s, s, ...scope.params);
 }));
 
-app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
+app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query, req.user)));
 
-app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
+// Only roles the user may hand out (no more rights than their own).
+app.get('/api/master/roles', wrap((req) =>
+  db.prepare('SELECT id, code, name, permissions FROM roles ORDER BY name').all()
+    .filter((r) => coversRole(req.user, JSON.parse(r.permissions))).map(({ permissions, ...r }) => r)));
 // Offline copies for the mechanic app: the steps a new work order gets, and every active spare part (compact).
 app.get('/api/master/step-template', wrap(() => activeStepTemplate()));
 app.get('/api/master/spareparts/all', wrap(() =>
@@ -85,8 +91,12 @@ app.get('/api/master/spareparts', wrap((req) => {
                      WHERE is_active = 1 AND (part_number LIKE ? OR part_name LIKE ? OR IFNULL(brand, '') LIKE ?)
                      ORDER BY (part_number LIKE ?) DESC, part_number LIMIT 20`).all(s, s, s, `${String(req.query.search ?? '').trim()}%`);
 }));
-app.get('/api/master/sites', wrap((req) =>
-  db.prepare(`SELECT id, site_code, site_name, company, is_active FROM sites ${req.query.all ? '' : 'WHERE is_active = 1'} ORDER BY site_name`).all()));
+// Sites within the user's scope: Admin Company every site of the company, others their own site.
+app.get('/api/master/sites', wrap((req) => {
+  const scope = siteCondition(req.user, 'site_name');
+  return db.prepare(`SELECT id, site_code, site_name, company, is_active FROM sites WHERE ${req.query.all ? '1' : 'is_active = 1'} AND ${scope.sql} ORDER BY site_name`)
+    .all(...scope.params);
+}));
 
 // Inactive categories stay visible to filters (?all=1) but cannot be picked for new work orders.
 // Job codes for the work order picker; inactive ones only with ?all=1 (filters).
@@ -101,8 +111,8 @@ app.get('/api/master/repair-categories', wrap((req) =>
 /* ---------- Master data CRUD ---------- */
 const crud = (path, permission, { list, get, create, update, remove }) => {
   const guard = requirePermission(permission);
-  app.get(`/api/${path}`, guard, wrap((req) => list(req.query)));
-  app.get(`/api/${path}/:id(\\d+)`, guard, wrap((req) => get(Number(req.params.id))));
+  app.get(`/api/${path}`, guard, wrap((req) => list(req.query, req.user)));
+  app.get(`/api/${path}/:id(\\d+)`, guard, wrap((req) => get(Number(req.params.id), req.user)));
   app.post(`/api/${path}`, guard, wrap((req, res) => {
     res.status(201);
     return create(req.body ?? {}, req.user);
@@ -129,9 +139,15 @@ app.post('/api/steps/:id(\\d+)/move', requirePermission('master.step'), wrap((re
 crud('steps', 'master.step', { list: listStepTemplates, get: getStepTemplate, create: createStepTemplate, update: updateStepTemplate, remove: deleteStepTemplate });
 
 /* ---------- Work orders ---------- */
-app.get('/api/dashboard', wrap((req) => dashboard(req.query)));
+app.get('/api/dashboard', wrap((req) => dashboard(req.query, req.user)));
 
-app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query)));
+app.get('/api/work-orders', wrap((req) => listWorkOrders(req.query, req.user)));
+
+// A work order outside the user's site scope does not exist for them.
+app.use('/api/work-orders/:id', (req, res, next) => {
+  const exists = db.prepare('SELECT 1 FROM work_orders WHERE wo_uuid = ?').get(req.params.id);
+  next(exists && !canSeeWo(req.user, req.params.id) ? new HttpError(404, 'Work order not found') : undefined);
+});
 
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['site', 'Site'], ['maintenance_label', 'Type of Maintenance'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
@@ -148,7 +164,7 @@ const hms = (seconds) => {
 };
 
 app.get('/api/work-orders/export', wrap((req, res) => {
-  const { data } = listWorkOrders({ ...req.query, page: 1, limit: 500 });
+  const { data } = listWorkOrders({ ...req.query, page: 1, limit: 500 }, req.user);
   const lines = [CSV_COLUMNS.map(([, h]) => csvCell(h)).join(',')];
   for (const row of data) {
     const maintenance = { PREVENTIVE: 'Preventive Maintenance', REPAIR: 'Repair', WARRANTY: 'Warranty', PDI: 'PDI', OTHERS: `Others: ${row.maintenance_other ?? ''}` }[row.maintenance_type] ?? '';
@@ -168,7 +184,7 @@ app.post('/api/work-orders', requirePermission('wo.create'), wrap((req, res) => 
   return createWorkOrder(req.body ?? {}, req.user, channel);
 }));
 
-app.put('/api/work-orders/:id', requirePermission('wo.update'), wrap((req) => updateWorkOrder(req.params.id, req.body ?? {})));
+app.put('/api/work-orders/:id', requirePermission('wo.update'), wrap((req) => updateWorkOrder(req.params.id, req.body ?? {}, req.user)));
 
 app.delete('/api/work-orders/:id', requirePermission('wo.delete'), wrap((req) => {
   deleteWorkOrder(req.params.id);
@@ -236,9 +252,9 @@ app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'
 app.post('/api/sync', wrap((req) => applyOp(req.body ?? {}, req.user)));
 
 /* ---------- Notifications (own only) ---------- */
-app.get('/api/notifications', wrap((req) => listNotifications(req.user.id, req.query)));
-app.post('/api/notifications/read-all', wrap((req) => markAllRead(req.user.id)));
-app.post('/api/notifications/:id(\\d+)/read', wrap((req) => markRead(req.user.id, Number(req.params.id))));
+app.get('/api/notifications', wrap((req) => listNotifications(req.user, req.query)));
+app.post('/api/notifications/read-all', wrap((req) => markAllRead(req.user)));
+app.post('/api/notifications/:id(\\d+)/read', wrap((req) => markRead(req.user, Number(req.params.id))));
 
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
 

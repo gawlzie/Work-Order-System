@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hasPermission } from './auth.js';
 import { db, roleHas, tx } from './db.js';
 import { NOTIFICATION, notify } from './notifications.js';
+import { inScope, woCondition } from './scope.js';
 
 export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAITING', FINISH: 'FINISH' };
 export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', REJECT: 'REJECT' };
@@ -196,9 +197,15 @@ function decorate(row) {
 
 const SORTABLE = ['wo_number', 'created_at', 'unit_number', 'site', 'driver_name', 'mechanic_name', 'status', 'approval_status', 'category', 'job_code_list', 'total_time'];
 
-function buildFilters(q) {
+/** `user`: only work orders within the user's site scope. */
+function buildFilters(q, user) {
   const where = [];
   const params = [];
+  if (user) {
+    const scope = woCondition(user);
+    where.push(scope.sql);
+    params.push(...scope.params);
+  }
   if (q.search) {
     where.push(`(wo.wo_number LIKE ? OR u.unit_number LIKE ? OR d.full_name LIKE ? OR wo.problem LIKE ?
       OR EXISTS (SELECT 1 FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid AND (jc.job_code LIKE ? OR jc.job_name LIKE ?)))`);
@@ -246,12 +253,12 @@ function buildFilters(q) {
   return { sql: where.length ? ` WHERE ${where.join(' AND ')}` : '', params };
 }
 
-export function listWorkOrders(q = {}) {
+export function listWorkOrders(q = {}, user = null) {
   const page = Math.max(1, Number(q.page) || 1);
   const limit = Math.min(500, Math.max(1, Number(q.limit) || 10));
   const sortBy = SORTABLE.includes(q.sort_by) ? q.sort_by : 'created_at';
   const sortOrder = String(q.sort_order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-  const { sql, params } = buildFilters(q);
+  const { sql, params } = buildFilters(q, user);
 
   const rows = db.prepare(`${LIST_SELECT}${sql}`).all(...params).map(decorate);
   rows.sort((a, b) => {
@@ -316,12 +323,17 @@ const assignable = (employeeId, permission) =>
     .get(employeeId, permission);
 
 /** Validates references. Values unchanged from `current` (the WO being edited) may point at since-deactivated records. */
-function assertRefs({ unit_id, driver_id, mechanic_id }, current = {}) {
-  if (!db.prepare('SELECT 1 FROM units WHERE id = ? AND (is_active = 1 OR id = ?)').get(unit_id, current.unit_id ?? null))
-    throw new HttpError(422, 'Unit not found or inactive');
+/** With `user`, a new or changed unit, driver or mechanic must be within the user's site scope. */
+function assertRefs({ unit_id, driver_id, mechanic_id }, current = {}, user = null) {
+  const unit = db.prepare('SELECT site FROM units WHERE id = ? AND (is_active = 1 OR id = ?)').get(unit_id, current.unit_id ?? null);
+  if (!unit) throw new HttpError(422, 'Unit not found or inactive');
+  const outside = (id, changed) => user && changed && !inScope(user, db.prepare('SELECT site FROM employees WHERE id = ?').get(id)?.site);
+  if (user && unit_id !== current.unit_id && !inScope(user, unit.site)) throw new HttpError(422, `Unit is not at your site (${unit.site ?? '-'})`);
   if (driver_id !== current.driver_id && !assignable(driver_id, 'wo.as_driver')) throw new HttpError(422, 'Driver not found');
+  if (outside(driver_id, driver_id !== current.driver_id)) throw new HttpError(422, 'Driver is not at your site');
   if (mechanic_id && mechanic_id !== current.mechanic_id && !assignable(mechanic_id, 'wo.as_mechanic'))
     throw new HttpError(422, 'Mechanic not found');
+  if (mechanic_id && outside(mechanic_id, mechanic_id !== current.mechanic_id)) throw new HttpError(422, 'Mechanic is not at your site');
 }
 
 /** `metersRequired`: HM / KM must be given (new WOs); on edit an empty value keeps the stored reading. */
@@ -391,7 +403,7 @@ function assertMeters(data, current = null) {
 /** `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there; `silent`: no notification (example data). */
 export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
   const data = validatePayload(body);
-  assertRefs(data);
+  assertRefs(data, {}, user);
   assertMeters(data);
   const open = db
     .prepare("SELECT wo_number FROM work_orders WHERE unit_id = ? AND status != 'FINISH' AND approval_status != 'REJECT'")
@@ -416,11 +428,11 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
   return getWorkOrder(wo_uuid);
 }
 
-export function updateWorkOrder(woUuid, body) {
+export function updateWorkOrder(woUuid, body, user = null) {
   const wo = getWorkOrder(woUuid);
   if (wo.status === STATUS.FINISH) throw new HttpError(409, 'A finished work order cannot be edited');
   const data = validatePayload(body, { metersRequired: false });
-  assertRefs(data, wo);
+  assertRefs(data, wo, user);
   assertMeters(data, wo);
   db.prepare(
     // The site follows the unit only when the unit is changed; otherwise the WO keeps the site it was raised at.
@@ -759,8 +771,8 @@ export function addAdditionalWork(woUuid, name, opts = {}) {
   return getWorkOrder(woUuid);
 }
 
-export function dashboard(q = {}) {
-  const { sql, params } = buildFilters({ created_start: q.start_date, created_end: q.end_date, site: q.site });
+export function dashboard(q = {}, user = null) {
+  const { sql, params } = buildFilters({ created_start: q.start_date, created_end: q.end_date, site: q.site }, user);
   const rows = db.prepare(`${LIST_SELECT}${sql}`).all(...params).map(decorate);
   const counts = { open: 0, on_progress: 0, waiting: 0, finish: 0 };
   for (const r of rows) {

@@ -1,6 +1,7 @@
 /**
  * In-app notifications, one row per recipient. Three events:
- * - WO_CREATED: approvers (admin) and the mechanics at the work order's site (a new job there);
+ * Approvers are those of the work order's site (Admin Site there) plus Admin Company.
+ * - WO_CREATED: approvers and the mechanics at the work order's site (a new job there);
  * - WO_FINISHED: approvers and whoever raised the work order;
  * - WO_OVERDUE: a work order still open (not finished, not rejected) more than 1 day after it was raised, once per
  *   work order: approvers and its PIC mechanic.
@@ -8,6 +9,7 @@
  * by the client from `type` and `data`, so it shows in the reader's language.
  */
 import { db, roleHas } from './db.js';
+import { ALL_SITES, woCondition } from './scope.js';
 
 export const NOTIFICATION = { CREATED: 'WO_CREATED', FINISHED: 'WO_FINISHED', OVERDUE: 'WO_OVERDUE' };
 export const OVERDUE_HOURS = 24;
@@ -20,7 +22,8 @@ const withPermission = (permission, extra = '', ...params) =>
               WHERE e.is_active = 1 AND e.username IS NOT NULL AND ${roleHas('r')} ${extra}`).all(permission, ...params).map((r) => r.id);
 
 function recipients(type, wo) {
-  const ids = new Set(withPermission('wo.approve'));
+  // Approvers of the work order's site: Admin Company (every site) and the Admin Site placed there.
+  const ids = new Set(withPermission('wo.approve', `AND (${roleHas('r')} OR e.site = ? COLLATE NOCASE)`, ALL_SITES, wo.site ?? ''));
   if (type === NOTIFICATION.CREATED && wo.site) for (const id of withPermission('wo.as_mechanic', 'AND e.site = ? COLLATE NOCASE', wo.site)) ids.add(id);
   if (type === NOTIFICATION.FINISHED && wo.created_by) ids.add(wo.created_by);
   if (type === NOTIFICATION.OVERDUE && wo.mechanic_id) ids.add(wo.mechanic_id);
@@ -62,22 +65,25 @@ export function scanOverdue() {
   return due.length;
 }
 
-/** The user's latest notifications plus how many are unread. */
-export function listNotifications(userId, q = {}) {
+/** The user's latest notifications plus how many are unread; only for work orders still within their site scope. */
+export function listNotifications(user, q = {}) {
+  const userId = user.id;
+  const scope = woCondition(user);
+  const visible = `EXISTS (SELECT 1 FROM work_orders wo WHERE wo.wo_uuid = n.wo_uuid AND ${scope.sql})`;
   const limit = Math.min(100, Math.max(1, Number(q.limit) || 30));
   const rows = db.prepare(`SELECT n.id, n.type, n.wo_uuid, n.data, n.created_at, n.read_at, a.full_name AS actor_name
                            FROM notifications n LEFT JOIN employees a ON a.id = n.actor_id
-                           WHERE n.user_id = ? ORDER BY n.created_at DESC, n.id DESC LIMIT ?`).all(userId, limit);
-  const unread = db.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(userId).n;
+                           WHERE n.user_id = ? AND ${visible} ORDER BY n.created_at DESC, n.id DESC LIMIT ?`).all(userId, ...scope.params, limit);
+  const unread = db.prepare(`SELECT COUNT(*) AS n FROM notifications n WHERE n.user_id = ? AND n.read_at IS NULL AND ${visible}`).get(userId, ...scope.params).n;
   return { data: rows.map((r) => ({ ...r, data: JSON.parse(r.data) })), unread };
 }
 
-export function markRead(userId, id) {
-  db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL').run(now(), id, userId);
-  return listNotifications(userId);
+export function markRead(user, id) {
+  db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL').run(now(), id, user.id);
+  return listNotifications(user);
 }
 
-export function markAllRead(userId) {
-  db.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').run(now(), userId);
-  return listNotifications(userId);
+export function markAllRead(user) {
+  db.prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').run(now(), user.id);
+  return listNotifications(user);
 }

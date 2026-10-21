@@ -6,7 +6,8 @@ import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 
 const DEMO = [
-  ['admin', 'Admin Plant'],
+  ['admincompany', 'Admin Company (all sites)'],
+  ['admin', 'Admin Site (BIB)'],
   ['budi', 'Mechanic'],
   ['joko', 'Driver (view only)'],
 ];

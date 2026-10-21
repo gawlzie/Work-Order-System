@@ -12,7 +12,8 @@ const COMPANY = 'Inline Technology International';
 const SITE = 'Site Kalimantan - Pit A';
 
 const EMPLOYEES = [
-  ['ITI-0001', 'Admin Plant', 'admin', 'admin'],
+  ['ITI-0000', 'Admin Company', 'admin_company', 'admincompany'],
+  ['ITI-0001', 'Admin Site', 'admin', 'admin'],
   ['ITI-1001', 'Budi Santoso', 'mechanic', 'budi'],
   ['ITI-1002', 'Agus Prasetyo', 'mechanic', 'agus'],
   ['ITI-1003', 'Rudi Hartono', 'mechanic', 'rudi'],

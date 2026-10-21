@@ -29,6 +29,8 @@ const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; 
 export function Layout() {
   const { t, lang, setLang } = useI18n();
   const { user, logout, can } = useAuth();
+  // Users limited to their own site see which one.
+  const roleLine = user && !can('site.all') && user.site ? `${user.role_name} · ${user.site}` : user?.role_name;
   const confirm = useConfirm();
   const nav = NAV.filter((item) => !item.permission || can(item.permission));
   const navigate = useNavigate();
@@ -148,14 +150,14 @@ export function Layout() {
                 </span>
                 <span className="hidden text-left leading-tight sm:block">
                   <span className="block text-sm font-medium">{user?.full_name}</span>
-                  <span className="block text-[11px] text-muted-foreground">{user?.role_name}</span>
+                  <span className="block text-[11px] text-muted-foreground">{roleLine}</span>
                 </span>
               </button>
               {menuOpen && (
                 <div className="absolute right-0 mt-2 w-56 animate-fade-in rounded-lg border border-border bg-card p-1 shadow-lg">
                   <div className="border-b border-border px-3 py-2 sm:hidden">
                     <p className="truncate text-sm font-medium">{user?.full_name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{user?.role_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{roleLine}</p>
                   </div>
                   <button onClick={() => { setMenuOpen(false); navigate('/profile'); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
                     <UserIcon className="size-4" /> {t('profile')}
