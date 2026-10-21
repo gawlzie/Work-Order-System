@@ -1,6 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Plus, Printer, RefreshCcw, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Printer, RefreshCcw, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalDialog } from '../components/ApprovalDialog';
@@ -11,10 +10,7 @@ import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
 import { WoPrintForm } from '../components/WoPrintForm';
 import { maintenanceLabel } from '../components/MaintenanceType';
-import { useConfirm } from '../components/confirm';
-import { useToast } from '../components/toast';
-import { BtnLabel, Button, Card, EmptyState, Input, PageHeader, Spinner } from '../components/ui';
-import { api } from '../lib/api';
+import { BtnLabel, Button, Card, EmptyState, PageHeader, Spinner } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
@@ -57,28 +53,9 @@ export function WorkOrderDetailPage() {
   const { id } = useParams();
   const { t, lang } = useI18n();
   const { can } = useAuth();
-  const toast = useToast();
-  const confirm = useConfirm();
   const navigate = useNavigate();
-  const qc = useQueryClient();
   const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
-  const [extra, setExtra] = useState('');
   const [approval, setApproval] = useState<'approve' | 'reject' | null>(null);
-
-  const onDone = (data: WorkOrderDetail) => {
-    qc.setQueryData(['work-order', id], data);
-    qc.invalidateQueries({ queryKey: ['work-orders'] });
-    qc.invalidateQueries({ queryKey: ['dashboard'] });
-  };
-
-  const addExtra = useMutation({
-    mutationFn: () => api<WorkOrderDetail>(`/work-orders/${id}/additional-work`, { method: 'POST', body: { name: extra } }),
-    onSuccess: (data) => {
-      onDone(data);
-      setExtra('');
-    },
-    onError: (err) => toast('error', (err as Error).message),
-  });
 
   useSecondTick(!!wo && wo.status !== 'FINISH' && !!wo.started_at);
 
@@ -86,9 +63,7 @@ export function WorkOrderDetailPage() {
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
 
   // Steps are started and finished in the mechanic app only; this page shows their times.
-  // A rejected WO cannot be worked on.
-  const canProgress = can('wo.progress') && wo.approval_status !== 'REJECT';
-  const allTop = [...wo.steps, ...wo.additional_work];
+  const allTop = wo.steps;
 
   const stateIcon = (s: Step) =>
     s.finished_at ? <CheckCircle2 className="size-5 text-emerald-500" /> : s.started_at ? <Loader className="size-5 animate-spin text-yellow-500 [animation-duration:3s]" /> : <Circle className="size-5 text-muted-foreground/50" />;
@@ -235,24 +210,6 @@ export function WorkOrderDetailPage() {
           <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(1, allTop.length)) * 100}%` }} />
         </div>
         {renderSteps(wo.steps)}
-      </Card>
-
-      <Card className="print-area mt-4 overflow-hidden">
-        <div className="border-b border-border p-4">
-          <h2 className="font-semibold">{t('additional_work')}</h2>
-        </div>
-        {wo.additional_work.length ? renderSteps(wo.additional_work) : <p className="p-4 text-sm text-muted-foreground">-</p>}
-        {canProgress && (
-          <form
-            className="no-print flex gap-2 border-t border-border p-4"
-            onSubmit={(e) => { e.preventDefault(); if (extra.trim().length >= 3) confirm({ message: t('confirm_add_extra', { name: extra.trim() }) }, () => addExtra.mutate()); }}
-          >
-            <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={t('add_additional_work')} maxLength={120} />
-            <Button type="submit" variant="outline" loading={addExtra.isPending} disabled={extra.trim().length < 3} title={t('create')}>
-              <Plus className="size-4" /> <BtnLabel>{t('create')}</BtnLabel>
-            </Button>
-          </form>
-        )}
       </Card>
 
       <ProofSection wo={wo} />
