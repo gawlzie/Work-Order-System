@@ -388,7 +388,7 @@ function assertMeters(data, current = null) {
   }
 }
 
-/** `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there. */
+/** `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there; `silent`: no notification (example data). */
 export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
   const data = validatePayload(body);
   assertRefs(data);
@@ -411,7 +411,7 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
     ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, data.unit_id,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
-    notify(NOTIFICATION.CREATED, wo_uuid, { actorId: user.id });
+    if (!opts.silent) notify(NOTIFICATION.CREATED, wo_uuid, { actorId: user.id });
   });
   return getWorkOrder(wo_uuid);
 }
@@ -514,7 +514,7 @@ export function progressStep(woUuid, stepId, action, user, remarks, opts = {}) {
     } else {
       throw new HttpError(422, 'Unknown step action');
     }
-    recomputeStatus(woUuid, { actorId: user?.id ?? null });
+    recomputeStatus(woUuid, { actorId: user?.id ?? null, silent: !!opts.silent });
   });
   return getWorkOrder(woUuid);
 }
