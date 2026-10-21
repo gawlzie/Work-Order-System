@@ -206,6 +206,17 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_wo ON notifications(wo_uuid, type);
+
+-- Offline sync: outbox operations from the mechanic app that were applied (op_id is the phone's id for the action),
+-- so a resent operation is not applied twice.
+CREATE TABLE IF NOT EXISTS sync_ops (
+  op_id      TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL,
+  type       TEXT NOT NULL,
+  wo_uuid    TEXT,
+  done_at    TEXT NOT NULL, -- when the mechanic did it on the phone
+  applied_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_wo_created ON work_orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_steps_wo ON wo_steps(wo_uuid);
 `);
@@ -311,6 +322,9 @@ export function fillMaintenanceTypes() {
     WHERE maintenance_type IS NULL`).run().changes;
 }
 fillMaintenanceTypes();
+
+// Things made offline in the mechanic app carry the phone's reference until they have a server id.
+for (const table of ['wo_steps', 'wo_job_codes', 'wo_job_parts']) if (!columns(table).includes('client_ref')) db.exec(`ALTER TABLE ${table} ADD COLUMN client_ref TEXT`);
 if (!columns('work_orders').includes('approval_remarks')) db.exec('ALTER TABLE work_orders ADD COLUMN approval_remarks TEXT');
 const categoryCols = columns('repair_categories');
 if (!categoryCols.includes('description')) db.exec('ALTER TABLE repair_categories ADD COLUMN description TEXT');

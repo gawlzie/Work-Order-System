@@ -278,12 +278,12 @@ export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uui
 /** Job code entries of a work order, each with the spare parts used for it. */
 export function listWoJobCodes(woUuid) {
   const entries = db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, c.name AS category_name, j.standard_duration,
-                     x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at, x.started_at, x.finished_at
+                     x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at, x.started_at, x.finished_at, x.client_ref
               FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id JOIN repair_categories c ON c.id = j.category_id
               JOIN employees m ON m.id = x.mechanic_id LEFT JOIN employees a ON a.id = x.added_by
               WHERE x.wo_uuid = ? ORDER BY x.added_at, x.id`).all(woUuid);
   const parts = db.prepare(`SELECT p.id, p.wo_job_code_id, p.sparepart_id, sp.part_number, sp.part_name, p.qty, p.uom,
-                                   a.full_name AS added_by_name, p.added_at, p.updated_at
+                                   a.full_name AS added_by_name, p.added_at, p.updated_at, p.client_ref
                             FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id JOIN spareparts sp ON sp.id = p.sparepart_id
                             LEFT JOIN employees a ON a.id = p.added_by
                             WHERE x.wo_uuid = ? ORDER BY p.added_at, p.id`).all(woUuid);
@@ -388,7 +388,8 @@ function assertMeters(data, current = null) {
   }
 }
 
-export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
+/** `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there. */
+export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
   const data = validatePayload(body);
   assertRefs(data);
   assertMeters(data);
@@ -397,8 +398,9 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB) {
     .get(data.unit_id);
   if (open) throw new HttpError(409, `Unit already has an active work order (${open.wo_number})`);
 
-  const wo_uuid = randomUUID();
-  const ts = now();
+  const wo_uuid = opts.wo_uuid ?? randomUUID();
+  if (db.prepare('SELECT 1 FROM work_orders WHERE wo_uuid = ?').get(wo_uuid)) throw new HttpError(409, 'This work order was already sent');
+  const ts = opts.at ?? now();
   // Every work order, whoever raises it, waits until an approver approves or rejects it.
   const approval = APPROVAL.WAITING;
   tx(() => {
@@ -464,11 +466,18 @@ function getStep(woUuid, stepId) {
 }
 
 /** Mechanic progress: start or finish a step (top-level steps run strictly in order). */
-export function progressStep(woUuid, stepId, action, user, remarks) {
+/** `opts.at` (offline sync): when it was done on the phone; kept in order with the steps before it. */
+export function progressStep(woUuid, stepId, action, user, remarks, opts = {}) {
   const wo = getWorkOrder(woUuid);
   assertWorkable(wo);
   const step = getStep(woUuid, stepId);
-  const ts = now();
+  let ts = opts.at ?? now();
+  if (opts.at) {
+    const floor = action === 'start'
+      ? db.prepare('SELECT MAX(finished_at) AS t FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL AND step_no < ?').get(woUuid, step.step_no).t
+      : step.started_at;
+    if (floor && ts < floor) ts = floor;
+  }
   const isMechanic = hasPermission(user, 'wo.as_mechanic');
   const picId = isMechanic ? user.id : wo.mechanic_id;
 
@@ -585,7 +594,7 @@ function manualJobTimes(wo, body) {
   return { started_at: start.toISOString(), finished_at: finish.toISOString() };
 }
 
-export function addWoJobCode(woUuid, body, user) {
+export function addWoJobCode(woUuid, body, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
   const admin = jobCodeGate(wo, user);
   // Admin entries come with the times typed in; mechanics use the start / finish timer instead.
@@ -607,8 +616,8 @@ export function addWoJobCode(woUuid, body, user) {
     throw err;
   }
   const times = manual ? manualJobTimes(wo, body) : { started_at: null, finished_at: null };
-  db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(woUuid, jobId, mechanicId, user.id, now(), times.started_at, times.finished_at);
+  db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at, started_at, finished_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(woUuid, jobId, mechanicId, user.id, opts.at ?? now(), times.started_at, times.finished_at, opts.client_ref ?? null);
   return getWorkOrder(woUuid);
 }
 
@@ -624,14 +633,17 @@ export function setWoJobCodeTimes(woUuid, entryId, body, user) {
 }
 
 /** Start or finish the timer of one job code entry; only while the job code step (Step 7) is running. */
-export function timeWoJobCode(woUuid, entryId, action, user) {
+export function timeWoJobCode(woUuid, entryId, action, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
   assertWorkable(wo);
   const repair = wo.steps.find((s) => s.allow_add_sub);
   if (!repair?.started_at || repair.finished_at) throw new HttpError(409, `Job code timers run while Step ${repair?.step_no ?? 7} · ${repair?.step_name ?? 'Repair Process'} is in progress`);
   const entry = db.prepare('SELECT * FROM wo_job_codes WHERE id = ? AND wo_uuid = ?').get(entryId, woUuid);
   if (!entry) throw new HttpError(404, 'Job code entry not found');
-  const ts = now();
+  let ts = opts.at ?? now();
+  // A time from the phone is kept inside the job code step and after the job code started.
+  const floor = action === 'start' ? repair.started_at : entry.started_at;
+  if (opts.at && floor && ts < floor) ts = floor;
   if (action === 'start') {
     if (entry.started_at) throw new HttpError(409, 'This job code has already started');
     db.prepare('UPDATE wo_job_codes SET started_at = ? WHERE id = ?').run(ts, entryId);
@@ -669,7 +681,7 @@ function jobEntry(woUuid, entryId) {
 }
 
 /** Body: sparepart_id, qty. Same people and moment as job codes: mechanics while Step 7 runs, approvers once it started. */
-export function addWoJobPart(woUuid, entryId, body, user) {
+export function addWoJobPart(woUuid, entryId, body, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);
   jobEntry(woUuid, entryId);
@@ -678,8 +690,9 @@ export function addWoJobPart(woUuid, entryId, body, user) {
   if (db.prepare('SELECT 1 FROM wo_job_parts WHERE wo_job_code_id = ? AND sparepart_id = ?').get(entryId, part.id))
     throw Object.assign(new HttpError(409, `${part.part_number} is already listed for this job code; change its quantity instead`), { errors: { sparepart_id: 'Already listed for this job code' } });
   const qty = partQty(body?.qty, part.uom);
-  const ts = now();
-  db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, sparepart_id, qty, uom, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)').run(entryId, part.id, qty, part.uom, user.id, ts);
+  const ts = opts.at ?? now();
+  db.prepare('INSERT INTO wo_job_parts (wo_job_code_id, sparepart_id, qty, uom, added_by, added_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(entryId, part.id, qty, part.uom, user.id, ts, opts.client_ref ?? null);
   db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(ts, woUuid);
   return getWorkOrder(woUuid);
 }
@@ -715,15 +728,15 @@ export function removeWoJobCode(woUuid, entryId, user) {
   return getWorkOrder(woUuid);
 }
 
-export function addAdditionalWork(woUuid, name) {
+export function addAdditionalWork(woUuid, name, opts = {}) {
   const wo = getWorkOrder(woUuid);
   assertWorkable(wo);
   const title = String(name ?? '').trim();
   if (title.length < 3) throw new HttpError(422, 'Additional work name is required');
   const { max } = db.prepare('SELECT MAX(step_no) AS max FROM wo_steps WHERE wo_uuid = ? AND parent_id IS NULL').get(woUuid);
   tx(() => {
-    db.prepare('INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_additional) VALUES (?, NULL, ?, ?, 1)').run(
-      woUuid, (max ?? 0) + 1, title);
+    db.prepare('INSERT INTO wo_steps (wo_uuid, parent_id, step_no, step_name, is_additional, client_ref) VALUES (?, NULL, ?, ?, 1, ?)').run(
+      woUuid, (max ?? 0) + 1, title, opts.client_ref ?? null);
     recomputeStatus(woUuid);
   });
   return getWorkOrder(woUuid);

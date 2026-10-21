@@ -1,5 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { api, qs } from './api';
+import { useAuth } from './auth';
+import { createdDetail, overlayDetail, overlayList, useOutbox } from './offline';
 import type { Category, DashboardStats, JobCodeOption, Employee, Paged, PermissionDef, RoleOption, Unit, WorkOrder, WorkOrderDetail, NotificationList, SiteOption, SparepartOption } from './types';
 
 export interface WoListParams {
@@ -21,21 +24,45 @@ export interface WoListParams {
   site?: string;
 }
 
-/** Pass `refetchInterval` (ms) to keep a list fresh, e.g. the mechanic job list. */
-export const useWorkOrders = (params: WoListParams, refetchInterval?: number) =>
-  useQuery({
+export const fetchWorkOrder = (id: string) => api<WorkOrderDetail>(`/work-orders/${id}`);
+
+/**
+ * Pass `refetchInterval` (ms) to keep a list fresh, e.g. the mechanic job list.
+ * Actions still in this phone's outbox (offline) are shown on top of the server data.
+ */
+export function useWorkOrders(params: WoListParams, refetchInterval?: number) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const queue = useOutbox(user?.id);
+  const key = JSON.stringify(params);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const select = useCallback((page: Paged<WorkOrder>) => overlayList(page, params, queue, qc), [queue, key, qc]);
+  return useQuery({
     queryKey: ['work-orders', params],
     queryFn: () => api<Paged<WorkOrder>>(`/work-orders${qs({ ...params })}`),
     placeholderData: (prev) => prev,
     refetchInterval,
+    select,
   });
+}
 
-export const useWorkOrder = (id: string | undefined) =>
-  useQuery({
-    queryKey: ['work-order', id],
-    queryFn: () => api<WorkOrderDetail>(`/work-orders/${id}`),
-    enabled: !!id,
-  });
+/** One work order, with this phone's unsent actions applied; one raised offline is shown from the outbox. */
+export function useWorkOrder(id: string | undefined) {
+  const { user } = useAuth();
+  const queue = useOutbox(user?.id);
+  const created = queue.find((o) => o.type === 'wo.create' && o.wo_uuid === id);
+  const select = useCallback((wo: WorkOrderDetail) => overlayDetail(wo, queue), [queue]);
+  const query = useQuery({ queryKey: ['work-order', id], queryFn: () => fetchWorkOrder(id!), enabled: !!id && !created, select });
+  return created ? { ...query, data: createdDetail(created, queue), isLoading: false, isError: false, error: null } : query;
+}
+
+/** Steps a new work order gets (offline copy for work orders raised without signal). */
+export const useStepTemplate = () =>
+  useQuery({ queryKey: ['step-template'], queryFn: () => api<{ name: string; waiting: boolean; addSub: boolean; subs: string[] }[]>('/master/step-template'), staleTime: 3_600_000 });
+
+/** Every active spare part, compact: the Step 7 picker searches it on the phone, also offline. */
+export const useSparepartsAll = (enabled = true) =>
+  useQuery({ queryKey: ['spareparts', 'all'], queryFn: () => api<SparepartOption[]>('/master/spareparts/all'), staleTime: 3_600_000, enabled });
 
 export const useDashboard = (start: string, end: string, site = '') =>
   useQuery({

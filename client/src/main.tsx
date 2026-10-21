@@ -5,18 +5,27 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ConfirmProvider } from './components/confirm';
 import { ToastProvider } from './components/toast';
-import { AuthProvider } from './lib/auth';
+import { AuthProvider, cachedUser } from './lib/auth';
+import { loadOutbox, restoreCache, startPersist } from './lib/offline';
 import { I18nProvider } from './lib/i18n';
 import { setupPwa } from './lib/pwa';
 import './index.css';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 10_000 } },
+  // Data stays a day so the offline copy loaded on start is not dropped.
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 10_000, gcTime: 86_400_000 } },
 });
 
 setupPwa();
 
-createRoot(document.getElementById('root')!).render(
+// Load the outbox and the offline copy of the data before the first screen, so the app works without signal.
+async function start() {
+  await Promise.all([loadOutbox(), restoreCache(queryClient, cachedUser()?.id)]);
+  startPersist(queryClient, () => cachedUser()?.id);
+  render();
+}
+
+const render = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
@@ -33,3 +42,5 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+void start();

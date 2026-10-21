@@ -5,7 +5,9 @@ import { useDeferredValue, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useOnline } from '../lib/pwa';
-import { useSparepartSearch } from '../lib/queries';
+import { entryRef, lineRef, useAct } from '../lib/act';
+import { newRef } from '../lib/offline';
+import { useSparepartsAll, useSparepartSearch } from '../lib/queries';
 import type { SparepartOption, WoJobCode, WoJobPart, WorkOrderDetail } from '../lib/types';
 import { useConfirm } from './confirm';
 import { useToast } from './toast';
@@ -14,6 +16,15 @@ import { Button, Field, Input, Modal } from './ui';
 /** LTR, KG and MTR may have decimals; other units are counted in whole numbers (same rule as the server). */
 const DECIMAL_UOMS = ['LTR', 'KG', 'MTR'];
 const qtyText = (qty: number, lang: string) => new Intl.NumberFormat(lang === 'id' ? 'id-ID' : 'en-GB', { maximumFractionDigits: 2 }).format(qty);
+
+/** Same order as the server search: part number starting with the text first; at most 20. */
+function localSearch(parts: SparepartOption[], term: string) {
+  const q = term.toLowerCase();
+  return parts
+    .filter((p) => p.part_number.toLowerCase().includes(q) || p.part_name.toLowerCase().includes(q) || (p.brand ?? '').toLowerCase().includes(q))
+    .sort((a, b) => Number(b.part_number.toLowerCase().startsWith(q)) - Number(a.part_number.toLowerCase().startsWith(q)) || a.part_number.localeCompare(b.part_number))
+    .slice(0, 20);
+}
 
 function qtyError(raw: string, uom: string) {
   const v = Number(raw.trim().replace(',', '.'));
@@ -27,11 +38,13 @@ function qtyError(raw: string, uom: string) {
  * Spare parts used for one job code entry (job code + mechanic) of Step 7: part, quantity and its unit.
  * Who may change them is decided by the parent (same rule as the job codes themselves).
  */
-export function JobParts({ wo, entry, editable, onDone }: { wo: WorkOrderDetail; entry: WoJobCode; editable: boolean; onDone: (data: WorkOrderDetail) => void }) {
+/** `queued` (mechanic app): changes go through the outbox, so they also work offline. */
+export function JobParts({ wo, entry, editable, onDone, queued }: { wo: WorkOrderDetail; entry: WoJobCode; editable: boolean; onDone: (data: WorkOrderDetail) => void; queued?: boolean }) {
   const { t, lang } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
   const online = useOnline();
+  const act = useAct();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WoJobPart | null>(null);
   const base = `/work-orders/${wo.wo_uuid}/job-codes/${entry.id}/parts`;
@@ -59,7 +72,7 @@ export function JobParts({ wo, entry, editable, onDone }: { wo: WorkOrderDetail;
                 <span className="shrink-0 font-medium tabular-nums">{qtyText(p.qty, lang)} {p.uom}</span>
                 {editable && (
                   <span className="no-print -my-1 ml-auto flex shrink-0 sm:ml-0">
-                    <Button size="icon" variant="ghost" className="size-7" title={t('edit_part_title')} aria-label={t('edit_part_title')} disabled={!online} onClick={() => setEditing(p)}>
+                    <Button size="icon" variant="ghost" className="size-7" title={t('edit_part_title')} aria-label={t('edit_part_title')} disabled={!queued && !online} onClick={() => setEditing(p)}>
                       <Pencil className="size-3.5" />
                     </Button>
                     <Button
@@ -68,9 +81,9 @@ export function JobParts({ wo, entry, editable, onDone }: { wo: WorkOrderDetail;
                       className="size-7 text-destructive"
                       title={t('delete')}
                       aria-label={t('delete')}
-                      disabled={!online}
+                      disabled={!queued && !online}
                       loading={remove.isPending && remove.variables?.id === p.id}
-                      onClick={() => confirm({ message: t('confirm_remove_part', { part: `${p.part_number} · ${p.part_name}`, job: entry.job_code }), tone: 'destructive', confirmLabel: t('delete') }, () => remove.mutate(p))}
+                      onClick={() => confirm({ message: t('confirm_remove_part', { part: `${p.part_number} · ${p.part_name}`, job: entry.job_code }), tone: 'destructive', confirmLabel: t('delete') }, () => (queued ? act({ type: 'part.remove', wo_uuid: wo.wo_uuid, label: t('op_part_remove', { part: p.part_number }), ...entryRef(entry), ...lineRef(p) }) : remove.mutate(p)))}
                     >
                       <Trash2 className="size-3.5" />
                     </Button>
@@ -82,23 +95,27 @@ export function JobParts({ wo, entry, editable, onDone }: { wo: WorkOrderDetail;
         </ul>
       )}
       {editable && (
-        <Button size="sm" variant="ghost" className="no-print -ml-2 mt-1 h-8 text-primary" disabled={!online} onClick={() => setAdding(true)}>
+        <Button size="sm" variant="ghost" className="no-print -ml-2 mt-1 h-8 text-primary" disabled={!queued && !online} onClick={() => setAdding(true)}>
           <Plus className="size-3.5" /> {t('add_part')}
         </Button>
       )}
-      {adding && <AddPartDialog base={base} entry={entry} onClose={() => setAdding(false)} onDone={(data) => { onDone(data); setAdding(false); }} />}
-      {editing && <EditPartDialog base={base} line={editing} onClose={() => setEditing(null)} onDone={(data) => { onDone(data); setEditing(null); }} />}
+      {adding && <AddPartDialog base={base} entry={entry} woUuid={wo.wo_uuid} queued={queued} onClose={() => setAdding(false)} onDone={(data) => { onDone(data); setAdding(false); }} />}
+      {editing && <EditPartDialog base={base} line={editing} entry={entry} woUuid={wo.wo_uuid} queued={queued} onClose={() => setEditing(null)} onDone={(data) => { onDone(data); setEditing(null); }} />}
     </div>
   );
 }
 
-function AddPartDialog({ base, entry, onClose, onDone }: { base: string; entry: WoJobCode; onClose: () => void; onDone: (data: WorkOrderDetail) => void }) {
+function AddPartDialog({ base, entry, woUuid, queued, onClose, onDone }: { base: string; entry: WoJobCode; woUuid: string; queued?: boolean; onClose: () => void; onDone: (data: WorkOrderDetail) => void }) {
   const { t, lang } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
   const [term, setTerm] = useState('');
   const search = useDeferredValue(term.trim());
-  const results = useSparepartSearch(search);
+  const remote = useSparepartSearch(queued ? '' : search);
+  // Mechanic app: search the spare parts kept on the phone, so it also works offline.
+  const all = useSparepartsAll(!!queued);
+  const act = useAct();
+  const results = { data: queued ? (search.length >= 2 && all.data ? localSearch(all.data, search) : undefined) : remote.data };
   const [part, setPart] = useState<SparepartOption | null>(null);
   const [qty, setQty] = useState('1');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -119,7 +136,14 @@ function AddPartDialog({ base, entry, onClose, onDone }: { base: string; entry: 
     setErrors(next);
     if (Object.keys(next).length || !part) return;
     const amount = qtyText(Number(qty.replace(',', '.')), lang);
-    confirm({ message: t('confirm_add_part', { part: `${part.part_number} · ${part.part_name}`, qty: amount, uom: part.uom, job: entry.job_code, mechanic: entry.mechanic_name }) }, () => save.mutate());
+    confirm({ message: t('confirm_add_part', { part: `${part.part_number} · ${part.part_name}`, qty: amount, uom: part.uom, job: entry.job_code, mechanic: entry.mechanic_name }) }, () => {
+      if (!queued) return save.mutate();
+      act({
+        type: 'part.add', wo_uuid: woUuid, label: t('op_part_add', { part: part.part_number, qty: amount, uom: part.uom }), ...entryRef(entry), sparepart_id: part.id, qty, line_ref: newRef(),
+        view: { part_number: part.part_number, part_name: part.part_name, uom: part.uom },
+      });
+      onClose();
+    });
   };
 
   return (
@@ -184,12 +208,13 @@ function AddPartDialog({ base, entry, onClose, onDone }: { base: string; entry: 
   );
 }
 
-function EditPartDialog({ base, line, onClose, onDone }: { base: string; line: WoJobPart; onClose: () => void; onDone: (data: WorkOrderDetail) => void }) {
+function EditPartDialog({ base, line, entry, woUuid, queued, onClose, onDone }: { base: string; line: WoJobPart; entry: WoJobCode; woUuid: string; queued?: boolean; onClose: () => void; onDone: (data: WorkOrderDetail) => void }) {
   const { t, lang } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
   const [qty, setQty] = useState(String(line.qty));
   const [error, setError] = useState('');
+  const act = useAct();
   const save = useMutation({
     mutationFn: () => api<WorkOrderDetail>(`${base}/${line.id}`, { method: 'PUT', body: { qty } }),
     onSuccess: onDone,
@@ -201,7 +226,11 @@ function EditPartDialog({ base, line, onClose, onDone }: { base: string; line: W
   const submit = () => {
     const e = qtyError(qty, line.uom);
     setError(e);
-    if (!e) confirm({ message: t('confirm_edit_part', { part: `${line.part_number} · ${line.part_name}`, qty: qtyText(Number(qty.replace(',', '.')), lang), uom: line.uom }) }, () => save.mutate());
+    if (!e) confirm({ message: t('confirm_edit_part', { part: `${line.part_number} · ${line.part_name}`, qty: qtyText(Number(qty.replace(',', '.')), lang), uom: line.uom }) }, () => {
+      if (!queued) return save.mutate();
+      act({ type: 'part.update', wo_uuid: woUuid, label: t('op_part_update', { part: line.part_number, qty: qtyText(Number(qty.replace(',', '.')), lang), uom: line.uom }), ...entryRef(entry), ...lineRef(line), qty });
+      onClose();
+    });
   };
   return (
     <Modal

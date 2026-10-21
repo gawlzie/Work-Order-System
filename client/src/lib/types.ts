@@ -191,6 +191,7 @@ export interface WorkOrder {
   /** Optional note the approver adds when approving, e.g. instructions for the mechanic. */
   approval_remarks: string | null;
   channel_source: Channel;
+  created_by: number | null;
   created_by_name: string | null;
   created_at: string;
   mobile_sync_time: string | null;
@@ -216,6 +217,8 @@ export interface Step {
   finished_at: string | null;
   remarks: string | null;
   sub_steps: Step[];
+  /** Reference of additional work added offline in the mechanic app. */
+  client_ref?: string | null;
 }
 
 /** Proof-of-completion file (PDF or image) of a finished work order. */
@@ -245,6 +248,8 @@ export interface WoJobCode {
   finished_at: string | null;
   /** Spare parts used for this job code entry. */
   parts: WoJobPart[];
+  /** Reference when it was added offline in the mechanic app. */
+  client_ref?: string | null;
 }
 
 /** One spare part line of a job code entry; uom is the part's unit when it was added. */
@@ -259,6 +264,8 @@ export interface WoJobPart {
   added_by_name: string | null;
   added_at: string;
   updated_at: string | null;
+  /** Reference when it was added offline in the mechanic app. */
+  client_ref?: string | null;
 }
 
 /** Spare part in the Step 7 picker. */

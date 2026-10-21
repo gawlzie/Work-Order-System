@@ -1,11 +1,12 @@
 import { clsx } from 'clsx';
-import { ClipboardList, PlusCircle, User as UserIcon, WifiOff, Wrench } from 'lucide-react';
+import { ClipboardList, PlusCircle, User as UserIcon, Wrench } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { NotificationBell } from '../../components/NotificationBell';
+import { SyncBar } from '../../components/SyncBar';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
 import { useI18n, type TKey } from '../../lib/i18n';
-import { useOnline } from '../../lib/pwa';
+import { useCategories, useEmployees, useJobCodeOptions, useSparepartsAll, useStepTemplate, useUnits } from '../../lib/queries';
 import type { Permission } from '../../lib/types';
 
 const TABS: { to: string; key: TKey; icon: typeof ClipboardList; end?: boolean; permission?: Permission }[] = [
@@ -21,8 +22,15 @@ const TABS: { to: string; key: TKey; icon: typeof ClipboardList; end?: boolean; 
 export function MechanicLayout() {
   const { t } = useI18n();
   const { user, can } = useAuth();
-  const online = useOnline();
   const tabs = TABS.filter((tab) => !tab.permission || can(tab.permission));
+  // Lists the forms need, loaded while there is signal and kept on the phone for offline use.
+  useUnits();
+  useEmployees('driver');
+  useEmployees('mechanic');
+  useCategories();
+  useJobCodeOptions();
+  useStepTemplate();
+  useSparepartsAll(can('wo.progress'));
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -40,11 +48,7 @@ export function MechanicLayout() {
             {initials(user?.full_name ?? '?')}
           </NavLink>
         </div>
-        {!online && (
-          <p className="flex items-center justify-center gap-2 bg-orange-500 px-4 py-1.5 text-center text-xs font-medium text-white" role="status">
-            <WifiOff className="size-3.5 shrink-0" /> {t('m_offline')}
-          </p>
-        )}
+        <SyncBar />
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">

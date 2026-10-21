@@ -18,9 +18,10 @@ import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.j
 import { seed } from './seed.js';
 import {
   APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, setWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
-  getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
+  activeStepTemplate, getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 import { listNotifications, markAllRead, markRead, scanOverdue } from './notifications.js';
+import { applyOp } from './sync.js';
 
 seed();
 const resynced = syncStatuses();
@@ -74,6 +75,10 @@ app.get('/api/master/units', wrap((req) => {
 app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query)));
 
 app.get('/api/master/roles', wrap(() => db.prepare('SELECT id, code, name FROM roles ORDER BY name').all()));
+// Offline copies for the mechanic app: the steps a new work order gets, and every active spare part (compact).
+app.get('/api/master/step-template', wrap(() => activeStepTemplate()));
+app.get('/api/master/spareparts/all', wrap(() =>
+  db.prepare('SELECT id, part_number, part_name, uom, brand, stock FROM spareparts WHERE is_active = 1 ORDER BY part_number').all()));
 app.get('/api/master/spareparts', wrap((req) => {
   const s = `%${String(req.query.search ?? '').trim()}%`;
   return db.prepare(`SELECT id, part_number, part_name, uom, brand, stock FROM spareparts
@@ -225,6 +230,9 @@ app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)/parts/:lineId(\\d+)', 
 
 app.post('/api/work-orders/:id/additional-work', requirePermission('wo.progress'), wrap((req) =>
   addAdditionalWork(req.params.id, req.body?.name)));
+
+/* ---------- Offline sync (mechanic app outbox) ---------- */
+app.post('/api/sync', wrap((req) => applyOp(req.body ?? {}, req.user)));
 
 /* ---------- Notifications (own only) ---------- */
 app.get('/api/notifications', wrap((req) => listNotifications(req.user.id, req.query)));

@@ -1,6 +1,7 @@
 import { clsx } from 'clsx';
 import { ChevronRight, RefreshCcw, Search, Timer } from 'lucide-react';
-import { useDeferredValue, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useDeferredValue, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
 import { SiteFilter } from '../../components/SiteSelect';
@@ -8,7 +9,8 @@ import { EmptyState, Input, Skeleton } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { formatDateTime, formatDuration } from '../../lib/format';
 import { useI18n, type TKey } from '../../lib/i18n';
-import { useWorkOrders, type WoListParams } from '../../lib/queries';
+import { useOutbox } from '../../lib/offline';
+import { fetchWorkOrder, useWorkOrders, type WoListParams } from '../../lib/queries';
 import type { Permission, WorkOrder } from '../../lib/types';
 
 const NOT_FINISHED = 'OPEN,ON_PROGRESS,WAITING';
@@ -26,6 +28,8 @@ const TABS: { id: TabId; key: TKey; empty: TKey; permission?: Permission; params
 
 function JobCard({ wo }: { wo: WorkOrder }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const unsent = useOutbox(user?.id).some((o) => o.wo_uuid === wo.wo_uuid);
   return (
     <Link to={`/m/wo/${wo.wo_uuid}`} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition active:scale-[0.99] hover:border-primary/40">
       <div className="min-w-0 flex-1">
@@ -38,6 +42,7 @@ function JobCard({ wo }: { wo: WorkOrder }) {
           <div className="flex shrink-0 flex-col items-end gap-1">
             <StatusBadge status={wo.status} />
             {wo.approval_status !== 'APPROVE' && <ApprovalBadge status={wo.approval_status} />}
+            {unsent && <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">{t('m_not_synced')}</span>}
           </div>
         </div>
         <p className="mt-2 line-clamp-2 text-sm">{wo.problem}</p>
@@ -77,6 +82,16 @@ export function JobsPage() {
     requests: useWorkOrders({ ...TABS[2].params(me), search: term, site, limit: 50 }, 30_000),
     done: useWorkOrders({ ...TABS[3].params(me), search: term, site, limit: 20 }, 30_000),
   };
+  // Keep the details of these jobs on the phone, so they open without signal.
+  const qc = useQueryClient();
+  const queue = useOutbox(user?.id);
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    const offlineNew = new Set(queue.filter((o) => o.type === 'wo.create').map((o) => o.wo_uuid));
+    const ids = [queries.active, queries.available, queries.requests].flatMap((q) => q.data?.data ?? []).map((w) => w.wo_uuid).filter((id) => !offlineNew.has(id));
+    for (const id of new Set(ids)) void qc.prefetchQuery({ queryKey: ['work-order', id], queryFn: () => fetchWorkOrder(id), staleTime: 60_000 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queries.active.data, queries.available.data, queries.requests.data, qc]);
   const tab = tabs.find((x) => x.id === tabId) ?? tabs[0];
   const current = queries[tab.id];
   const refreshing = Object.values(queries).some((q) => q.isFetching);
@@ -134,7 +149,8 @@ export function JobsPage() {
         <div className="space-y-3">
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
         </div>
-      ) : current.isError ? (
+      ) : current.isError && !current.data ? (
+        // With an offline copy the saved jobs are shown even when the last refresh failed (no signal).
         <EmptyState title={(current.error as Error).message} />
       ) : current.data?.data.length ? (
         <div className="space-y-3">

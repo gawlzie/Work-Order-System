@@ -11,6 +11,8 @@ import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
 import type { WoJobCode, WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
 import { JobParts } from './JobParts';
+import { entryRef, useAct } from '../lib/act';
+import { newRef } from '../lib/offline';
 import { useConfirm } from './confirm';
 import { useToast } from './toast';
 import { Button, Field, Input, Modal, Select } from './ui';
@@ -29,6 +31,9 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
   const confirm = useConfirm();
   const qc = useQueryClient();
   const online = useOnline();
+  const act = useAct();
+  // Mechanic app: actions go through the outbox (also offline); the admin page (manual) talks to the server directly.
+  const queued = !manual;
   const repair = [...wo.steps, ...wo.additional_work].find((s) => s.allow_add_sub);
   const workable = wo.approval_status !== 'REJECT';
   const admin = can('wo.approve');
@@ -140,7 +145,15 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
     const job = jobOptions.find((j) => String(j.id) === jobId);
     const mechanic = mechanics.data?.find((m) => String(m.id) === mechanicId);
     const vars = { job: job ? `${job.job_code} · ${job.job_name}` : '', mechanic: mechanic?.full_name ?? '' };
-    confirm({ message: typeTimes ? t('confirm_add_job_manual', { ...vars, d: formatDuration(typedDuration(start, finish)) }) : t('confirm_add_job', vars) }, () => add.mutate());
+    confirm({ message: typeTimes ? t('confirm_add_job_manual', { ...vars, d: formatDuration(typedDuration(start, finish)) }) : t('confirm_add_job', vars) }, () => {
+      if (!queued || !job) return add.mutate();
+      act({
+        type: 'job.add', wo_uuid: wo.wo_uuid, label: t('op_job_add', { job: job.job_code }), job_code_id: job.id, mechanic_id: Number(mechanicId), entry_ref: newRef(),
+        view: { job_code: job.job_code, job_name: job.job_name, category_name: job.category_name ?? wo.category, standard_duration: job.standard_duration, mechanic_name: mechanic?.full_name ?? '' },
+      });
+      setJobId('');
+      setErrors({});
+    });
   };
   const openEdit = (j: WoJobCode) => {
     setEditing(j);
@@ -193,9 +206,13 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
             onChange={(e) => {
               const id = e.target.value;
               const name = categories.data?.find((c) => String(c.id) === id)?.name ?? '';
-              if (id) confirm({ message: t('confirm_category', { name }) }, () => setCategory.mutate(id));
+              if (!id) return;
+              // Same rule as the server: job codes of the current category must go first.
+              if (queued && wo.job_codes.length) return toast('error', t('category_has_jobs'));
+              confirm({ message: t('confirm_category', { name }) }, () =>
+                queued ? act({ type: 'category.set', wo_uuid: wo.wo_uuid, label: t('op_category', { name }), category_id: Number(id), view: { category_name: name } }) : setCategory.mutate(id));
             }}
-            disabled={!online || setCategory.isPending}
+            disabled={(!queued && !online) || setCategory.isPending}
             aria-label={t('category')}
           >
             <option value="">{t('choose_category_first')}</option>
@@ -231,26 +248,26 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                     ) : null}
                   </p>
                 )}
-                <JobParts wo={wo} entry={j} editable={editable} onDone={done} />
+                <JobParts wo={wo} entry={j} editable={editable} onDone={done} queued={queued} />
               </div>
               {canTime && !j.finished_at && (
                 j.started_at ? (
-                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'finish')} onClick={() => confirm({ message: t('confirm_job_finish', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'success' }, () => timer.mutate({ entry: j, action: 'finish' }))}>
+                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!queued && !online} loading={busy(j, 'finish')} onClick={() => confirm({ message: t('confirm_job_finish', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'success' }, () => (queued ? act({ type: 'job.finish', wo_uuid: wo.wo_uuid, label: t('op_job_finish', { job: j.job_code }), ...entryRef(j) }) : timer.mutate({ entry: j, action: 'finish' })))}>
                     <Check className="size-4" /> {t('finish')}
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!online} loading={busy(j, 'start')} onClick={() => confirm({ message: t('confirm_job_start', { job: j.job_code, mechanic: j.mechanic_name }) }, () => timer.mutate({ entry: j, action: 'start' }))}>
+                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!queued && !online} loading={busy(j, 'start')} onClick={() => confirm({ message: t('confirm_job_start', { job: j.job_code, mechanic: j.mechanic_name }) }, () => (queued ? act({ type: 'job.start', wo_uuid: wo.wo_uuid, label: t('op_job_start', { job: j.job_code }), ...entryRef(j) }) : timer.mutate({ entry: j, action: 'start' })))}>
                     <Play className="size-4" /> {t('start')}
                   </Button>
                 )
               )}
               {typeTimes && (
-                <Button size="icon" variant="ghost" className="no-print shrink-0" title={t('job_time_edit')} aria-label={t('job_time_edit')} disabled={!online} onClick={() => openEdit(j)}>
+                <Button size="icon" variant="ghost" className="no-print shrink-0" title={t('job_time_edit')} aria-label={t('job_time_edit')} disabled={!queued && !online} onClick={() => openEdit(j)}>
                   <Pencil className="size-4" />
                 </Button>
               )}
               {editable && (
-                <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!online} loading={remove.isPending && remove.variables === j.id} onClick={() => confirm({ message: j.parts?.length ? t('confirm_remove_job_parts', { job: j.job_code, mechanic: j.mechanic_name, n: j.parts.length }) : t('confirm_remove_job', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'destructive', confirmLabel: t('delete') }, () => remove.mutate(j.id))}>
+                <Button size="icon" variant="ghost" className="no-print shrink-0 text-destructive" title={t('delete')} aria-label={t('delete')} disabled={!queued && !online} loading={remove.isPending && remove.variables === j.id} onClick={() => confirm({ message: j.parts?.length ? t('confirm_remove_job_parts', { job: j.job_code, mechanic: j.mechanic_name, n: j.parts.length }) : t('confirm_remove_job', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'destructive', confirmLabel: t('delete') }, () => (queued ? act({ type: 'job.remove', wo_uuid: wo.wo_uuid, label: t('op_job_remove', { job: j.job_code }), ...entryRef(j) }) : remove.mutate(j.id)))}>
                   <Trash2 className="size-4" />
                 </Button>
               )}
@@ -296,7 +313,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
               </p>
             </>
           )}
-          <Button variant="outline" onClick={submit} loading={add.isPending} disabled={!online} className={clsx(typeTimes && 'sm:justify-self-end')}>
+          <Button variant="outline" onClick={submit} loading={add.isPending} disabled={!queued && !online} className={clsx(typeTimes && 'sm:justify-self-end')}>
             <Plus className="size-4" /> {t('add_job_code_short')}
           </Button>
           {typeTimes && <p className="text-xs text-muted-foreground sm:col-span-2">{t('job_time_manual_hint')}</p>}

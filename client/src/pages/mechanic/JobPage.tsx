@@ -1,4 +1,3 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareText, Play, Plus, RefreshCcw, Timer, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -10,13 +9,13 @@ import { WoJobCodes } from '../../components/WoJobCodes';
 import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
 import { Button, Card, EmptyState, Input, Spinner, Textarea } from '../../components/ui';
-import { api } from '../../lib/api';
+import { stepRef, useAct } from '../../lib/act';
 import { useAuth } from '../../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
-import { useOnline } from '../../lib/pwa';
+import { newRef, useOutbox } from '../../lib/offline';
 import { useWorkOrder } from '../../lib/queries';
-import type { Step, WorkOrderDetail } from '../../lib/types';
+import type { Step } from '../../lib/types';
 
 /** Re-renders every `ms` so running timers stay current. */
 function useTick(ms: number) {
@@ -49,43 +48,17 @@ export function JobPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const qc = useQueryClient();
-  const online = useOnline();
-  const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
+  const { data: wo, isLoading, error, refetch, isFetching } = useWorkOrder(id);
   const [remarks, setRemarks] = useState('');
   const [extra, setExtra] = useState('');
+  // Every action goes through the outbox, so the steps can be done without signal too.
+  const act = useAct();
+  const unsent = useOutbox(user?.id).filter((o) => o.wo_uuid === id).length;
   useTick(1_000);
 
-  const onDone = (data: WorkOrderDetail) => {
-    qc.setQueryData(['work-order', id], data);
-    qc.invalidateQueries({ queryKey: ['work-orders'] });
-    qc.invalidateQueries({ queryKey: ['dashboard'] });
-  };
-
-  const progress = useMutation({
-    mutationFn: ({ step, action }: { step: Step; action: 'start' | 'finish' }) =>
-      api<WorkOrderDetail>(`/work-orders/${id}/steps/${step.id}/${action}`, { method: 'POST', body: { remarks: action === 'finish' && !step.parent_id ? remarks : undefined } }),
-    onSuccess: (data, { step, action }) => {
-      onDone(data);
-      if (action === 'finish' && !step.parent_id) {
-        setRemarks('');
-        toast('success', `${step.step_name} · ${t('done')}`);
-      }
-    },
-    onError: (err) => toast('error', (err as Error).message),
-  });
-
-  const addExtra = useMutation({
-    mutationFn: () => api<WorkOrderDetail>(`/work-orders/${id}/additional-work`, { method: 'POST', body: { name: extra } }),
-    onSuccess: (data) => {
-      onDone(data);
-      setExtra('');
-    },
-    onError: (err) => toast('error', (err as Error).message),
-  });
-
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
-  if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/m')}>{t('m_jobs')}</Button>} />;
+  // With an offline copy the job stays usable even when the last refresh failed.
+  if (!wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/m')}>{t('m_jobs')}</Button>} />;
 
   // Work can start before approval; a rejected WO cannot be worked on.
   const workable = wo.approval_status !== 'REJECT';
@@ -93,11 +66,22 @@ export function JobPage() {
   const allTop = [...wo.steps, ...wo.additional_work];
   const current = allTop.find((s) => !s.finished_at);
   const doneCount = allTop.filter((s) => s.finished_at).length;
-  const busy = (step: Step, action: 'start' | 'finish') => progress.isPending && progress.variables?.step.id === step.id && progress.variables.action === action;
   const run = (step: Step, action: 'start' | 'finish') =>
     confirm(
       { message: t(action === 'start' ? 'confirm_start_step' : 'confirm_finish_step', { step: `${step.step_no}. ${step.step_name}` }), tone: action === 'finish' ? 'success' : 'primary' },
-      () => progress.mutate({ step, action }),
+      () => {
+        act({
+          type: action === 'start' ? 'step.start' : 'step.finish',
+          wo_uuid: wo.wo_uuid,
+          label: t(action === 'start' ? 'op_step_start' : 'op_step_finish', { step: `${step.step_no}. ${step.step_name}` }),
+          ...stepRef(step),
+          ...(action === 'finish' && remarks.trim() ? { remarks: remarks.trim() } : {}),
+        });
+        if (action === 'finish') {
+          setRemarks('');
+          toast('success', `${step.step_name} · ${t('done')}`, navigator.onLine ? undefined : t('m_saved_offline'));
+        }
+      },
     );
   // The job code step (Step 7) can only be finished when it has job codes and all of them are finished.
   const jobsBlock = current?.allow_add_sub
@@ -120,6 +104,8 @@ export function JobPage() {
           <div className="min-w-0">
             <h1 className="text-2xl leading-tight font-semibold">{wo.unit_number}</h1>
             <p className="text-sm text-muted-foreground">{wo.wo_number} · {wo.unit_code}</p>
+            {unsent > 0 && <p className="mt-1 inline-flex rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">{t('m_not_synced')} · {unsent}</p>}
+            {error && !unsent && <p className="mt-1 text-xs text-muted-foreground">{t('m_offline_copy')}</p>}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <StatusBadge status={wo.status} />
@@ -179,13 +165,13 @@ export function JobPage() {
                 current.started_at ? (
                   <div className="mt-4 space-y-3">
                     <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={t('remarks_placeholder')} maxLength={500} className="min-h-20" />
-                    <Button variant="success" className="h-14 w-full text-base" disabled={!online || !!jobsBlock} loading={busy(current, 'finish')} onClick={() => run(current, 'finish')}>
+                    <Button variant="success" className="h-14 w-full text-base" disabled={!!jobsBlock} onClick={() => run(current, 'finish')}>
                       <CheckCircle2 className="size-5" /> {t('m_finish_current')}
                     </Button>
                     {jobsBlock && <p className="text-center text-xs text-muted-foreground">{jobsBlock}</p>}
                   </div>
                 ) : (
-                  <Button className="mt-4 h-14 w-full text-base" disabled={!online} loading={busy(current, 'start')} onClick={() => run(current, 'start')}>
+                  <Button className="mt-4 h-14 w-full text-base" onClick={() => run(current, 'start')}>
                     <Play className="size-5" /> {wo.mechanic_id ? t('m_start') : t('m_take_job')}
                   </Button>
                 )
@@ -251,11 +237,15 @@ export function JobPage() {
             className="flex gap-2 border-t border-border p-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (extra.trim().length >= 3) confirm({ message: t('confirm_add_extra', { name: extra.trim() }) }, () => addExtra.mutate());
+              if (extra.trim().length >= 3)
+                confirm({ message: t('confirm_add_extra', { name: extra.trim() }) }, () => {
+                  act({ type: 'work.add', wo_uuid: wo.wo_uuid, label: t('op_work_add', { name: extra.trim() }), name: extra.trim(), step_ref: newRef() });
+                  setExtra('');
+                });
             }}
           >
             <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={t('add_additional_work')} maxLength={120} className="h-11" />
-            <Button type="submit" variant="outline" className="h-11" loading={addExtra.isPending} disabled={!online || extra.trim().length < 3} aria-label={t('create')}>
+            <Button type="submit" variant="outline" className="h-11" disabled={extra.trim().length < 3} aria-label={t('create')}>
               <Plus className="size-5" />
             </Button>
           </form>
