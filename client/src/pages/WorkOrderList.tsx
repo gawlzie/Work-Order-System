@@ -14,10 +14,10 @@ import { api, download, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatDateTime, formatDuration } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
-import { useCategories, useEmployees, useJobCodeOptions, useUnits, useWorkOrders, type WoListParams } from '../lib/queries';
+import { useCategories, useEmployees, useUnits, useWorkOrders, type WoListParams } from '../lib/queries';
 import type { WorkOrder } from '../lib/types';
 
-const FILTER_KEYS = ['status', 'approval_status', 'channel_source', 'site', 'unit_id', 'mechanic_id', 'category_id', 'job_code_id', 'created_start', 'created_end'] as const;
+const FILTER_KEYS = ['status', 'approval_status', 'channel_source', 'site', 'unit_id', 'mechanic_id', 'category_id', 'created_start', 'created_end'] as const;
 
 type Dialog = { kind: 'approve' | 'reject' | 'delete'; wo: WorkOrder } | null;
 
@@ -63,7 +63,6 @@ export function WorkOrderListPage() {
   const units = useUnits(true);
   const mechanics = useEmployees('mechanic');
   const categories = useCategories(true);
-  const jobCodes = useJobCodeOptions(true);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['work-orders'] });
@@ -224,14 +223,6 @@ export function WorkOrderListPage() {
               <Select value={params.category_id} onChange={(e) => update({ category_id: e.target.value })}>
                 <option value="">{t('all')}</option>
                 {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </Field>
-            <Field label={t('job_code')}>
-              <Select value={params.job_code_id} onChange={(e) => update({ job_code_id: e.target.value })}>
-                <option value="">{t('all')}</option>
-                {jobCodes.data?.filter((j) => !params.category_id || String(j.category_id) === String(params.category_id)).map((j) => (
-                  <option key={j.id} value={j.id}>{j.job_code} · {j.job_name}</option>
-                ))}
               </Select>
             </Field>
             <div className="flex items-end">

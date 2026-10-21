@@ -19,7 +19,6 @@ export interface WoListParams {
   unit_id?: string;
   mechanic_id?: string;
   category_id?: string;
-  job_code_id?: string;
   created_by?: string;
   site?: string;
 }
