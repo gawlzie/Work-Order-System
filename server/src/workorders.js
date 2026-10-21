@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hasPermission } from './auth.js';
 import { db, roleHas, tx } from './db.js';
 import { NOTIFICATION, notify } from './notifications.js';
-import { inScope, woCondition } from './scope.js';
+import { allSites, inScope, woCondition } from './scope.js';
 
 export const STATUS = { OPEN: 'OPEN', ON_PROGRESS: 'ON_PROGRESS', WAITING: 'WAITING', FINISH: 'FINISH' };
 export const APPROVAL = { WAITING: 'WAITING', APPROVE: 'APPROVE', REJECT: 'REJECT' };
@@ -400,10 +400,28 @@ function assertMeters(data, current = null) {
   }
 }
 
+/**
+ * Site of a new work order. Admin Company (site.all) picks it (`body.site`) and the unit must be there; without a pick
+ * (e.g. from the mechanic app) it is the unit's site. Everyone else raises work orders for their own site.
+ */
+function woSite(body, unitId, user) {
+  const unitSite = db.prepare('SELECT site FROM units WHERE id = ?').get(unitId)?.site ?? null;
+  if (!user) return unitSite;
+  if (!allSites(user)) return user.site ?? unitSite;
+  const picked = String(body?.site ?? '').trim();
+  if (!picked) return unitSite;
+  const site = db.prepare('SELECT site_name FROM sites WHERE site_name = ? COLLATE NOCASE AND is_active = 1').get(picked)?.site_name;
+  if (!site || !inScope(user, site)) throw Object.assign(new HttpError(422, 'Choose an active site'), { errors: { site: 'Choose an active site' } });
+  if (unitSite && unitSite.toLowerCase() !== site.toLowerCase())
+    throw Object.assign(new HttpError(422, `Unit is at ${unitSite}, not at ${site}`), { errors: { unit_id: `Unit is at ${unitSite}` } });
+  return site;
+}
+
 /** `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there; `silent`: no notification (example data). */
 export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
   const data = validatePayload(body);
   assertRefs(data, {}, user);
+  const site = woSite(body, data.unit_id, user);
   assertMeters(data);
   const open = db
     .prepare("SELECT wo_number FROM work_orders WHERE unit_id = ? AND status != 'FINISH' AND approval_status != 'REJECT'")
@@ -419,8 +437,8 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
     db.prepare(
       `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, maintenance_type, maintenance_other, hm, km, site,
         status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT site FROM units WHERE id = ?), 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, data.unit_id,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, site,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
     if (!opts.silent) notify(NOTIFICATION.CREATED, wo_uuid, { actorId: user.id });

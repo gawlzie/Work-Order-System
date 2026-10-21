@@ -4,16 +4,26 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MaintenanceTypeField, maintenanceErrors } from '../components/MaintenanceType';
 import { MeterFields, meterErrors } from '../components/MeterFields';
+import { SiteSelect } from '../components/SiteSelect';
 import { UnitSite } from '../components/UnitSite';
 import { useToast } from '../components/toast';
 import { Button, Card, Field, Modal, PageHeader, Select, Spinner, Textarea } from '../components/ui';
 import { api, ApiError } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useEmployees, useUnits, useWorkOrder } from '../lib/queries';
-import type { WorkOrderDetail } from '../lib/types';
+import type { Employee, WorkOrderDetail } from '../lib/types';
 
-const EMPTY = { unit_id: '', driver_id: '', mechanic_id: '', hm: '', km: '', maintenance_type: '', maintenance_other: '', problem: '' };
+const EMPTY = { site: '', unit_id: '', driver_id: '', mechanic_id: '', hm: '', km: '', maintenance_type: '', maintenance_other: '', problem: '' };
 type Form = typeof EMPTY;
+
+const sameSite = (a?: string | null, b?: string | null) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+/** People at `site`; everyone when nobody is placed there (a site without its own drivers / mechanics). */
+const atSite = (people: Employee[] | undefined, site: string) => {
+  if (!people || !site) return people;
+  const here = people.filter((p) => sameSite(p.site, site));
+  return here.length ? here : people;
+};
 
 export function WorkOrderFormPage() {
   const { id } = useParams();
@@ -26,6 +36,9 @@ export function WorkOrderFormPage() {
   const units = useUnits();
   const drivers = useEmployees('driver');
   const mechanics = useEmployees('mechanic');
+  const { can } = useAuth();
+  // Admin Company picks the site of a new work order; everyone else raises it for their own site (set by the server).
+  const pickSite = !isEdit && can('site.all');
 
   const [form, setForm] = useState<Form>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
@@ -35,6 +48,7 @@ export function WorkOrderFormPage() {
     const wo = existing.data;
     if (wo) {
       setForm({
+        site: wo.site ?? '',
         unit_id: String(wo.unit_id),
         driver_id: String(wo.driver_id),
         mechanic_id: wo.mechanic_id ? String(wo.mechanic_id) : '',
@@ -64,6 +78,21 @@ export function WorkOrderFormPage() {
     },
   });
 
+  // Picking a site narrows the lists to it and clears choices from another site.
+  const unitOptions = pickSite && form.site ? units.data?.filter((u) => sameSite(u.site, form.site)) : units.data;
+  const driverOptions = pickSite ? atSite(drivers.data, form.site) : drivers.data;
+  const mechanicOptions = pickSite ? atSite(mechanics.data, form.site) : mechanics.data;
+  const chooseSite = (site: string) => {
+    setForm((f) => ({
+      ...f,
+      site,
+      unit_id: units.data?.some((u) => String(u.id) === f.unit_id && sameSite(u.site, site)) ? f.unit_id : '',
+      driver_id: atSite(drivers.data, site)?.some((d) => String(d.id) === f.driver_id) ? f.driver_id : '',
+      mechanic_id: atSite(mechanics.data, site)?.some((m) => String(m.id) === f.mechanic_id) ? f.mechanic_id : '',
+    }));
+    setErrors((er) => ({ ...er, site: undefined, unit_id: undefined }));
+  };
+
   const set = (k: keyof Form) => (e: { target: { value: string } }) => {
     setForm((f) => ({ ...f, [k]: e.target.value }));
     setErrors((er) => ({ ...er, [k]: undefined }));
@@ -72,6 +101,7 @@ export function WorkOrderFormPage() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const next: typeof errors = {};
+    if (pickSite && !form.site) next.site = t('select_site');
     if (!form.unit_id) next.unit_id = 'Unit is required';
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
@@ -101,11 +131,16 @@ export function WorkOrderFormPage() {
             errors={errors}
             onChange={(field, value) => set(field)({ target: { value } })}
           />
+          {pickSite && (
+            <Field label={t('site')} required error={errors.site} className="sm:col-span-2">
+              <SiteSelect value={form.site} invalid={!!errors.site} onChange={(s) => chooseSite(s.site_name)} />
+            </Field>
+          )}
           <Field label={`${t('unit')} (Dump Truck)`} required error={errors.unit_id}>
-            <Select value={form.unit_id} onChange={set('unit_id')} invalid={!!errors.unit_id}>
-              <option value="">{t('select_unit')}</option>
+            <Select value={form.unit_id} onChange={set('unit_id')} invalid={!!errors.unit_id} disabled={pickSite && !form.site}>
+              <option value="">{pickSite && !form.site ? t('select_site') : t('select_unit')}</option>
               {wo && units.data && !units.data.some((u) => u.id === wo.unit_id) && <option value={wo.unit_id}>{wo.unit_number} · {wo.unit_code}</option>}
-              {units.data?.map((u) => (
+              {unitOptions?.map((u) => (
                 <option key={u.id} value={u.id}>{u.unit_number} · {u.unit_code} · {u.brand} {u.model}</option>
               ))}
             </Select>
@@ -115,14 +150,14 @@ export function WorkOrderFormPage() {
             <Select value={form.driver_id} onChange={set('driver_id')} invalid={!!errors.driver_id}>
               <option value="">{t('select_driver')}</option>
               {wo && drivers.data && !drivers.data.some((d) => d.id === wo.driver_id) && <option value={wo.driver_id}>{wo.driver_name}</option>}
-              {drivers.data?.map((d) => <option key={d.id} value={d.id}>{d.full_name} ({d.employee_id})</option>)}
+              {driverOptions?.map((d) => <option key={d.id} value={d.id}>{d.full_name} ({d.employee_id}){pickSite && form.site && !sameSite(d.site, form.site) ? ` · ${d.site ?? '-'}` : ''}</option>)}
             </Select>
           </Field>
           <Field label={t('pic_mechanic')} error={errors.mechanic_id}>
             <Select value={form.mechanic_id} onChange={set('mechanic_id')}>
               <option value="">{t('select_mechanic')}</option>
               {wo?.mechanic_id && mechanics.data && !mechanics.data.some((m) => m.id === wo.mechanic_id) && <option value={wo.mechanic_id}>{wo.mechanic_name}</option>}
-              {mechanics.data?.map((m) => <option key={m.id} value={m.id}>{m.full_name} ({m.employee_id})</option>)}
+              {mechanicOptions?.map((m) => <option key={m.id} value={m.id}>{m.full_name} ({m.employee_id}){pickSite && form.site && !sameSite(m.site, form.site) ? ` · ${m.site ?? '-'}` : ''}</option>)}
             </Select>
           </Field>
           <MeterFields

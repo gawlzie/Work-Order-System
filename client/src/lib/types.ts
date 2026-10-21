@@ -59,6 +59,8 @@ export interface Employee {
   employee_id: string;
   full_name: string;
   role: string;
+  /** Site name (driver / mechanic pickers). */
+  site?: string | null;
 }
 
 export interface RoleOption {
