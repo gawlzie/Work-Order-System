@@ -1,5 +1,6 @@
 import { clsx } from 'clsx';
-import { ClipboardList, PlusCircle, User as UserIcon, Wrench } from 'lucide-react';
+import { BrandMark } from '../../components/Brand';
+import { ClipboardList, PlusCircle, User as UserIcon } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { NotificationBell } from '../../components/NotificationBell';
 import { SyncBar } from '../../components/SyncBar';
@@ -35,9 +36,7 @@ export function MechanicLayout() {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-border bg-card/90 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-2.5 px-4">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-white">
-            <Wrench className="size-4" />
-          </span>
+          <BrandMark className="size-8" />
           <div className="min-w-0 leading-tight">
             <p className="text-sm font-semibold">WO ITI</p>
             <p className="truncate text-[11px] text-muted-foreground">{t('mechanic_app')}</p>

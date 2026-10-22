@@ -1,6 +1,6 @@
 // Service worker for the installable web app. It caches the app shell so the app opens without a network,
 // but never caches /api: work-order data always comes live from the server.
-const CACHE = 'wos-shell-v1';
+const CACHE = 'wos-shell-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

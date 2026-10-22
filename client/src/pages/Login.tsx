@@ -1,4 +1,5 @@
-import { Eye, EyeOff, Wrench } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import { BrandLogo } from '../components/Brand';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Button, Field, Input } from '../components/ui';
@@ -44,11 +45,8 @@ export function LoginPage() {
       <div className="relative hidden overflow-hidden bg-[#030712] p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute -top-32 -right-32 size-96 rounded-full bg-blue-600/30 blur-3xl" />
         <div className="absolute -bottom-40 -left-20 size-96 rounded-full bg-indigo-500/20 blur-3xl" />
-        <div className="relative flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-lg bg-primary">
-            <Wrench className="size-5" />
-          </div>
-          <span className="font-semibold">Inline Technology International</span>
+        <div className="relative">
+          <BrandLogo onDark className="h-12" />
         </div>
         <div className="relative">
           <h1 className="text-4xl leading-tight font-semibold">{t('app_name')}</h1>
@@ -62,9 +60,7 @@ export function LoginPage() {
       <div className="flex items-center justify-center p-6">
         <form onSubmit={submit} className="w-full max-w-sm space-y-5">
           <div className="lg:hidden">
-            <div className="mb-4 flex size-11 items-center justify-center rounded-lg bg-primary text-white">
-              <Wrench className="size-5" />
-            </div>
+            <BrandLogo className="mb-4 h-11" />
           </div>
           <div>
             <h2 className="text-2xl font-semibold">{t('login_title')}</h2>

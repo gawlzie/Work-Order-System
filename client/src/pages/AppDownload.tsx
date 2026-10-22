@@ -1,4 +1,5 @@
-import { CheckCircle2, ClipboardList, ExternalLink, Globe, Smartphone, Timer, Wrench } from 'lucide-react';
+import { CheckCircle2, ClipboardList, ExternalLink, Globe, Smartphone, Timer } from 'lucide-react';
+import { BrandMark } from '../components/Brand';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, PageHeader } from '../components/ui';
 import { useI18n } from '../lib/i18n';
@@ -54,7 +55,7 @@ export function AppDownloadPage() {
               <div className="absolute top-2 left-1/2 h-4 w-20 -translate-x-1/2 rounded-full bg-foreground/90" />
               <div className="flex h-full flex-col gap-2 p-3 pt-9">
                 <div className="flex items-center gap-2 rounded-lg bg-primary p-2 text-white">
-                  <Wrench className="size-4" />
+                  <span className="rounded bg-white p-0.5"><BrandMark className="size-4" /></span>
                   <span className="text-xs font-semibold">WO ITI</span>
                 </div>
                 {['DT 105', 'DT 112', 'DT 118', 'DT 103'].map((u, i) => (

@@ -1,4 +1,5 @@
 import { clsx } from 'clsx';
+import { BrandLogo, BrandMark } from './Brand';
 import { ClipboardList, Hash, LayoutDashboard, ListOrdered, LogOut, MapPin, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Tags, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -61,13 +62,11 @@ export function Layout() {
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
-      <div className={clsx('mb-4 flex h-12 shrink-0 items-center gap-2.5 px-2', collapsed && 'lg:justify-center lg:px-0')}>
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
-          <Wrench className="size-5" />
-        </div>
-        <div className={clsx('leading-tight', collapsed && 'lg:hidden')}>
-          <p className="text-sm font-semibold">WO ITI</p>
-          <p className="text-[11px] text-muted-foreground">{t('app_name')}</p>
+      <div className={clsx('mb-4 flex min-h-12 shrink-0 items-center gap-2.5 px-2', collapsed && 'lg:justify-center lg:px-0')}>
+        {collapsed && <BrandMark className="hidden size-9 shrink-0 lg:block" />}
+        <div className={clsx('min-w-0 leading-tight', collapsed && 'lg:hidden')}>
+          <BrandLogo className="h-9" />
+          <p className="mt-1 text-[11px] text-muted-foreground">WO ITI · {t('app_name')}</p>
         </div>
         <button className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-muted lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close menu">
           <X className="size-5" />
@@ -126,9 +125,7 @@ export function Layout() {
             {collapsed ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
           </button>
           <NavLink to="/" className="flex items-center gap-2 lg:hidden">
-            <span className="flex size-7 items-center justify-center rounded-md bg-primary text-white">
-              <Wrench className="size-4" />
-            </span>
+            <BrandMark className="size-7" />
             <span className="text-sm font-semibold max-[359px]:hidden">WO ITI</span>
           </NavLink>
           <div className="ml-auto flex items-center gap-1">
