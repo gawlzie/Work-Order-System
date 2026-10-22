@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react';
 import loginPicture from '../assets/brand/login-fleet-maintenance.webp';
-import { BrandLogo } from '../components/Brand';
+import { BrandLogo, BrandMark } from '../components/Brand';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Button, Field, Input } from '../components/ui';
@@ -49,8 +49,10 @@ export function LoginPage() {
         <img src={loginPicture} alt={t('login_image_alt')} className="relative size-full object-contain" />
       </div>
 
-      <div className="flex flex-col items-center justify-center p-6">
-        <form onSubmit={submit} className="w-full max-w-sm space-y-5">
+      <div className="relative flex flex-col items-center justify-center overflow-hidden p-6">
+        {/* Brand mark behind the form: 10x the logo above it (h-11), at 20%; narrower on phones so it stays whole. */}
+        <BrandMark decorative className="pointer-events-none absolute top-1/2 left-1/2 h-[min(440px,85vw)] w-auto -translate-x-1/2 -translate-y-1/2 opacity-20 select-none" />
+        <form onSubmit={submit} className="relative w-full max-w-sm space-y-5">
           <BrandLogo className="mb-4 h-11" />
           <div>
             <h2 className="text-2xl font-semibold">{t('login_title')}</h2>
@@ -82,7 +84,7 @@ export function LoginPage() {
             </div>
           </div>
         </form>
-        <p className="mt-8 text-xs text-muted-foreground">© {new Date().getFullYear()} Inline Technology International</p>
+        <p className="relative mt-8 text-xs text-muted-foreground">© {new Date().getFullYear()} Inline Technology International</p>
       </div>
     </div>
   );

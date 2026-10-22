@@ -19,7 +19,7 @@ export function BrandLogo({ className, onDark }: { className?: string; onDark?: 
   );
 }
 
-/** The dot mark alone, for small spots (collapsed sidebar, phone header). */
-export function BrandMark({ className }: { className?: string }) {
-  return <img src={mark} alt={NAME} className={clsx('object-contain', className)} />;
+/** The dot mark alone, for small spots (collapsed sidebar, phone header); `decorative` hides it from screen readers. */
+export function BrandMark({ className, decorative }: { className?: string; decorative?: boolean }) {
+  return <img src={mark} alt={decorative ? '' : NAME} aria-hidden={decorative || undefined} className={clsx('object-contain', className)} />;
 }
