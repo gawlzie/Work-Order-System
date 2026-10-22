@@ -89,7 +89,7 @@ export function EmployeeMasterPage() {
                   )}
                 </MetaItem>
                 <MetaItem label={t('phone')}>{e.phone ? <a href={`tel:${e.phone}`} className="text-primary">{e.phone}</a> : '-'}</MetaItem>
-                <MetaItem label={t('site')}>{e.site}</MetaItem>
+                <MetaItem label={t('site')}>{e.site || t('all_sites')}</MetaItem>
               </dl>
               <div className="mt-2 -mr-2 flex justify-end gap-1">
                 <Button size="icon" variant="ghost" title={t('edit')} aria-label={t('edit')} onClick={() => setEditing(e)}><Pencil className="size-4" /></Button>
@@ -134,7 +134,7 @@ export function EmployeeMasterPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{e.phone ?? '-'}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{e.site}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{e.site || t('all_sites')}</td>
                   <td className="px-4 py-3"><ActiveBadge active={e.is_active} /></td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">
@@ -192,6 +192,8 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const hadAccount = !!employee?.has_account;
+  // A company-wide role (Admin Company) has no site: it works at every site of the company.
+  const companyWide = !!roles.find((r) => String(r.id) === form.role_id)?.all_sites;
 
   const save = useMutation({
     mutationFn: () => api<MasterEmployee>(employee ? `/employees/${employee.id}` : '/employees', { method: employee ? 'PUT' : 'POST', body: form }),
@@ -265,6 +267,7 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
           <Field label={t('company')} error={errors.company}>
             <Input value={form.company} onChange={set('company')} maxLength={100} />
           </Field>
+          {!companyWide && (
           <Field label={t('site')} error={errors.site} className="sm:col-span-2">
             <SiteSelect
               value={form.site}
@@ -276,6 +279,7 @@ function EmployeeForm({ employee, roles, onClose }: { employee: MasterEmployee |
               }}
             />
           </Field>
+          )}
           <div className="sm:col-span-2">
             <Switch checked={form.is_active} disabled={isSelf} onChange={(v) => patch({ is_active: v })} label={t('active')} description={t('employee_active_hint')} />
             {errors.is_active && <p className="mt-1 text-xs text-destructive">{errors.is_active}</p>}

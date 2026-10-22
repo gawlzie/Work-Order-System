@@ -62,7 +62,7 @@ export function AccountPage() {
         <div className="min-w-0">
           <p className="truncate font-semibold">{user.full_name}</p>
           <p className="truncate text-sm text-muted-foreground">{user.role_name} · {user.employee_id}</p>
-          <p className="truncate text-xs text-muted-foreground">{user.company} · {user.site}</p>
+          <p className="truncate text-xs text-muted-foreground">{user.company}{user.site ? ` · ${user.site}` : ''}</p>
         </div>
       </Card>
 

@@ -83,7 +83,7 @@ export function seed({ reset = false } = {}) {
       'INSERT INTO employees (employee_id, full_name, role_id, company, site, username, password_hash) VALUES (?, ?, (SELECT id FROM roles WHERE code = ?), ?, ?, ?, ?)',
     );
     for (const [eid, name, role, username] of EMPLOYEES) {
-      insEmp.run(eid, name, role, COMPANY, SITE, username, username ? hashPassword('password123') : null);
+      insEmp.run(eid, name, role, COMPANY, role === 'admin_company' ? '' : SITE, username, username ? hashPassword('password123') : null);
     }
 
     const insUnit = db.prepare('INSERT INTO units (unit_code, unit_number, unit_type, brand, model, serial_number, year) VALUES (?, ?, ?, ?, ?, ?, ?)');

@@ -21,7 +21,7 @@ import {
   activeStepTemplate, getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 import { listNotifications, markAllRead, markRead, scanOverdue } from './notifications.js';
-import { canSeeWo, coversRole, siteCondition } from './scope.js';
+import { ALL_SITES, canSeeWo, coversRole, siteCondition } from './scope.js';
 import { applyOp } from './sync.js';
 
 seed();
@@ -80,7 +80,7 @@ app.get('/api/master/employees', wrap((req) => assignableEmployees(req.query, re
 // Only roles the user may hand out (no more rights than their own).
 app.get('/api/master/roles', wrap((req) =>
   db.prepare('SELECT id, code, name, permissions FROM roles ORDER BY name').all()
-    .filter((r) => coversRole(req.user, JSON.parse(r.permissions))).map(({ permissions, ...r }) => r)));
+    .filter((r) => coversRole(req.user, JSON.parse(r.permissions))).map(({ permissions, ...r }) => ({ ...r, all_sites: JSON.parse(permissions).includes(ALL_SITES) }))));
 // Offline copies for the mechanic app: the steps a new work order gets, and every active spare part (compact).
 app.get('/api/master/step-template', wrap(() => activeStepTemplate()));
 app.get('/api/master/spareparts/all', wrap(() =>

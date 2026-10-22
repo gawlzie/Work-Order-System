@@ -11,7 +11,7 @@ import { useI18n } from '../lib/i18n';
 
 export function ProfilePage() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
@@ -38,7 +38,8 @@ export function ProfilePage() {
     [t('phone'), user.phone ?? '-'],
     [t('email'), user.email ?? '-'],
     [t('company'), user.company],
-    [t('site'), user.site],
+    // Admin Company works across every site of the company and has no site of its own.
+    ...(can('site.all') ? [] : [[t('site'), user.site]]),
   ];
 
   return (

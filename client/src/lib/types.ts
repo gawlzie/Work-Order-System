@@ -67,6 +67,8 @@ export interface RoleOption {
   id: number;
   code: string;
   name: string;
+  /** Company-wide role (site.all): its employees have no site of their own. Only on the role picker list. */
+  all_sites?: boolean;
 }
 
 export interface MasterRole extends RoleOption {

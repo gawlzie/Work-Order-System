@@ -1,7 +1,7 @@
 import { hashPassword } from './auth.js';
 import { db, roleHas, tx } from './db.js';
 import { ADMIN_PERMISSIONS, PERMISSION_KEYS } from './permissions.js';
-import { coversRole, inScope, siteCondition } from './scope.js';
+import { ALL_SITES, coversRole, inScope, siteCondition } from './scope.js';
 import { DECIMAL_UOMS, HttpError, UOMS } from './workorders.js';
 
 /* ---------- Shared helpers ---------- */
@@ -175,12 +175,17 @@ function validateEmployee(body, existing, user) {
   if (!data.role_id || !db.prepare('SELECT 1 FROM roles WHERE id = ?').get(data.role_id)) errors.role_id = 'Role is required';
   if (data.phone && !/^\+?[0-9 -]{6,20}$/.test(data.phone)) errors.phone = 'Phone number is not valid';
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errors.email = 'Email is not valid';
-  const site = siteName(data.site, existing?.site);
-  if (site) data.site = site;
-  else errors.site = 'Choose an active site from the site master';
-  if (site && !inScope(user, site)) errors.site = 'You can only place employees at your own site';
   const role = data.role_id && db.prepare('SELECT permissions FROM roles WHERE id = ?').get(data.role_id);
-  if (role && !coversRole(user, JSON.parse(role.permissions))) errors.role_id = 'You cannot give a role with more rights than your own';
+  const permissions = role ? JSON.parse(role.permissions) : [];
+  if (role && !coversRole(user, permissions)) errors.role_id = 'You cannot give a role with more rights than your own';
+  // A company-wide role (Admin Company) works at every site of the company, so it has no site of its own.
+  if (permissions.includes(ALL_SITES)) data.site = '';
+  else {
+    const site = siteName(data.site, existing?.site);
+    if (site) data.site = site;
+    else errors.site = 'Choose an active site from the site master';
+    if (site && !inScope(user, site)) errors.site = 'You can only place employees at your own site';
+  }
 
   const hasAccount = flag(body.has_account, existing?.has_account ?? 0) === 1;
   const password = String(body.password ?? '');

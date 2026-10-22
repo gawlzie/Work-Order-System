@@ -33,7 +33,7 @@ export function ensureAdminExamples() {
   const added = [];
   tx(() => {
     if (!byUsername.get('admincompany')) {
-      ins.run(nextId(), 'Admin Company', roleId('admin_company'), company, sites[0]?.site_name ?? null, 'admincompany', hashPassword(PASSWORD));
+      ins.run(nextId(), 'Admin Company', roleId('admin_company'), company, '', 'admincompany', hashPassword(PASSWORD));
       added.push(`admincompany  Admin Company (all sites of ${company})`);
     }
     // The old Admin Plant account keeps its username and site, now as Admin Site.
