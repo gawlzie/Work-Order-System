@@ -2,7 +2,7 @@
   "id": "/m",
   "name": "WOS Mechanic",
   "short_name": "WOS Mechanic",
-  "description": "Work Order Service for mechanics: take jobs, start and finish repair steps, raise work orders.",
+  "description": "Work Order System for mechanics: take jobs, start and finish repair steps, raise work orders.",
   "start_url": "/m",
   "scope": "/",
   "display": "standalone",

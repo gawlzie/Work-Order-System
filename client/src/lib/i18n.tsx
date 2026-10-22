@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
 const en = {
-  app_name: 'Work Order Service',
+  app_name: 'Work Order System',
   dashboard: 'Dashboard',
   transaction: 'Transaction',
   work_order: 'Work Order',
