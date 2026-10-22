@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { DB_PATH, db, loadUser } from './db.js';
 import { createUnit } from './master.js';
 import {
-  addWoJobCode, addWoJobPart, APPROVAL, CHANNEL, createWorkOrder, progressStep, setApproval, setWoCategory, timeWoJobCode,
+  addWoJobCode, addWoJobPart, APPROVAL, CHANNEL, createWorkOrder, progressStep, setApproval, addWoCategory, timeWoJobCode,
 } from './workorders.js';
 
 // [unit code, unit number, brand, model, serial, year, site index (sites by id), start HM, start KM]
@@ -101,7 +101,7 @@ export function addUnitExamples() {
       progressStep(wo.wo_uuid, step(no), 'start', mechanic, null, opts(t));
       if (no === 7 && spec.cat) {
         const category = pick('SELECT id FROM repair_categories WHERE name = ?', spec.cat);
-        setWoCategory(wo.wo_uuid, { category_id: category.id }, mechanic);
+        addWoCategory(wo.wo_uuid, { category_id: category.id }, mechanic, opts(t));
         let jt = t + 5 * MIN;
         for (const [code, parts, running] of spec.jobs) {
           const job = code

@@ -55,7 +55,7 @@ export function NewJobPage() {
       hm: Number(form.hm.replace(',', '.')), km: Number(form.km), status: 'OPEN', approval_status: 'WAITING', reject_reason: null, approval_remarks: null, channel_source: 'MOBILE',
       created_by: user.id, created_by_name: user.full_name, created_at: now, updated_at: now, started_at: null, finished_at: null, category_id: null, category: null,
       job_code_list: null, part_list: null, job_standard_duration: null, repair_time: null, step_information: 'Not started', total_time: 0, proof_count: 0, mobile_sync_time: null,
-      steps, additional_work: [], job_codes: [], proofs: [],
+      steps, additional_work: [], categories: [], job_codes: [], proofs: [],
     };
     act({ type: 'wo.create', wo_uuid, label: t('op_wo_create', { unit: unit?.unit_number ?? '' }), body: { ...form }, view });
     toast('success', t('data_saved'), navigator.onLine ? t('m_sent_for_approval') : t('m_saved_offline'));

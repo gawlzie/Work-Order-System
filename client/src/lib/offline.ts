@@ -15,7 +15,7 @@ import { dehydrate, hydrate, type QueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { api, ApiError } from './api';
 import { idbDel, idbGet, idbSet } from './idb';
-import type { Paged, Step, User, WoJobCode, WoJobPart, WorkOrder, WorkOrderDetail } from './types';
+import { woCategories, type Paged, type Step, type User, type WoJobCode, type WoJobPart, type WorkOrder, type WorkOrderDetail } from './types';
 
 /* ---------- Outbox ---------- */
 
@@ -25,6 +25,8 @@ export type OpType =
   | 'step.finish'
   | 'work.add'
   | 'category.set'
+  | 'category.add'
+  | 'category.remove'
   | 'job.add'
   | 'job.start'
   | 'job.finish'
@@ -252,13 +254,21 @@ function applyOp(wo: WorkOrderDetail, op: OutboxOp): WorkOrderDetail {
       }
       break;
     }
+    // 'category.set': outbox entries of the older app (one category per work order); the server adds it.
     case 'category.set':
-      next = { ...next, category_id: op.category_id ?? null, category: (v.category_name as string) ?? next.category };
+    case 'category.add':
+    case 'category.remove': {
+      const now = woCategories(next);
+      const list = op.type === 'category.remove'
+        ? now.filter((c) => c.id !== op.category_id)
+        : now.some((c) => c.id === op.category_id) ? now : [...now, { id: op.category_id!, name: v.category_name, is_active: 1, added_at: op.at, job_count: 0 }];
+      next = { ...next, categories: list, category_id: list[0]?.id ?? null, category: list.map((c) => c.name).join(', ') || null };
       break;
+    }
     case 'job.add':
       if (!jobs.some((j) => j.client_ref === op.entry_ref)) {
         jobs.push({
-          id: tempId(op.entry_ref!), client_ref: op.entry_ref, job_code_id: op.job_code_id!, job_code: v.job_code, job_name: v.job_name, category_name: v.category_name,
+          id: tempId(op.entry_ref!), client_ref: op.entry_ref, job_code_id: op.job_code_id!, job_code: v.job_code, job_name: v.job_name, category_id: v.category_id, category_name: v.category_name,
           standard_duration: v.standard_duration ?? null, mechanic_id: op.mechanic_id!, mechanic_name: v.mechanic_name, added_by_name: op.user_name, added_at: op.at,
           started_at: null, finished_at: null, parts: [],
         });

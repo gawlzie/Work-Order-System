@@ -17,7 +17,7 @@ import { PERMISSIONS } from './permissions.js';
 import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.js';
 import { seed } from './seed.js';
 import {
-  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, setWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
+  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, addWoCategory, removeWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
   activeStepTemplate, getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 import { listNotifications, markAllRead, markRead, scanOverdue } from './notifications.js';
@@ -225,7 +225,8 @@ app.delete('/api/work-orders/:id/proofs/:proofId(\\d+)', requirePermission('wo.a
 // Repair category and job codes of a work order (Step 7): mechanics (wo.progress) while the step runs, approvers (wo.approve) after it started.
 const canWorkJobs = (req, res, next) =>
   hasPermission(req.user, 'wo.progress') || hasPermission(req.user, 'wo.approve') ? next() : next(new HttpError(403, 'Forbidden for your role'));
-app.put('/api/work-orders/:id/category', canWorkJobs, wrap((req) => setWoCategory(req.params.id, req.body ?? {}, req.user)));
+app.post('/api/work-orders/:id/categories', canWorkJobs, wrap((req) => addWoCategory(req.params.id, req.body ?? {}, req.user)));
+app.delete('/api/work-orders/:id/categories/:categoryId(\\d+)', canWorkJobs, wrap((req) => removeWoCategory(req.params.id, Number(req.params.categoryId), req.user)));
 app.post('/api/work-orders/:id/job-codes', canWorkJobs, wrap((req, res) => {
   res.status(201);
   return addWoJobCode(req.params.id, req.body ?? {}, req.user);

@@ -14,7 +14,7 @@ import { db } from './db.js';
 import { canSeeWo } from './scope.js';
 import {
   CHANNEL, HttpError, addAdditionalWork, addWoJobCode, addWoJobPart, createWorkOrder, getWorkOrder, progressStep, removeWoJobCode,
-  removeWoJobPart, setWoCategory, timeWoJobCode, updateWoJobPart,
+  removeWoJobPart, addWoCategory, removeWoCategory, timeWoJobCode, updateWoJobPart,
 } from './workorders.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -96,9 +96,15 @@ export function applyOp(op, user) {
       need(user, 'wo.progress');
       wo = addAdditionalWork(woUuid, op.name, { client_ref: ref(op.step_ref) });
       break;
+    // 'category.set' comes from phones on the older app (one category per work order): it adds the category.
     case 'category.set':
+    case 'category.add':
       need(user, 'wo.progress', 'wo.approve');
-      wo = setWoCategory(woUuid, { category_id: op.category_id }, user);
+      wo = addWoCategory(woUuid, { category_id: op.category_id }, user, opts);
+      break;
+    case 'category.remove':
+      need(user, 'wo.progress', 'wo.approve');
+      wo = removeWoCategory(woUuid, op.category_id, user);
       break;
     case 'job.add':
       need(user, 'wo.progress', 'wo.approve');

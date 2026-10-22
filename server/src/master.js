@@ -372,7 +372,7 @@ export const unitModels = () =>
 /* ---------- Repair categories ---------- */
 
 const CATEGORY_COLUMNS = `c.*,
-  (SELECT COUNT(*) FROM work_orders w WHERE w.category_id = c.id) AS wo_count,
+  (SELECT COUNT(*) FROM wo_categories w WHERE w.category_id = c.id) AS wo_count,
   (SELECT COUNT(*) FROM job_codes j WHERE j.category_id = c.id) AS job_count,
   (SELECT COUNT(*) FROM spareparts p WHERE p.category_id = c.id) AS part_count`;
 

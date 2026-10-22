@@ -180,6 +180,15 @@ CREATE TABLE IF NOT EXISTS wo_job_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_codes_wo ON wo_job_codes(wo_uuid);
 
+/* Repair categories of a work order (one or more), chosen in the repair step (Step 7); job codes come from these. */
+CREATE TABLE IF NOT EXISTS wo_categories (
+  wo_uuid     TEXT NOT NULL REFERENCES work_orders(wo_uuid) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES repair_categories(id),
+  added_by    INTEGER REFERENCES employees(id),
+  added_at    TEXT NOT NULL,
+  PRIMARY KEY (wo_uuid, category_id)
+);
+
 -- Spare parts used for one job code entry (job code + mechanic) of Step 7, typed in freely (part_name, qty, uom).
 -- sparepart_id / part_number only on lines from before, when parts were picked from the spare part master.
 CREATE TABLE IF NOT EXISTS wo_job_parts (
@@ -399,6 +408,10 @@ if (!woCols.includes('hm')) db.exec('ALTER TABLE work_orders ADD COLUMN hm REAL'
 if (!woCols.includes('km')) db.exec('ALTER TABLE work_orders ADD COLUMN km REAL');
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
+// One repair category per work order (work_orders.category_id) became a list (wo_categories). The column stays as the
+// first category of the list, so a work order written with it alone (older seed data) gets it listed here.
+db.exec(`INSERT OR IGNORE INTO wo_categories (wo_uuid, category_id, added_by, added_at)
+         SELECT wo_uuid, category_id, mechanic_id, COALESCE(started_at, created_at) FROM work_orders WHERE category_id IS NOT NULL`);
 
 /** SQL condition: the role aliased `r` holds the permission bound to the next `?`. */
 export const roleHas = (alias = 'r') => `EXISTS (SELECT 1 FROM json_each(${alias}.permissions) WHERE value = ?)`;

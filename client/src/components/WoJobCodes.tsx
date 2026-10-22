@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Check, CheckCircle2, Circle, Clock, Hash, Loader, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { Check, CheckCircle2, Circle, Clock, Hash, Loader, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -8,7 +8,7 @@ import { durationBetween, formatDateTime, formatDuration, fromDateTimeInput, toD
 import { useI18n } from '../lib/i18n';
 import { useOnline } from '../lib/pwa';
 import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
-import type { WoJobCode, WorkOrderDetail } from '../lib/types';
+import { woCategories, type WoCategory, type WoJobCode, type WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
 import { JobParts } from './JobParts';
 import { entryRef, useAct } from '../lib/act';
@@ -20,7 +20,7 @@ import { Button, Field, Input, Modal, Select } from './ui';
 /**
  * Repair category and job codes of a work order, filled in during the repair step (Step 7), never at creation:
  * mechanics while it runs (mechanic pre-filled with themselves, or the colleague they help), approvers (admin) once it
- * has started, to correct. The category comes first and the job code list only offers job codes of that category.
+ * has started, to correct. The categories (one or more) come first and the job code list only offers job codes of those.
  * `manual` (admin page): no start / finish timers; the admin types in each job code's start and finish time instead.
  * `compact` with `manual`: shown inside the Step 7 row of the admin page, still with each job code's times.
  */
@@ -52,7 +52,10 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
   const jobs = useJobCodeOptions();
   const mechanics = useEmployees('mechanic');
   const categories = useCategories();
-  const jobOptions = (jobs.data ?? []).filter((j) => j.category_id === wo.category_id);
+  const cats = woCategories(wo);
+  const jobOptions = (jobs.data ?? []).filter((j) => cats.some((c) => c.id === j.category_id));
+  // Job codes of a category on this work order (entries from the older app only carry the category name).
+  const jobsIn = (c: WoCategory) => wo.job_codes.filter((j) => (j.category_id != null ? j.category_id === c.id : j.category_name === c.name)).length;
   const [jobId, setJobId] = useState('');
   const [mechanicId, setMechanicId] = useState(() => (!admin && can('wo.as_mechanic') && user ? String(user.id) : ''));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -88,15 +91,37 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
       toast('error', (err as Error).message);
     },
   });
-  const setCategory = useMutation({
-    mutationFn: (categoryId: string) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/category`, { method: 'PUT', body: { category_id: categoryId } }),
+  const addCategory = useMutation({
+    mutationFn: (categoryId: number) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/categories`, { method: 'POST', body: { category_id: categoryId } }),
     onSuccess: (data) => {
       done(data);
-      setJobId('');
       setErrors({});
     },
     onError: (err) => toast('error', (err as Error).message),
   });
+  const removeCategory = useMutation({
+    mutationFn: (categoryId: number) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/categories/${categoryId}`, { method: 'DELETE' }),
+    onSuccess: done,
+    onError: (err) => toast('error', (err as Error).message),
+  });
+  const pickCategory = (id: string) => {
+    const category = categories.data?.find((c) => String(c.id) === id);
+    if (!category) return;
+    confirm({ message: t('confirm_category', { name: category.name }) }, () =>
+      queued
+        ? act({ type: 'category.add', wo_uuid: wo.wo_uuid, label: t('op_category', { name: category.name }), category_id: category.id, view: { category_name: category.name } })
+        : addCategory.mutate(category.id));
+  };
+  const dropCategory = (c: WoCategory) => {
+    // Same rule as the server: the category's job codes must go first.
+    if (jobsIn(c)) return toast('error', t('category_has_jobs', { name: c.name }));
+    confirm({ message: t('confirm_remove_category', { name: c.name }), tone: 'destructive', confirmLabel: t('delete') }, () => {
+      if (queued) act({ type: 'category.remove', wo_uuid: wo.wo_uuid, label: t('op_category_remove', { name: c.name }), category_id: c.id });
+      else removeCategory.mutate(c.id);
+      // The picked job code may belong to the removed category.
+      setJobId('');
+    });
+  };
   const timer = useMutation({
     mutationFn: ({ entry, action }: { entry: WoJobCode; action: 'start' | 'finish' }) =>
       api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes/${entry.id}/${action}`, { method: 'POST' }),
@@ -149,7 +174,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
       if (!queued || !job) return add.mutate();
       act({
         type: 'job.add', wo_uuid: wo.wo_uuid, label: t('op_job_add', { job: job.job_code }), job_code_id: job.id, mechanic_id: Number(mechanicId), entry_ref: newRef(),
-        view: { job_code: job.job_code, job_name: job.job_name, category_name: job.category_name ?? wo.category, standard_duration: job.standard_duration, mechanic_name: mechanic?.full_name ?? '' },
+        view: { job_code: job.job_code, job_name: job.job_name, category_id: job.category_id, category_name: job.category_name, standard_duration: job.standard_duration, mechanic_name: mechanic?.full_name ?? '' },
       });
       setJobId('');
       setErrors({});
@@ -199,28 +224,42 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
       )}
 
       <div className={clsx(compact ? 'mb-3' : 'border-b border-border px-4 py-3')}>
-        <p className="mb-1 text-xs text-muted-foreground">{t('category')}</p>
-        {editable ? (
-          <Select
-            value={wo.category_id ? String(wo.category_id) : ''}
-            onChange={(e) => {
-              const id = e.target.value;
-              const name = categories.data?.find((c) => String(c.id) === id)?.name ?? '';
-              if (!id) return;
-              // Same rule as the server: job codes of the current category must go first.
-              if (queued && wo.job_codes.length) return toast('error', t('category_has_jobs'));
-              confirm({ message: t('confirm_category', { name }) }, () =>
-                queued ? act({ type: 'category.set', wo_uuid: wo.wo_uuid, label: t('op_category', { name }), category_id: Number(id), view: { category_name: name } }) : setCategory.mutate(id));
-            }}
-            disabled={(!queued && !online) || setCategory.isPending}
-            aria-label={t('category')}
-          >
-            <option value="">{t('choose_category_first')}</option>
-            {wo.category_id && categories.data && !categories.data.some((c) => c.id === wo.category_id) && <option value={wo.category_id}>{wo.category}</option>}
-            {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </Select>
+        <p className="mb-1 text-xs text-muted-foreground">{t('categories_label')}</p>
+        {cats.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {cats.map((c) => (
+              <span key={c.id} className={clsx('inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 text-sm', editable ? 'pr-1 pl-2.5' : 'px-2.5')}>
+                <span className="font-medium">{c.name}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">· {jobsIn(c)}</span>
+                {editable && (
+                  <button
+                    type="button"
+                    className="no-print rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                    title={t('delete')}
+                    aria-label={`${t('delete')} ${c.name}`}
+                    disabled={(!queued && !online) || removeCategory.isPending}
+                    onClick={() => dropCategory(c)}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
         ) : (
-          <p className="text-sm font-medium">{wo.category ?? '-'}</p>
+          !editable && <p className="text-sm font-medium">-</p>
+        )}
+        {editable && (
+          <Select
+            className={clsx('no-print', cats.length > 0 && 'mt-2')}
+            value=""
+            onChange={(e) => pickCategory(e.target.value)}
+            disabled={(!queued && !online) || addCategory.isPending}
+            aria-label={cats.length ? t('add_another_category') : t('choose_category_first')}
+          >
+            <option value="">{cats.length ? `+ ${t('add_another_category')}` : t('choose_category_first')}</option>
+            {categories.data?.filter((c) => !cats.some((x) => x.id === c.id)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
         )}
       </div>
 
@@ -234,7 +273,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
               <div className="min-w-0 flex-1">
                 <p className="text-sm break-words"><span className="font-mono text-xs">{j.job_code}</span> · {j.job_name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {j.mechanic_name} · {t('standard_short')} {jobDuration(j.standard_duration)}
+                  {cats.length > 1 && <>{j.category_name} · </>}{j.mechanic_name} · {t('standard_short')} {jobDuration(j.standard_duration)}
                   {(!compact || manual) && <> · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
                 </p>
                 {j.started_at && (
@@ -278,8 +317,8 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
         <p className={clsx('text-sm text-muted-foreground', !compact && 'px-4 py-3')}>{t('job_codes_none')}</p>
       )}
 
-      {editable && !wo.category_id && <p className={clsx('no-print text-xs text-muted-foreground', compact ? 'mt-2' : 'border-t border-border px-4 py-3')}>{t('job_codes_need_category')}</p>}
-      {editable && !!wo.category_id && (
+      {editable && !cats.length && <p className={clsx('no-print text-xs text-muted-foreground', compact ? 'mt-2' : 'border-t border-border px-4 py-3')}>{t('job_codes_need_category')}</p>}
+      {editable && cats.length > 0 && (
         <div className={clsx('no-print grid gap-2', typeTimes ? 'sm:grid-cols-2' : 'sm:grid-cols-[1fr_14rem_auto]', compact ? 'mt-2' : 'border-t border-border p-4')}>
           <div>
             <JobCodePicker

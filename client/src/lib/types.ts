@@ -240,6 +240,8 @@ export interface WoJobCode {
   job_code_id: number;
   job_code: string;
   job_name: string;
+  /** Missing on copies saved by the older app. */
+  category_id?: number;
   category_name: string;
   standard_duration: number | null;
   mechanic_id: number;
@@ -285,8 +287,23 @@ export interface WorkOrderDetail extends WorkOrder {
   steps: Step[];
   additional_work: Step[];
   proofs: Proof[];
+  /** Repair categories chosen in Step 7 (one or more); missing on copies saved by the older app, see woCategories(). */
+  categories?: WoCategory[];
   job_codes: WoJobCode[];
 }
+
+/** A repair category on a work order, with how many of its job codes the work order holds. */
+export interface WoCategory {
+  id: number;
+  name: string;
+  is_active: number;
+  added_at: string;
+  job_count: number;
+}
+
+/** Categories of a work order; from the single category of copies saved by the older app. */
+export const woCategories = (wo: WorkOrderDetail): WoCategory[] =>
+  wo.categories ?? (wo.category_id ? [{ id: wo.category_id, name: wo.category ?? '', is_active: 1, added_at: wo.created_at, job_count: wo.job_codes.length }] : []);
 
 export interface MasterSite {
   id: number;

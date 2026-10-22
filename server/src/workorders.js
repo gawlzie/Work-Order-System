@@ -159,7 +159,9 @@ const LIST_SELECT = `
   SELECT wo.*, u.unit_number, u.unit_code, u.unit_type, u.brand AS unit_brand, u.model AS unit_model, u.serial_number AS unit_serial,
          (SELECT st.company FROM sites st WHERE st.site_name = wo.site COLLATE NOCASE) AS site_company,
          d.full_name AS driver_name, m.full_name AS mechanic_name,
-         c.name AS category, cb.full_name AS created_by_name,
+         (SELECT GROUP_CONCAT(name, ', ') FROM (SELECT c.name FROM wo_categories wc JOIN repair_categories c ON c.id = wc.category_id
+            WHERE wc.wo_uuid = wo.wo_uuid ORDER BY wc.added_at, c.name)) AS category,
+         cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
          (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
          (SELECT GROUP_CONCAT(p.part_name || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
@@ -178,7 +180,6 @@ const LIST_SELECT = `
   JOIN units u ON u.id = wo.unit_id
   JOIN employees d ON d.id = wo.driver_id
   LEFT JOIN employees m ON m.id = wo.mechanic_id
-  LEFT JOIN repair_categories c ON c.id = wo.category_id
   LEFT JOIN employees cb ON cb.id = wo.created_by`;
 
 function decorate(row) {
@@ -224,7 +225,6 @@ function buildFilters(q, user) {
     ['unit_id', 'wo.unit_id'],
     ['driver_id', 'wo.driver_id'],
     ['mechanic_id', 'wo.mechanic_id'],
-    ['category_id', 'wo.category_id'],
     ['created_by', 'wo.created_by'],
   ]) {
     if (q[key]) {
@@ -236,6 +236,15 @@ function buildFilters(q, user) {
       where.push(`(${parts.join(' OR ')})`);
       params.push(...ids);
     }
+  }
+  // A work order matches when any of its repair categories is picked; `none` = no category yet.
+  if (q.category_id) {
+    const values = String(q.category_id).split(',');
+    const ids = values.filter((v) => v !== 'none');
+    const parts = ids.length ? [`EXISTS (SELECT 1 FROM wo_categories wc WHERE wc.wo_uuid = wo.wo_uuid AND wc.category_id IN (${ids.map(() => '?').join(',')}))`] : [];
+    if (ids.length < values.length) parts.push('NOT EXISTS (SELECT 1 FROM wo_categories wc WHERE wc.wo_uuid = wo.wo_uuid)');
+    where.push(`(${parts.join(' OR ')})`);
+    params.push(...ids);
   }
   if (q.job_code_id) {
     const ids = String(q.job_code_id).split(',');
@@ -284,7 +293,7 @@ export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uui
 /** Job codes done on a work order, in the order they were added. */
 /** Job code entries of a work order, each with the spare parts used for it. */
 export function listWoJobCodes(woUuid) {
-  const entries = db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, c.name AS category_name, j.standard_duration,
+  const entries = db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, j.category_id, c.name AS category_name, j.standard_duration,
                      x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at, x.started_at, x.finished_at, x.client_ref
               FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id JOIN repair_categories c ON c.id = j.category_id
               JOIN employees m ON m.id = x.mechanic_id LEFT JOIN employees a ON a.id = x.added_by
@@ -314,9 +323,22 @@ export function getWorkOrder(woUuid) {
     steps: withSubs.filter((s) => !s.is_additional),
     additional_work: withSubs.filter((s) => s.is_additional),
     proofs: listProofs(woUuid),
+    categories: listWoCategories(woUuid),
     job_codes: listWoJobCodes(woUuid),
   };
 }
+
+/** Repair categories of a work order in the order they were chosen, each with how many job codes it holds. */
+export const listWoCategories = (woUuid) =>
+  db.prepare(`SELECT c.id, c.name, c.is_active, wc.added_at,
+                     (SELECT COUNT(*) FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id WHERE x.wo_uuid = wc.wo_uuid AND j.category_id = c.id) AS job_count
+              FROM wo_categories wc JOIN repair_categories c ON c.id = wc.category_id
+              WHERE wc.wo_uuid = ? ORDER BY wc.added_at, c.name`).all(woUuid);
+
+/** work_orders.category_id follows the first category of the list (null when none). */
+const syncFirstCategory = (woUuid) =>
+  db.prepare(`UPDATE work_orders SET updated_at = ?, category_id = (SELECT wc.category_id FROM wo_categories wc JOIN repair_categories c ON c.id = wc.category_id
+                WHERE wc.wo_uuid = work_orders.wo_uuid ORDER BY wc.added_at, c.name LIMIT 1) WHERE wo_uuid = ?`).run(now(), woUuid);
 
 const assignable = (employeeId, permission) =>
   db.prepare(`SELECT 1 FROM employees e JOIN roles r ON r.id = e.role_id WHERE e.id = ? AND e.is_active = 1 AND ${roleHas()}`)
@@ -569,7 +591,7 @@ export function addSubStep(woUuid, stepId, name) {
 /**
  * Repair category and job codes are filled in during the repair step (Step 7, the step where mechanics add their own
  * sub-steps), never when the WO is created: by a mechanic while that step runs, by an approver (admin) any time after
- * it started, also to correct a finished WO. The category comes first; job codes must belong to it.
+ * it started, also to correct a finished WO. The categories (one or more) come first; job codes must belong to one of them.
  * Each job code entry names the mechanic who did the job.
  */
 function jobCodeGate(wo, user) {
@@ -582,16 +604,32 @@ function jobCodeGate(wo, user) {
   return admin;
 }
 
-export function setWoCategory(woUuid, body, user) {
+/** Adds a repair category to the work order (a work order can have several); adding one it already has changes nothing. */
+export function addWoCategory(woUuid, body, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);
   const categoryId = Number(body?.category_id);
-  if (!categoryId || !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND (is_active = 1 OR id = ?)').get(categoryId, wo.category_id ?? 0))
+  if (wo.categories.some((c) => c.id === categoryId)) return wo;
+  if (!categoryId || !db.prepare('SELECT 1 FROM repair_categories WHERE id = ? AND is_active = 1').get(categoryId))
     throw Object.assign(new HttpError(422, 'Choose an active repair category'), { errors: { category_id: 'Choose an active repair category' } });
-  const other = db.prepare(`SELECT COUNT(*) AS n FROM wo_job_codes x JOIN job_codes j ON j.id = x.job_code_id
-                             WHERE x.wo_uuid = ? AND j.category_id != ?`).get(woUuid, categoryId).n;
-  if (other) throw new HttpError(409, `Remove the ${other} job code(s) of the current category first`);
-  db.prepare('UPDATE work_orders SET category_id = ?, updated_at = ? WHERE wo_uuid = ?').run(categoryId, now(), woUuid);
+  tx(() => {
+    db.prepare('INSERT INTO wo_categories (wo_uuid, category_id, added_by, added_at) VALUES (?, ?, ?, ?)').run(woUuid, categoryId, user.id, opts.at ?? now());
+    syncFirstCategory(woUuid);
+  });
+  return getWorkOrder(woUuid);
+}
+
+/** Removes a repair category from the work order; only once none of its job codes is left on it. */
+export function removeWoCategory(woUuid, categoryId, user) {
+  const wo = getWorkOrder(woUuid);
+  jobCodeGate(wo, user);
+  const category = wo.categories.find((c) => c.id === Number(categoryId));
+  if (!category) throw new HttpError(404, 'This repair category is not on the work order');
+  if (category.job_count) throw new HttpError(409, `Remove the ${category.job_count} job code(s) of ${category.name} first`);
+  tx(() => {
+    db.prepare('DELETE FROM wo_categories WHERE wo_uuid = ? AND category_id = ?').run(woUuid, category.id);
+    syncFirstCategory(woUuid);
+  });
   return getWorkOrder(woUuid);
 }
 
@@ -630,13 +668,13 @@ export function addWoJobCode(woUuid, body, user, opts = {}) {
   // Admin entries come with the times typed in; mechanics use the start / finish timer instead.
   const manual = body?.started_at != null || body?.finished_at != null;
   if (manual && !admin) throw new HttpError(403, 'Only an approver can type in job code times');
-  if (!wo.category_id) throw Object.assign(new HttpError(422, 'Choose the repair category first'), { errors: { category_id: 'Choose the repair category first' } });
+  if (!wo.categories.length) throw Object.assign(new HttpError(422, 'Choose the repair category first'), { errors: { category_id: 'Choose the repair category first' } });
   const jobId = Number(body?.job_code_id);
   const mechanicId = Number(body?.mechanic_id);
   const errors = {};
   const job = jobId ? db.prepare('SELECT category_id FROM job_codes WHERE id = ? AND is_active = 1').get(jobId) : null;
   if (!job) errors.job_code_id = 'Choose an active job code';
-  else if (job.category_id !== wo.category_id) errors.job_code_id = 'This job code is not in the repair category of the work order';
+  else if (!wo.categories.some((c) => c.id === job.category_id)) errors.job_code_id = 'This job code is not in a repair category of the work order';
   if (!mechanicId || !assignable(mechanicId, 'wo.as_mechanic')) errors.mechanic_id = 'Choose the mechanic who does this job';
   else if (jobId && db.prepare('SELECT 1 FROM wo_job_codes WHERE wo_uuid = ? AND job_code_id = ? AND mechanic_id = ?').get(woUuid, jobId, mechanicId))
     errors.job_code_id = 'This job code is already added for this mechanic';
@@ -801,8 +839,12 @@ export function dashboard(q = {}, user = null) {
   }
   const finished = rows.filter((r) => r.status === STATUS.FINISH);
   const totalTime = finished.reduce((sum, r) => sum + r.total_time, 0);
+  // A work order with several repair categories counts once in each of them.
+  const namesOf = {};
+  for (const c of db.prepare('SELECT wc.wo_uuid, c.name FROM wo_categories wc JOIN repair_categories c ON c.id = wc.category_id').all())
+    (namesOf[c.wo_uuid] ??= []).push(c.name);
   const byCategory = {};
-  for (const r of rows) byCategory[r.category || 'Uncategorized'] = (byCategory[r.category || 'Uncategorized'] || 0) + 1;
+  for (const r of rows) for (const name of namesOf[r.wo_uuid] ?? ['Uncategorized']) byCategory[name] = (byCategory[name] || 0) + 1;
   return {
     total: rows.length,
     ...counts,
