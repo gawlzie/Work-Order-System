@@ -69,7 +69,11 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
             <td>{box(type === 'REPAIR')} Repair</td>
             <td>{box(type === 'WARRANTY')} Warranty</td>
             <td>{box(type === 'PDI')} PDI</td>
-            <td>{box(type === 'OTHERS')} Others: {type === 'OTHERS' ? <span className="woform-filled !min-w-0">{wo.maintenance_other}</span> : <span className="whitespace-nowrap">{line('2.5rem')}</span>}</td>
+            <td>{box(type === 'OTHERS')} Others</td>
+          </tr>
+          <tr>
+            <th>NOTES</th>
+            <td colSpan={5} className="whitespace-pre-wrap break-words">{wo.maintenance_other ?? ''}</td>
           </tr>
         </tbody>
       </table>

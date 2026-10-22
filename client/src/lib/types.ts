@@ -183,7 +183,7 @@ export interface WorkOrder {
   repair_time: number | null;
   problem: string;
   maintenance_type: MaintenanceType | null;
-  /** Description when maintenance_type is OTHERS. */
+  /** Notes on the type of maintenance (any type; for OTHERS they describe it). */
   maintenance_other: string | null;
   /** Site of the unit when the WO was raised. */
   site: string | null;

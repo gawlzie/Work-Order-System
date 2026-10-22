@@ -51,7 +51,7 @@ export function NewJobPage() {
       wo_uuid, wo_number: t('m_new_offline'), unit_id: Number(form.unit_id), unit_number: unit?.unit_number ?? '', unit_code: unit?.unit_code ?? '', unit_type: unit?.unit_type ?? '',
       unit_brand: unit?.brand ?? null, unit_model: unit?.model ?? null, unit_serial: unit?.serial_number ?? null, site: unit?.site ?? null, site_company: null,
       driver_id: Number(form.driver_id), driver_name: driver?.full_name ?? '', mechanic_id: form.mechanic_id ? Number(form.mechanic_id) : null, mechanic_name: mechanic?.full_name ?? null,
-      problem: form.problem.trim(), maintenance_type: form.maintenance_type, maintenance_other: form.maintenance_type === 'OTHERS' ? form.maintenance_other.trim() : null,
+      problem: form.problem.trim(), maintenance_type: form.maintenance_type, maintenance_other: form.maintenance_other.trim() || null,
       hm: Number(form.hm.replace(',', '.')), km: Number(form.km), status: 'OPEN', approval_status: 'WAITING', reject_reason: null, approval_remarks: null, channel_source: 'MOBILE',
       created_by: user.id, created_by_name: user.full_name, created_at: now, updated_at: now, started_at: null, finished_at: null, category_id: null, category: null,
       job_code_list: null, part_list: null, job_standard_duration: null, repair_time: null, step_information: 'Not started', total_time: 0, proof_count: 0, mobile_sync_time: null,

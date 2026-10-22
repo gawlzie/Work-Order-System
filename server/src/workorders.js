@@ -370,12 +370,12 @@ function validatePayload(body, { metersRequired = true } = {}) {
   if (!driver_id) errors.driver_id = 'Driver is required';
   if (problem.length < 5) errors.problem = 'Problem description must be at least 5 characters';
   if (problem.length > 1000) errors.problem = 'Problem description is too long (max 1000)';
-  // Type of maintenance; "Others" needs its own description.
+  // Type of maintenance with its notes (maintenance_other): optional, except for "Others" where they describe it.
   const maintenance_type = String(body.maintenance_type ?? '').trim().toUpperCase();
-  const maintenance_other = maintenance_type === 'OTHERS' ? String(body.maintenance_other ?? '').trim().replace(/\s+/g, ' ') : null;
+  const maintenance_other = String(body.maintenance_other ?? '').trim().replace(/\s+/g, ' ') || null;
   if (!MAINTENANCE_TYPES.includes(maintenance_type)) errors.maintenance_type = 'Choose the type of maintenance';
-  else if (maintenance_type === 'OTHERS' && (maintenance_other.length < 2 || maintenance_other.length > 60))
-    errors.maintenance_other = 'Describe the type of maintenance (2-60 characters)';
+  else if (maintenance_type === 'OTHERS' && (maintenance_other ?? '').length < 2) errors.maintenance_other = 'Notes are required for Others: describe the type of maintenance';
+  if (maintenance_other && maintenance_other.length > 200) errors.maintenance_other = 'Notes are too long (max 200 characters)';
   // HM (hour meter, one decimal) and KM (odometer, whole number) are required readings of the unit.
   const hmRaw = String(body.hm ?? '').trim().replace(',', '.');
   const kmRaw = String(body.km ?? '').trim().replace(',', '.');

@@ -150,7 +150,7 @@ app.use('/api/work-orders/:id', (req, res, next) => {
 });
 
 const CSV_COLUMNS = [
-  ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['site', 'Site'], ['maintenance_label', 'Type of Maintenance'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
+  ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['site', 'Site'], ['maintenance_label', 'Type of Maintenance'], ['maintenance_other', 'Maintenance Notes'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
   ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['part_list', 'Spare Parts'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (h:mm:ss)'], ['proof_count', 'Proof Files'],
@@ -167,7 +167,7 @@ app.get('/api/work-orders/export', wrap((req, res) => {
   const { data } = listWorkOrders({ ...req.query, page: 1, limit: 500 }, req.user);
   const lines = [CSV_COLUMNS.map(([, h]) => csvCell(h)).join(',')];
   for (const row of data) {
-    const maintenance = { PREVENTIVE: 'Preventive Maintenance', REPAIR: 'Repair', WARRANTY: 'Warranty', PDI: 'PDI', OTHERS: `Others: ${row.maintenance_other ?? ''}` }[row.maintenance_type] ?? '';
+    const maintenance = { PREVENTIVE: 'Preventive Maintenance', REPAIR: 'Repair', WARRANTY: 'Warranty', PDI: 'PDI', OTHERS: 'Others' }[row.maintenance_type] ?? '';
     lines.push(CSV_COLUMNS.map(([k]) => csvCell(k === 'maintenance_label' ? maintenance : k === 'total_time' ? hms(row.total_time) : k === 'job_standard_duration' ? hms(row.job_standard_duration == null ? null : row.job_standard_duration * 60) : row[k])).join(','));
   }
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
