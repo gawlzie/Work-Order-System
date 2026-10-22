@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/badges';
 import { DateRange } from '../components/DateRange';
 import { SiteFilter } from '../components/SiteSelect';
 import { Pagination } from '../components/Pagination';
+import { isRunning, RunningTime } from '../components/RunningTime';
 import { BtnLabel, Button, Card, EmptyState, MetaItem, PageHeader, Skeleton } from '../components/ui';
 import { formatDateTime, formatDuration, toDateInput } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
@@ -142,7 +143,7 @@ export function DashboardPage() {
                   <MetaItem label={t('unit')}>{wo.unit_number}</MetaItem>
                   <MetaItem label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</MetaItem>
                   <MetaItem label={t('step_information')}>{wo.step_information}</MetaItem>
-                  <MetaItem label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></MetaItem>
+                  <MetaItem label={t('total_time')}><span className="tabular-nums"><RunningTime seconds={wo.total_time} since={list.dataUpdatedAt} running={isRunning(wo.status)} /></span></MetaItem>
                 </dl>
               </Link>
             </li>
@@ -168,7 +169,7 @@ export function DashboardPage() {
                   <td className="px-4 py-3 whitespace-nowrap">{wo.mechanic_name ?? '-'}</td>
                   <td className="px-4 py-3"><StatusBadge status={wo.status} /></td>
                   <td className="px-4 py-3 whitespace-nowrap">{wo.step_information}</td>
-                  <td className="px-4 py-3 whitespace-nowrap tabular-nums">{formatDuration(wo.total_time)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums"><RunningTime seconds={wo.total_time} since={list.dataUpdatedAt} running={isRunning(wo.status)} /></td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDateTime(wo.created_at)}</td>
                 </tr>
               ))}
