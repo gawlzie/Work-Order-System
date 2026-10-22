@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from 'lucide-react';
-import benefits from '../assets/brand/login-benefits.webp';
+import loginPicture from '../assets/brand/login-fleet-maintenance.webp';
 import { BrandLogo } from '../components/Brand';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -43,10 +43,10 @@ export function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      {/* "WOS Benefits at a Glance" shown whole (it is full of text); a blurred copy fills the rest on other screen shapes. */}
+      {/* "Fleet Maintenance Operations" picture shown whole; a blurred copy fills the rest on other screen shapes. */}
       <div className="relative hidden overflow-hidden bg-[#e8f0fb] lg:sticky lg:top-0 lg:block lg:h-screen">
-        <img src={benefits} alt="" aria-hidden="true" className="absolute inset-0 size-full scale-110 object-cover opacity-70 blur-2xl" />
-        <img src={benefits} alt={t('login_image_alt')} className="relative size-full object-contain" />
+        <img src={loginPicture} alt="" aria-hidden="true" className="absolute inset-0 size-full scale-110 object-cover opacity-70 blur-2xl" />
+        <img src={loginPicture} alt={t('login_image_alt')} className="relative size-full object-contain" />
       </div>
 
       <div className="flex flex-col items-center justify-center p-6">

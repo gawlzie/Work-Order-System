@@ -2,7 +2,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 
 const en = {
   app_name: 'Work Order System',
-  login_image_alt: 'WOS benefits at a glance: better decision-making, risk management, efficiency, visibility, team productivity and strategic growth',
+  login_image_alt: 'Fleet maintenance operations: a mechanic repairing a dump truck at the mine site while the work order is followed on the WOS dashboard and the mechanic app',
   dashboard: 'Dashboard',
   transaction: 'Transaction',
   work_order: 'Work Order',
