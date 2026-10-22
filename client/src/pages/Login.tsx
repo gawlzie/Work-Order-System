@@ -1,4 +1,5 @@
 import { Eye, EyeOff } from 'lucide-react';
+import benefits from '../assets/brand/login-benefits.webp';
 import { BrandLogo } from '../components/Brand';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -42,26 +43,15 @@ export function LoginPage() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden bg-[#030712] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div className="absolute -top-32 -right-32 size-96 rounded-full bg-blue-600/30 blur-3xl" />
-        <div className="absolute -bottom-40 -left-20 size-96 rounded-full bg-indigo-500/20 blur-3xl" />
-        <div className="relative">
-          <BrandLogo onDark className="h-12" />
-        </div>
-        <div className="relative">
-          <h1 className="text-4xl leading-tight font-semibold">{t('app_name')}</h1>
-          <p className="mt-4 max-w-md text-white/70">
-            We integrate innovation and reliability to empower your business with cutting-edge technology.
-          </p>
-        </div>
-        <p className="relative text-xs text-white/50">© {new Date().getFullYear()} Inline Technology International</p>
+      {/* "WOS Benefits at a Glance" shown whole (it is full of text); a blurred copy fills the rest on other screen shapes. */}
+      <div className="relative hidden overflow-hidden bg-[#e8f0fb] lg:sticky lg:top-0 lg:block lg:h-screen">
+        <img src={benefits} alt="" aria-hidden="true" className="absolute inset-0 size-full scale-110 object-cover opacity-70 blur-2xl" />
+        <img src={benefits} alt={t('login_image_alt')} className="relative size-full object-contain" />
       </div>
 
-      <div className="flex items-center justify-center p-6">
+      <div className="flex flex-col items-center justify-center p-6">
         <form onSubmit={submit} className="w-full max-w-sm space-y-5">
-          <div className="lg:hidden">
-            <BrandLogo className="mb-4 h-11" />
-          </div>
+          <BrandLogo className="mb-4 h-11" />
           <div>
             <h2 className="text-2xl font-semibold">{t('login_title')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t('login_subtitle')}</p>
@@ -92,6 +82,7 @@ export function LoginPage() {
             </div>
           </div>
         </form>
+        <p className="mt-8 text-xs text-muted-foreground">© {new Date().getFullYear()} Inline Technology International</p>
       </div>
     </div>
   );
