@@ -12,6 +12,7 @@ import { BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, Page
 import { SiteFilter } from '../components/SiteSelect';
 import { api, download, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { localDate, usePrintFileName } from '../lib/print';
 import { formatDateTime, formatDuration } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useCategories, useEmployees, useUnits, useWorkOrders, type WoListParams } from '../lib/queries';
@@ -28,6 +29,7 @@ export function WorkOrderListPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [sp, setSp] = useSearchParams();
+  usePrintFileName('Work-Orders');
   const [showFilters, setShowFilters] = useState(() => FILTER_KEYS.some((k) => sp.get(k)));
   const [searchText, setSearchText] = useState(sp.get('search') ?? '');
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -83,7 +85,7 @@ export function WorkOrderListPage() {
     setExporting(true);
     try {
       const { page: _p, limit: _l, ...filters } = params;
-      await download(`/work-orders/export${qs({ ...filters })}`, 'work-orders.csv');
+      await download(`/work-orders/export${qs({ ...filters })}`, `work-orders_${localDate()}.csv`);
       toast('success', t('exported'));
     } catch (err) {
       toast('error', (err as Error).message);

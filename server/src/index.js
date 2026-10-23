@@ -163,6 +163,18 @@ const hms = (seconds) => {
   return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 };
 
+const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/**
+ * The export is named after the date range filter: work-orders_2026-10-01_to_2026-10-23.csv. Without a start date it
+ * runs from the first work order (all_to_...), without an end date up to today.
+ */
+const exportFileName = (q) =>
+  `work-orders_${isDate(q.created_start) ? q.created_start : 'all'}_to_${isDate(q.created_end) ? q.created_end : today()}.csv`;
+
 app.get('/api/work-orders/export', wrap((req, res) => {
   const { data } = listWorkOrders({ ...req.query, page: 1, limit: 500 }, req.user);
   const lines = [CSV_COLUMNS.map(([, h]) => csvCell(h)).join(',')];
@@ -171,7 +183,7 @@ app.get('/api/work-orders/export', wrap((req, res) => {
     lines.push(CSV_COLUMNS.map(([k]) => csvCell(k === 'maintenance_label' ? maintenance : k === 'total_time' ? hms(row.total_time) : k === 'job_standard_duration' ? hms(row.job_standard_duration == null ? null : row.job_standard_duration * 60) : row[k])).join(','));
   }
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="work-orders-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${exportFileName(req.query)}"`);
   res.send('﻿' + lines.join('\r\n'));
 }));
 

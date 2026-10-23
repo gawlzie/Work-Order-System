@@ -14,6 +14,7 @@ import { BtnLabel, Button, Card, EmptyState, PageHeader, Spinner } from '../comp
 import { useAuth } from '../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
+import { usePrintFileName } from '../lib/print';
 import { useWorkOrder } from '../lib/queries';
 import type { Step, WorkOrderDetail } from '../lib/types';
 
@@ -58,6 +59,8 @@ export function WorkOrderDetailPage() {
   const [approval, setApproval] = useState<'approve' | 'reject' | null>(null);
 
   useSecondTick(!!wo && wo.status !== 'FINISH' && !!wo.started_at);
+  // Saved PDF: WO-202610-0044_<print date>.pdf
+  usePrintFileName(wo?.wo_number);
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
