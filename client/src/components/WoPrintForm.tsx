@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { durationBetween, formatDateTime } from '../lib/format';
 import type { WorkOrderDetail } from '../lib/types';
 import { formatMeter } from './MeterFields';
+import ielLogo from '../assets/print/logo-iel.png';
+import msiLogo from '../assets/print/logo-msi.png';
 
 /**
  * Printed "Work Order Request Form" (A4, two pages), laid out like the paper template
@@ -11,7 +13,8 @@ import { formatMeter } from './MeterFields';
  */
 
 const JOB_ROWS = 5;
-const PART_ROWS = 8;
+// 7 empty part rows (more when needed) keep page 1 on one A4 sheet with the logos in the head.
+const PART_ROWS = 7;
 const NOTE_ROWS = 2;
 
 const box = (ticked: boolean) => (ticked ? '☑' : '☐');
@@ -46,11 +49,13 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
         <tbody>
           <tr>
             <td className="woform-brand">
+              <img src={msiLogo} alt="Motor Sights" className="woform-logo" />
               <strong>MOTOR SIGHTS</strong>
               <small>Service &amp; Support</small>
             </td>
             <td className="woform-title">WORK ORDER REQUEST FORM</td>
             <td className="woform-meta">
+              <img src={ielLogo} alt="PT Indonesia Equipment Line" className="woform-logo woform-logo-iel" />
               <b>Form No.:</b> {line('4rem')}
               <br />
               <b>Revision:</b> {line('3rem')}

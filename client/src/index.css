@@ -141,6 +141,17 @@ body {
     display: block;
     font-size: 10.5pt;
   }
+  /* Company logos in the head: Motor Sights above its name, PT Indonesia Equipment Line above the form number. */
+  .woform-logo {
+    display: block;
+    height: 28pt;
+    width: auto;
+    margin: 0 auto 2pt;
+  }
+  .woform-logo-iel {
+    height: 22pt;
+    margin: 0 0 2pt;
+  }
   .woform-brand small {
     font-size: 6.5pt;
     font-weight: 700;
@@ -153,7 +164,7 @@ body {
   .woform-meta {
     width: 18%;
     font-size: 6.5pt;
-    line-height: 1.5;
+    line-height: 1.4;
   }
   .woform-grid {
     margin-bottom: 4pt;
