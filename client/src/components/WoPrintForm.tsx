@@ -8,7 +8,7 @@ import msiLogo from '../assets/print/logo-msi.png';
 /**
  * Printed "Work Order Request Form" (A4, two pages), laid out like the paper template
  * Work_order_Request_Form_template.pdf and filled with the work order's data. Hidden on screen; shown by the browser
- * print of the work order detail page. Fields the system does not know (signatures, form number, payment, ...) stay
+ * print of the work order detail page. Fields the system does not know (signatures, form number, ...) stay
  * blank lines or empty boxes to fill in by hand. Always English, like the template.
  */
 
@@ -146,8 +146,8 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
         <tbody>
           <tr>
             <th>Customer Type</th>
-            <td>{box(false)} Internal</td>
-            <td>{box(false)} External</td>
+            <td>{box(wo.customer_type === 'INTERNAL')} Internal</td>
+            <td>{box(wo.customer_type === 'EXTERNAL')} External</td>
             <th>Remark</th>
             <td>{wo.approval_remarks ?? ''}</td>
           </tr>
@@ -165,9 +165,13 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
           </tr>
           <tr>
             <th>Payment</th>
-            <td>{box(false)} Customer Paid</td>
-            <td>{box(false)} Free</td>
-            <td colSpan={2}>{box(false)} Others: {line('3.5rem')}</td>
+            {/* One cell for the three choices, so an Others description has most of the row (up to 100 characters on 2 lines). */}
+            <td colSpan={4} className="break-words">
+              <span className="woform-choice">{box(wo.payment_type === 'CUSTOMER_PAID')} Customer Paid</span>
+              <span className="woform-choice">{box(wo.payment_type === 'FREE')} Free</span>
+              {box(wo.payment_type === 'OTHERS')} Others:{' '}
+              {wo.payment_type === 'OTHERS' && wo.payment_other ? <span className="woform-filled-inline">{wo.payment_other}</span> : line('7rem')}
+            </td>
           </tr>
         </tbody>
       </table>

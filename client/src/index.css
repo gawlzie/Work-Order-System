@@ -236,6 +236,13 @@ body {
     border-bottom: 0.6pt solid #000;
     font-weight: 700;
   }
+  /* Choices side by side in one cell (Payment), and a filled-in text there: underlined, may wrap. */
+  .woform-choice {
+    margin-right: 18pt;
+  }
+  .woform-filled-inline {
+    border-bottom: 0.6pt solid #000;
+  }
   .woform-page2 {
     break-before: page;
   }
