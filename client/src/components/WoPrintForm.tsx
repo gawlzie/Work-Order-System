@@ -49,8 +49,7 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
         <tbody>
           <tr>
             <td className="woform-brand">
-              <img src={msiLogo} alt="Motor Sights" className="woform-logo" />
-              <strong>MOTOR SIGHTS</strong>
+              <img src={msiLogo} alt="Motor Sights" className="woform-logo woform-logo-msi" />
               <small>Service &amp; Support</small>
             </td>
             <td className="woform-title">WORK ORDER REQUEST FORM</td>

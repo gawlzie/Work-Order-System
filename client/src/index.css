@@ -137,16 +137,17 @@ body {
     width: 22%;
     text-align: center !important;
   }
-  .woform-brand strong {
-    display: block;
-    font-size: 10.5pt;
-  }
-  /* Company logos in the head: Motor Sights above its name, PT Indonesia Equipment Line above the form number. */
+  /* Company logos in the head: Motor Sights (its name is in the logo) above "Service & Support", PT Indonesia
+     Equipment Line above the form number. 48pt is the largest Motor Sights logo that keeps the head as tall as the
+     form number box, so page 1 still fits one A4 sheet. */
   .woform-logo {
     display: block;
     height: 28pt;
     width: auto;
     margin: 0 auto 2pt;
+  }
+  .woform-logo-msi {
+    height: 48pt;
   }
   .woform-logo-iel {
     height: 22pt;

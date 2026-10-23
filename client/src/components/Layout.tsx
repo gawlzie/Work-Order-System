@@ -167,7 +167,7 @@ export function Layout() {
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6">
+        <main className="min-w-0 flex-1 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 print:p-0">
           <Outlet />
         </main>
       </div>
