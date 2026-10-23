@@ -110,6 +110,9 @@ CREATE TABLE IF NOT EXISTS work_orders (
   problem          TEXT NOT NULL,
   maintenance_type TEXT, -- PREVENTIVE | REPAIR | WARRANTY | PDI | OTHERS
   maintenance_other TEXT, -- free text when maintenance_type = OTHERS
+  customer_type    TEXT, -- INTERNAL | EXTERNAL
+  payment_type     TEXT, -- CUSTOMER_PAID | FREE | OTHERS
+  payment_other    TEXT, -- description when payment_type = OTHERS
   site             TEXT, -- site of the unit when the WO was raised (sites.site_name)
   hm               REAL, -- hour meter reading when the WO was raised
   km               REAL, -- odometer reading when the WO was raised
@@ -328,6 +331,9 @@ fillMissingSites();
 const woCols2 = columns('work_orders');
 if (!woCols2.includes('maintenance_type')) db.exec('ALTER TABLE work_orders ADD COLUMN maintenance_type TEXT');
 if (!woCols2.includes('maintenance_other')) db.exec('ALTER TABLE work_orders ADD COLUMN maintenance_other TEXT');
+// Customer type and payment; empty on work orders from before they were asked.
+for (const col of ['customer_type', 'payment_type', 'payment_other'])
+  if (!woCols2.includes(col)) db.exec(`ALTER TABLE work_orders ADD COLUMN ${col} TEXT`);
 
 /**
  * Work orders from before the type of maintenance was asked: Preventive when one of their job codes is a periodic

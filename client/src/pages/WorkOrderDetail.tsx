@@ -9,6 +9,7 @@ import { formatMeter } from '../components/MeterFields';
 import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
 import { WoPrintForm } from '../components/WoPrintForm';
+import { customerTypeLabel, paymentLabel } from '../components/CustomerPayment';
 import { maintenanceLabel } from '../components/MaintenanceType';
 import { BtnLabel, Button, Card, EmptyState, PageHeader, Spinner } from '../components/ui';
 import { useAuth } from '../lib/auth';
@@ -184,6 +185,8 @@ export function WorkOrderDetailPage() {
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
           <Info label={t('maintenance_type')}>{maintenanceLabel(wo.maintenance_type, t)}</Info>
           <Info label={t('maintenance_notes')}><span className="break-words">{wo.maintenance_other || '-'}</span></Info>
+          <Info label={t('customer_type')}>{customerTypeLabel(wo.customer_type, t)}</Info>
+          <Info label={t('payment')}><span className="break-words">{paymentLabel(wo.payment_type, wo.payment_other, t)}</span></Info>
           <Info label={t('site')}>{wo.site ?? '-'}</Info>
           <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
           <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>

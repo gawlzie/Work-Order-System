@@ -17,6 +17,8 @@ export type Permission =
   | 'site.all';
 export type WoStatus = 'OPEN' | 'ON_PROGRESS' | 'WAITING' | 'FINISH';
 export type MaintenanceType = 'PREVENTIVE' | 'REPAIR' | 'WARRANTY' | 'PDI' | 'OTHERS';
+export type CustomerType = 'INTERNAL' | 'EXTERNAL';
+export type PaymentType = 'CUSTOMER_PAID' | 'FREE' | 'OTHERS';
 export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
 
@@ -185,6 +187,10 @@ export interface WorkOrder {
   maintenance_type: MaintenanceType | null;
   /** Notes on the type of maintenance (any type; for OTHERS they describe it). */
   maintenance_other: string | null;
+  /** Customer type and payment (null on work orders from before they were asked); payment_other describes Others. */
+  customer_type: CustomerType | null;
+  payment_type: PaymentType | null;
+  payment_other: string | null;
   /** Site of the unit when the WO was raised. */
   site: string | null;
   /** Hour meter and odometer readings when the WO was raised (null on older WOs). */

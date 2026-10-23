@@ -2,6 +2,7 @@ import { Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm';
+import { CustomerPaymentFields, customerPaymentErrors } from '../../components/CustomerPayment';
 import { MaintenanceTypeField, maintenanceErrors } from '../../components/MaintenanceType';
 import { MeterFields, meterErrors } from '../../components/MeterFields';
 import { UnitSite } from '../../components/UnitSite';
@@ -13,7 +14,7 @@ import { useI18n } from '../../lib/i18n';
 import { newId } from '../../lib/offline';
 import { useEmployees, useStepTemplate, useUnits } from '../../lib/queries';
 
-type Form = { unit_id: string; driver_id: string; mechanic_id: string; hm: string; km: string; maintenance_type: string; maintenance_other: string; problem: string };
+type Form = { unit_id: string; driver_id: string; mechanic_id: string; hm: string; km: string; maintenance_type: string; maintenance_other: string; customer_type: string; payment_type: string; payment_other: string; problem: string };
 
 /** Raise a work order from the field. Mechanics are set as PIC by default; the admin approves it on the web. */
 export function NewJobPage() {
@@ -29,7 +30,7 @@ export function NewJobPage() {
   const mechanics = useEmployees('mechanic');
   const self = can('wo.as_mechanic') && user ? String(user.id) : '';
 
-  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, hm: '', km: '', maintenance_type: '', maintenance_other: '', problem: '' });
+  const [form, setForm] = useState<Form>({ unit_id: '', driver_id: '', mechanic_id: self, hm: '', km: '', maintenance_type: '', maintenance_other: '', customer_type: '', payment_type: '', payment_other: '', problem: '' });
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
 
   /**
@@ -52,6 +53,7 @@ export function NewJobPage() {
       unit_brand: unit?.brand ?? null, unit_model: unit?.model ?? null, unit_serial: unit?.serial_number ?? null, site: unit?.site ?? null, site_company: null,
       driver_id: Number(form.driver_id), driver_name: driver?.full_name ?? '', mechanic_id: form.mechanic_id ? Number(form.mechanic_id) : null, mechanic_name: mechanic?.full_name ?? null,
       problem: form.problem.trim(), maintenance_type: form.maintenance_type, maintenance_other: form.maintenance_other.trim() || null,
+      customer_type: form.customer_type, payment_type: form.payment_type, payment_other: form.payment_type === 'OTHERS' ? form.payment_other.trim() : null,
       hm: Number(form.hm.replace(',', '.')), km: Number(form.km), status: 'OPEN', approval_status: 'WAITING', reject_reason: null, approval_remarks: null, channel_source: 'MOBILE',
       created_by: user.id, created_by_name: user.full_name, created_at: now, updated_at: now, started_at: null, finished_at: null, category_id: null, category: null,
       job_code_list: null, part_list: null, job_standard_duration: null, repair_time: null, step_information: 'Not started', total_time: 0, proof_count: 0, mobile_sync_time: null,
@@ -74,6 +76,7 @@ export function NewJobPage() {
     if (!form.driver_id) next.driver_id = 'Driver is required';
     if (form.problem.trim().length < 5) next.problem = 'Problem description must be at least 5 characters';
     Object.assign(next, maintenanceErrors(form.maintenance_type, form.maintenance_other));
+    Object.assign(next, customerPaymentErrors(form.customer_type, form.payment_type, form.payment_other));
     Object.assign(next, meterErrors(form.hm, form.km, true, units.data?.find((u) => String(u.id) === form.unit_id), undefined, lang));
     setErrors(next);
     if (!Object.keys(next).length) confirm({ message: t('confirm_submit_wo') }, create);
@@ -88,6 +91,14 @@ export function NewJobPage() {
           <MaintenanceTypeField
             type={form.maintenance_type}
             other={form.maintenance_other}
+            errors={errors}
+            inputClassName="h-12"
+            onChange={(field, value) => set(field)({ target: { value } })}
+          />
+          <CustomerPaymentFields
+            customerType={form.customer_type}
+            paymentType={form.payment_type}
+            paymentOther={form.payment_other}
             errors={errors}
             inputClassName="h-12"
             onChange={(field, value) => set(field)({ target: { value } })}

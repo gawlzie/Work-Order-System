@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareTe
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
+import { customerTypeLabel, paymentLabel } from '../../components/CustomerPayment';
 import { maintenanceLabel } from '../../components/MaintenanceType';
 import { formatMeter } from '../../components/MeterFields';
 import { WoJobCodes } from '../../components/WoJobCodes';
@@ -204,6 +205,8 @@ export function JobPage() {
           <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
           <Info label={t('maintenance_type')}>{maintenanceLabel(wo.maintenance_type, t)}</Info>
           <Info label={t('maintenance_notes')}><span className="break-words">{wo.maintenance_other || '-'}</span></Info>
+          <Info label={t('customer_type')}>{customerTypeLabel(wo.customer_type, t)}</Info>
+          <Info label={t('payment')}><span className="break-words">{paymentLabel(wo.payment_type, wo.payment_other, t)}</span></Info>
           <Info label={t('site')}>{wo.site ?? '-'}</Info>
           <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
           <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>

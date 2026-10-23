@@ -360,8 +360,11 @@ function assertRefs({ unit_id, driver_id, mechanic_id }, current = {}, user = nu
 
 /** `metersRequired`: HM / KM must be given (new WOs); on edit an empty value keeps the stored reading. */
 export const MAINTENANCE_TYPES = ['PREVENTIVE', 'REPAIR', 'WARRANTY', 'PDI', 'OTHERS'];
+export const CUSTOMER_TYPES = ['INTERNAL', 'EXTERNAL'];
+export const PAYMENT_TYPES = ['CUSTOMER_PAID', 'FREE', 'OTHERS'];
 
-function validatePayload(body, { metersRequired = true } = {}) {
+/** `customerOptional`: a work order made offline in an older mechanic app, which did not ask customer type / payment yet. */
+function validatePayload(body, { metersRequired = true, customerOptional = false } = {}) {
   const unit_id = Number(body.unit_id);
   const driver_id = Number(body.driver_id);
   const problem = String(body.problem ?? '').trim();
@@ -376,6 +379,14 @@ function validatePayload(body, { metersRequired = true } = {}) {
   if (!MAINTENANCE_TYPES.includes(maintenance_type)) errors.maintenance_type = 'Choose the type of maintenance';
   else if (maintenance_type === 'OTHERS' && (maintenance_other ?? '').length < 2) errors.maintenance_other = 'Notes are required for Others: describe the type of maintenance';
   if (maintenance_other && maintenance_other.length > 200) errors.maintenance_other = 'Notes are too long (max 200 characters)';
+  // Customer type and payment; a payment of "Others" is described in payment_other (kept for Others only).
+  const customer_type = String(body.customer_type ?? '').trim().toUpperCase() || null;
+  const payment_type = String(body.payment_type ?? '').trim().toUpperCase() || null;
+  const payment_other = payment_type === 'OTHERS' ? String(body.payment_other ?? '').trim().replace(/\s+/g, ' ') || null : null;
+  if (customer_type ? !CUSTOMER_TYPES.includes(customer_type) : !customerOptional) errors.customer_type = 'Choose the customer type';
+  if (payment_type ? !PAYMENT_TYPES.includes(payment_type) : !customerOptional) errors.payment_type = 'Choose the payment';
+  else if (payment_type === 'OTHERS' && (payment_other ?? '').length < 2) errors.payment_other = 'Describe the payment for Others';
+  if (payment_other && payment_other.length > 100) errors.payment_other = 'Payment description is too long (max 100 characters)';
   // HM (hour meter, one decimal) and KM (odometer, whole number) are required readings of the unit.
   const hmRaw = String(body.hm ?? '').trim().replace(',', '.');
   const kmRaw = String(body.km ?? '').trim().replace(',', '.');
@@ -396,6 +407,9 @@ function validatePayload(body, { metersRequired = true } = {}) {
     problem,
     maintenance_type,
     maintenance_other,
+    customer_type,
+    payment_type,
+    payment_other,
     hm: hmRaw ? Math.round(hm * 10) / 10 : null,
     km: kmRaw ? km : null,
     mechanic_id: body.mechanic_id ? Number(body.mechanic_id) : null,
@@ -439,9 +453,12 @@ function woSite(body, unitId, user) {
   return site;
 }
 
-/** `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there; `silent`: no notification (example data). */
+/**
+ * `opts` (offline sync): `wo_uuid` made on the phone and `at`, when it was raised there; `customerOptional` for one
+ * from an older app version; `silent`: no notification (example data).
+ */
 export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
-  const data = validatePayload(body);
+  const data = validatePayload(body, { customerOptional: !!opts.customerOptional });
   assertRefs(data, {}, user);
   const site = woSite(body, data.unit_id, user);
   assertMeters(data);
@@ -457,10 +474,11 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
   const approval = APPROVAL.WAITING;
   tx(() => {
     db.prepare(
-      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, maintenance_type, maintenance_other, hm, km, site,
-        status, approval_status, channel_source, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, site,
+      `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, maintenance_type, maintenance_other,
+        customer_type, payment_type, payment_other, hm, km, site, status, approval_status, channel_source, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
+    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other,
+      data.customer_type, data.payment_type, data.payment_other, data.hm, data.km, site,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);
     if (!opts.silent) notify(NOTIFICATION.CREATED, wo_uuid, { actorId: user.id });
@@ -477,10 +495,11 @@ export function updateWorkOrder(woUuid, body, user = null) {
   db.prepare(
     // The site follows the unit only when the unit is changed; otherwise the WO keeps the site it was raised at.
     `UPDATE work_orders SET unit_id = ?, driver_id = ?, mechanic_id = ?, problem = ?, maintenance_type = ?, maintenance_other = ?,
-       hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?,
+       customer_type = ?, payment_type = ?, payment_other = ?, hm = COALESCE(?, hm), km = COALESCE(?, km), updated_at = ?,
        site = CASE WHEN unit_id = ? THEN site ELSE (SELECT site FROM units WHERE id = ?) END
      WHERE wo_uuid = ?`,
-  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.maintenance_type, data.maintenance_other, data.hm, data.km, now(), data.unit_id, data.unit_id, woUuid);
+  ).run(data.unit_id, data.driver_id, data.mechanic_id, data.problem, data.maintenance_type, data.maintenance_other,
+    data.customer_type, data.payment_type, data.payment_other, data.hm, data.km, now(), data.unit_id, data.unit_id, woUuid);
   return getWorkOrder(woUuid);
 }
 

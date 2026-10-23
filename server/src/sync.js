@@ -85,7 +85,8 @@ export function applyOp(op, user) {
   switch (op.type) {
     case 'wo.create':
       need(user, 'wo.create');
-      wo = createWorkOrder(op.body ?? {}, user, CHANNEL.MOBILE, { ...opts, wo_uuid: woUuid });
+      // Queued in an app version that did not ask customer type / payment yet: accepted without them.
+      wo = createWorkOrder(op.body ?? {}, user, CHANNEL.MOBILE, { ...opts, wo_uuid: woUuid, customerOptional: !('customer_type' in (op.body ?? {})) });
       break;
     case 'step.start':
     case 'step.finish':
