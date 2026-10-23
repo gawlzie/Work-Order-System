@@ -149,9 +149,11 @@ body {
   .woform-logo-msi {
     height: 48pt;
   }
+  /* The file is cropped to the logo, so 46 x 22pt shows it whole without stretching. */
   .woform-logo-iel {
+    width: 46pt;
     height: 22pt;
-    margin: 0 0 2pt;
+    object-fit: contain;
   }
   .woform-brand small {
     font-size: 6.5pt;
