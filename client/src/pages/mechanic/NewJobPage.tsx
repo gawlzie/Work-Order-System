@@ -56,7 +56,7 @@ export function NewJobPage() {
       customer_type: form.customer_type, payment_type: form.payment_type, payment_other: form.payment_type === 'OTHERS' ? form.payment_other.trim() : null,
       hm: Number(form.hm.replace(',', '.')), km: Number(form.km), status: 'OPEN', approval_status: 'WAITING', reject_reason: null, approval_remarks: null, channel_source: 'MOBILE',
       created_by: user.id, created_by_name: user.full_name, created_at: now, updated_at: now, started_at: null, finished_at: null, category_id: null, category: null,
-      job_code_list: null, part_list: null, job_standard_duration: null, repair_time: null, step_information: 'Not started', total_time: 0, proof_count: 0, mobile_sync_time: null,
+      job_code_list: null, part_list: null, repair_time: null, step_information: 'Not started', total_time: 0, proof_count: 0, mobile_sync_time: null,
       steps, additional_work: [], categories: [], job_codes: [], proofs: [],
     };
     act({ type: 'wo.create', wo_uuid, label: t('op_wo_create', { unit: unit?.unit_number ?? '' }), body: { ...form }, view });

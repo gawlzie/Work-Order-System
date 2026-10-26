@@ -8,8 +8,8 @@ import { durationBetween, formatDateTime, formatDuration, fromDateTimeInput, toD
 import { useI18n } from '../lib/i18n';
 import { useOnline } from '../lib/pwa';
 import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
-import { crewNames, jobManSeconds, woCategories, type WoCategory, type WoJobCode, type WorkOrderDetail } from '../lib/types';
-import { JobCodePicker, jobDuration } from './JobCodePicker';
+import { crewNames, woCategories, type WoCategory, type WoJobCode, type WorkOrderDetail } from '../lib/types';
+import { JobCodePicker } from './JobCodePicker';
 import { JobParts } from './JobParts';
 import { entryRef, useAct } from '../lib/act';
 import { newRef } from '../lib/offline';
@@ -198,8 +198,6 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
     onError: (err) => toast('error', (err as Error).message),
   });
 
-  const totalStd = wo.job_codes.reduce((sum, j) => sum + (j.standard_duration ?? 0), 0);
-  const totalMan = wo.job_codes.reduce((sum, j) => sum + (j.finished_at ? jobManSeconds(j) ?? 0 : 0), 0);
   const mechanicName = (id: string) => mechanics.data?.find((m) => String(m.id) === id)?.full_name ?? '';
   const finishedJobs = wo.job_codes.filter((j) => j.finished_at).length;
   const busy = (j: WoJobCode, action: 'start' | 'finish') => timer.isPending && timer.variables?.entry.id === j.id && timer.variables.action === action;
@@ -281,10 +279,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
             </p>
           </div>
           {wo.job_codes.length > 0 && (
-            <span className="shrink-0 text-right text-xs text-muted-foreground">
-              {t('standard_total')}<br /><span className="text-sm font-medium text-foreground tabular-nums">{jobDuration(totalStd || null)}</span>
-              {totalMan > 0 && <><br />{t('man_hours_total')}<br /><span className="text-sm font-medium text-foreground tabular-nums">{formatDuration(totalMan)}</span></>}
-            </span>
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{t('jobs_done', { done: finishedJobs, total: wo.job_codes.length })}</span>
           )}
         </div>
       )}
@@ -294,8 +289,6 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
           {wo.job_codes.length > 0 && (
             <span className="text-xs text-muted-foreground tabular-nums">
               {t('jobs_done', { done: finishedJobs, total: wo.job_codes.length })}
-              {manual && <> · {t('standard_total')} {jobDuration(totalStd || null)}</>}
-              {totalMan > 0 && <> · {t('man_hours')} {formatDuration(totalMan)}</>}
             </span>
           )}
         </div>
@@ -345,7 +338,6 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
         <ul className={clsx('divide-y divide-border', compact && 'rounded-xl border border-border')}>
           {wo.job_codes.map((j) => {
             const crew = j.crew ?? [];
-            const man = jobManSeconds(j) ?? 0;
             return (
             <li key={j.id} className={clsx('flex items-start gap-3', compact ? 'px-3 py-2.5' : 'px-4 py-3', j.started_at && !j.finished_at && 'bg-yellow-500/5')}>
               <span className="pt-0.5">
@@ -357,7 +349,6 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                   {cats.length > 1 && <>{j.category_name} · </>}
                   <span className="text-foreground">{j.mechanic_name}</span>
                   {crew.length > 0 && <> ({t('lead_short')}) + {crew.map((c) => c.full_name).join(', ')}</>}
-                  {' · '}{t('standard_short')} {jobDuration(j.standard_duration)}
                   {(!compact || manual) && <> · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
                 </p>
                 {j.started_at && (
@@ -365,16 +356,10 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                     <span className="font-medium tabular-nums">{formatDuration(durationBetween(j.started_at, j.finished_at))}</span>
                     {crew.length > 0 && (
                       <span className="text-muted-foreground">
-                        <Users className="mr-0.5 inline size-3.5 align-[-2px]" />{t('crew_of', { n: crew.length + 1 })} · {t('man_hours')} <span className="font-medium text-foreground tabular-nums">{formatDuration(man)}</span>
+                        <Users className="mr-0.5 inline size-3.5 align-[-2px]" />{t('crew_of', { n: crew.length + 1 })}
                       </span>
                     )}
                     {(!compact || manual) && <span className="text-muted-foreground">{formatDateTime(j.started_at)} – {j.finished_at ? formatDateTime(j.finished_at) : '…'}</span>}
-                    {/* The standard (MANHOUR) is in man-hours: compared with the time of the whole crew. */}
-                    {j.finished_at && j.standard_duration ? (
-                      man > j.standard_duration * 60
-                        ? <span className="rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration(man - j.standard_duration * 60) })}</span>
-                        : <span className="rounded-full bg-emerald-500/10 px-1.5 text-emerald-700 dark:text-emerald-400">{t('within_standard')}</span>
-                    ) : null}
                   </p>
                 )}
                 {editable && (admin || !j.finished_at) && (

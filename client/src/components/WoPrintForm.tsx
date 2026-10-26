@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { durationBetween, formatDateTime } from '../lib/format';
-import { crewNames, jobManSeconds, type WorkOrderDetail } from '../lib/types';
+import { crewNames, type WorkOrderDetail } from '../lib/types';
 import { formatMeter } from './MeterFields';
 import ielLogo from '../assets/print/logo-iel.png';
 import msiLogo from '../assets/print/logo-msi.png';
@@ -196,8 +196,7 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
                 <td>{j ? crewNames(j) : ''}</td>
                 <td>{j?.job_name ?? ''}</td>
                 <td>{j?.job_code ?? ''}</td>
-                {/* With helpers, also the man-hours (time x people) that the standard is set in. */}
-                <td className="whitespace-nowrap">{j ? hours(durationBetween(j.started_at, j.finished_at)) : ''}{j?.started_at && j.crew?.length ? ` (${hours(jobManSeconds(j))} MH)` : ''}</td>
+                <td className="whitespace-nowrap">{j ? hours(durationBetween(j.started_at, j.finished_at)) : ''}</td>
               </tr>
             );
           })}

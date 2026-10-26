@@ -1,5 +1,3 @@
-import { durationBetween } from './format';
-
 export type Permission =
   | 'wo.create'
   | 'wo.update'
@@ -181,11 +179,7 @@ export interface WorkOrder {
   job_code_list: string | null;
   /** Spare parts used, e.g. "VG61000070005 x2 PCS; ..." (null when none). */
   part_list: string | null;
-  /** Sum of the standard durations of the WO's job codes in minutes, null when none is known. */
-  job_standard_duration: number | null;
-  /** Man-hours of the finished job codes in seconds (lead + helpers); null when none is finished. */
-  job_man_seconds?: number | null;
-  /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
+  /** Seconds spent in the repair step (Repair Process); null before it starts. */
   repair_time: number | null;
   problem: string;
   maintenance_type: MaintenanceType | null;
@@ -282,15 +276,6 @@ export interface WoJobCrew {
 
 /** Lead and helpers of a job code entry, e.g. "Budi, Andi, Rudi". */
 export const crewNames = (j: WoJobCode) => [j.mechanic_name, ...(j.crew ?? []).map((c) => c.full_name)].join(', ');
-
-/**
- * Man-hours of a job code entry in seconds: its time (up to now while it runs) times the people in the crew, lead
- * included; null before it starts. Compared with the job code's standard (MANHOUR).
- */
-export function jobManSeconds(j: WoJobCode): number | null {
-  const time = durationBetween(j.started_at, j.finished_at);
-  return time == null ? null : time * (1 + (j.crew?.length ?? 0));
-}
 
 /** One spare part line of a job code entry, typed freely; part_number / sparepart_id only on lines from the former spare part master. */
 export interface WoJobPart {

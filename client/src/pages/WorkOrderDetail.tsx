@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalDialog } from '../components/ApprovalDialog';
 import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
-import { jobDuration } from '../components/JobCodePicker';
+
 import { formatMeter } from '../components/MeterFields';
 import { ProofSection } from '../components/ProofSection';
 import { WoJobCodes } from '../components/WoJobCodes';
@@ -17,7 +17,7 @@ import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { usePrintFileName } from '../lib/print';
 import { useWorkOrder } from '../lib/queries';
-import type { Step, WorkOrderDetail } from '../lib/types';
+import type { Step } from '../lib/types';
 
 function Info({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -25,19 +25,6 @@ function Info({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1 text-sm font-medium">{children}</dd>
     </div>
-  );
-}
-
-function StandardCompare({ wo }: { wo: WorkOrderDetail }) {
-  const { t } = useI18n();
-  // Judged once the repair step is done: repair time against the job code's standard duration.
-  const repairDone = wo.steps.concat(wo.additional_work).some((s) => s.allow_add_sub && s.finished_at);
-  if (!wo.job_standard_duration || wo.repair_time == null || !repairDone) return null;
-  const diff = wo.repair_time - wo.job_standard_duration * 60;
-  return diff > 0 ? (
-    <span className="ml-2 rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration(diff) })}</span>
-  ) : (
-    <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">{t('within_standard')}</span>
   );
 }
 
@@ -196,10 +183,7 @@ export function WorkOrderDetailPage() {
           <Info label={t('mobile_sync_time')}>{formatDateTime(wo.mobile_sync_time)}</Info>
           <Info label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></Info>
           {wo.job_codes.length > 0 && (
-            <Info label={t('standard_total')}><span className="tabular-nums">{jobDuration(wo.job_standard_duration)}</span></Info>
-          )}
-          {wo.job_codes.length > 0 && (
-            <Info label={t('repair_time')}><span className="tabular-nums">{wo.repair_time == null ? '-' : formatDuration(wo.repair_time)}</span><StandardCompare wo={wo} /></Info>
+            <Info label={t('repair_time')}><span className="tabular-nums">{wo.repair_time == null ? '-' : formatDuration(wo.repair_time)}</span></Info>
           )}
         </dl>
         <div className="mt-4 rounded-lg bg-muted p-4">

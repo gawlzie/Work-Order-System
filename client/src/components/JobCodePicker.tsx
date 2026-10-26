@@ -1,13 +1,10 @@
 import { clsx } from 'clsx';
 import { Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import type { JobCodeOption } from '../lib/types';
 
 const MAX_RESULTS = 50;
-
-export const jobDuration = (minutes: number | null | undefined) => (minutes ? formatDuration(minutes * 60) : '-');
 
 /**
  * Searchable job code picker (the list has hundreds of codes, too many for a plain select).
@@ -98,10 +95,7 @@ export function JobCodePicker({ options, value, onChange, invalid, className }: 
               onMouseDown={(e) => { e.preventDefault(); pick(o); }}
               className={clsx('cursor-pointer rounded-md px-3 py-2 text-sm', i === active && 'bg-muted', String(o.id) === value && 'font-medium text-primary')}
             >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0"><span className="font-mono text-xs">{o.job_code}</span> · {o.job_name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{jobDuration(o.standard_duration)}</span>
-              </div>
+              <div className="min-w-0"><span className="font-mono text-xs">{o.job_code}</span> · {o.job_name}</div>
               <p className="text-xs text-muted-foreground">{o.category_name}</p>
             </li>
           ))}

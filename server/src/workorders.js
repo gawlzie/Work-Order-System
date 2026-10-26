@@ -175,9 +175,7 @@ const LIST_SELECT = `
             WHERE wc.wo_uuid = wo.wo_uuid ORDER BY wc.added_at, c.name)) AS category,
          cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
-         (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
-         (SELECT ROUND(SUM((julianday(x.finished_at) - julianday(x.started_at)) * 86400 * (1 + (SELECT COUNT(*) FROM wo_job_crew c WHERE c.wo_job_code_id = x.id))))
-            FROM wo_job_codes x WHERE x.wo_uuid = wo.wo_uuid AND x.started_at IS NOT NULL AND x.finished_at IS NOT NULL) AS job_man_seconds,
+
          (SELECT GROUP_CONCAT(p.part_name || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
             WHERE x.wo_uuid = wo.wo_uuid) AS part_list,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
