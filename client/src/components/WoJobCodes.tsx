@@ -360,6 +360,12 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                       </span>
                     )}
                     {(!compact || manual) && <span className="text-muted-foreground">{formatDateTime(j.started_at)} – {j.finished_at ? formatDateTime(j.finished_at) : '…'}</span>}
+                    {/* Job time (start to finish) against the job code's duration in the master. */}
+                    {j.finished_at && j.standard_duration ? (
+                      (durationBetween(j.started_at, j.finished_at) ?? 0) > j.standard_duration * 60
+                        ? <span className="rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration((durationBetween(j.started_at, j.finished_at) ?? 0) - j.standard_duration * 60) })}</span>
+                        : <span className="rounded-full bg-emerald-500/10 px-1.5 text-emerald-700 dark:text-emerald-400">{t('within_standard')}</span>
+                    ) : null}
                   </p>
                 )}
                 {editable && (admin || !j.finished_at) && (
