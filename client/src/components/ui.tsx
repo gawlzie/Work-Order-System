@@ -1,6 +1,10 @@
 import { clsx } from 'clsx';
 import { Inbox, Loader2, X } from 'lucide-react';
-import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { fieldBase } from './fieldStyles';
+
+// Every drop-down is the searchable one.
+export { Select } from './SearchSelect';
 
 type Variant = 'primary' | 'outline' | 'ghost' | 'destructive' | 'success';
 
@@ -40,25 +44,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = 'Button';
 
-// 16px text on phones stops iOS Safari from zooming in when a field is focused.
-const fieldBase =
-  'w-full rounded-lg border border-border bg-card px-3 text-base outline-none sm:text-sm transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60';
-
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   ({ className, invalid, ...props }, ref) => (
     <input ref={ref} className={clsx(fieldBase, 'h-10', invalid && 'border-destructive', className)} {...props} />
   ),
 );
 Input.displayName = 'Input';
-
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(
-  ({ className, invalid, children, ...props }, ref) => (
-    <select ref={ref} className={clsx(fieldBase, 'h-10 pr-8', invalid && 'border-destructive', className)} {...props}>
-      {children}
-    </select>
-  ),
-);
-Select.displayName = 'Select';
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(
   ({ className, invalid, ...props }, ref) => (
