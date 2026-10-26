@@ -181,10 +181,10 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
         <thead>
           <tr>
             <th className="w-[6%]">No.</th>
-            <th className="w-[20%]">Mechanic / Crew</th>
+            <th className="w-[28%]">Mechanic / Crew</th>
             <th>Action / Work Performed</th>
-            <th className="w-[18%]">Job Code</th>
-            <th className="w-[12%]">Time (hrs)</th>
+            <th className="w-[13%]">Job Code</th>
+            <th className="w-[15%]">Time (hrs)</th>
           </tr>
         </thead>
         <tbody>
@@ -197,7 +197,7 @@ export function WoPrintForm({ wo }: { wo: WorkOrderDetail }) {
                 <td>{j?.job_name ?? ''}</td>
                 <td>{j?.job_code ?? ''}</td>
                 {/* With helpers, also the man-hours (time x people) that the standard is set in. */}
-                <td>{j ? hours(durationBetween(j.started_at, j.finished_at)) : ''}{j?.started_at && j.crew?.length ? ` (${hours(jobManSeconds(j))} MH)` : ''}</td>
+                <td className="whitespace-nowrap">{j ? hours(durationBetween(j.started_at, j.finished_at)) : ''}{j?.started_at && j.crew?.length ? ` (${hours(jobManSeconds(j))} MH)` : ''}</td>
               </tr>
             );
           })}
