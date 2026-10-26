@@ -47,14 +47,26 @@ const assertWorkable = (wo) => {
   if (wo.approval_status === APPROVAL.REJECT) throw new HttpError(409, 'This work order was rejected; work cannot continue');
 };
 
-export function nextWoNumber(date = new Date()) {
+/**
+ * Work order number: WO-<site alias>-<location alias>-<YYYYMM>-<NNN>, e.g. WO-BIB-TABUM-202610-047. A site without
+ * an alias leaves that part out. The number is fixed once given (a later alias or unit change does not renumber).
+ */
+export function woNumber(site, ym, seq) {
+  const aliases = site ? db.prepare('SELECT site_alias, location_alias FROM sites WHERE site_name = ? COLLATE NOCASE').get(site) : null;
+  return ['WO', aliases?.site_alias, aliases?.location_alias, ym, String(seq).padStart(3, '0')].filter(Boolean).join('-');
+}
+
+/** Ends of the numbers: "-YYYYMM-NNN" (also the older WO-YYYYMM-NNNN). */
+const NUMBER_TAIL = /-(\d{6})-(\d+)$/;
+
+/** The next number at `site`: the sequence runs per month over all sites, so it stays unique whatever the aliases. */
+export function nextWoNumber(site, date = new Date()) {
   const ym = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
-  const prefix = `WO-${ym}-`;
-  const row = db
-    .prepare('SELECT wo_number FROM work_orders WHERE wo_number LIKE ? ORDER BY wo_number DESC LIMIT 1')
-    .get(`${prefix}%`);
-  const seq = row ? Number(row.wo_number.slice(prefix.length)) + 1 : 1;
-  return `${prefix}${String(seq).padStart(4, '0')}`;
+  const last = db.prepare('SELECT wo_number FROM work_orders WHERE wo_number LIKE ?').all(`%-${ym}-%`)
+    .map((r) => NUMBER_TAIL.exec(r.wo_number))
+    .filter((m) => m && m[1] === ym)
+    .reduce((max, m) => Math.max(max, Number(m[2])), 0);
+  return woNumber(site, ym, last + 1);
 }
 
 /** Comparable form of a step list: names, flags and sub-steps in order. */
@@ -477,7 +489,7 @@ export function createWorkOrder(body, user, channel = CHANNEL.WEB, opts = {}) {
       `INSERT INTO work_orders (wo_uuid, wo_number, unit_id, driver_id, mechanic_id, category_id, problem, maintenance_type, maintenance_other,
         customer_type, payment_type, payment_other, hm, km, site, status, approval_status, channel_source, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?, ?, ?)`,
-    ).run(wo_uuid, nextWoNumber(), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other,
+    ).run(wo_uuid, nextWoNumber(site), data.unit_id, data.driver_id, data.mechanic_id, null, data.problem, data.maintenance_type, data.maintenance_other,
       data.customer_type, data.payment_type, data.payment_other, data.hm, data.km, site,
       approval, channel, user.id, ts, ts);
     insertSteps(wo_uuid);

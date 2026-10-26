@@ -191,9 +191,15 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
     setErrors((er) => ({ ...er, [k]: '' }));
   };
 
+  // Aliases: capitals and digits only (spaces and dashes dropped as typed).
+  const alias = (k: 'site_alias' | 'location_alias') => (e: { target: { value: string } }) => set(k)({ target: { value: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') } });
+  const woExample = ['WO', form.site_alias, form.location_alias, '202610', '047'].filter(Boolean).join('-');
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
+    for (const k of ['site_alias', 'location_alias'] as const)
+      if (form[k] && !/^[A-Z0-9]{2,20}$/.test(form[k])) next[k] = 'Alias must be 2-20 letters or digits';
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{1,19}$/.test(form.site_code.trim())) next.site_code = 'Site code must be 2-20 characters: A-Z, 0-9, _ -';
     if (form.site_name.trim().length < 2) next.site_name = 'Site name must be 2-100 characters';
     if (form.company.trim().length < 2) next.company = 'Company must be 2-100 characters';
@@ -235,7 +241,7 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
           <Input value={form.site_name} onChange={set('site_name')} placeholder="Site Kalimantan - Pit C" maxLength={100} invalid={!!errors.site_name} />
         </Field>
         <Field label={t('site_alias')} error={errors.site_alias}>
-          <Input value={form.site_alias} onChange={set('site_alias')} placeholder="PIT-C" maxLength={50} invalid={!!errors.site_alias} />
+          <Input value={form.site_alias} onChange={alias('site_alias')} placeholder="BIB" maxLength={20} invalid={!!errors.site_alias} className="font-mono uppercase" />
         </Field>
         <Field label={t('company')} required error={errors.company}>
           <Input value={form.company} onChange={set('company')} maxLength={100} invalid={!!errors.company} />
@@ -244,8 +250,9 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
           <Input value={form.location} onChange={set('location')} placeholder="Kutai Kartanegara, Kalimantan Timur" maxLength={200} invalid={!!errors.location} />
         </Field>
         <Field label={t('location_alias')} error={errors.location_alias}>
-          <Input value={form.location_alias} onChange={set('location_alias')} placeholder="KUKAR" maxLength={50} invalid={!!errors.location_alias} />
+          <Input value={form.location_alias} onChange={alias('location_alias')} placeholder="TABUM" maxLength={20} invalid={!!errors.location_alias} className="font-mono uppercase" />
         </Field>
+        <p className="-mt-2 text-xs text-muted-foreground">{t('site_alias_hint', { example: woExample })}</p>
         <Switch checked={form.is_active} onChange={(v) => setForm((f) => ({ ...f, is_active: v }))} label={t('active')} description={t('site_active_hint')} />
       </form>
     </Modal>

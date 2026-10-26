@@ -539,6 +539,8 @@ export function getSite(id) {
   return row;
 }
 
+const ALIAS = /^[A-Z0-9]{2,20}$/;
+
 /** Body: site_code, site_name, company, location, site_alias, location_alias (the last three optional), is_active. */
 function validateSite(body, existing) {
   const errors = {};
@@ -547,8 +549,9 @@ function validateSite(body, existing) {
     site_name: str(body.site_name).replace(/\s+/g, ' '),
     company: str(body.company).replace(/\s+/g, ' '),
     location: optional(body.location),
-    site_alias: optional(body.site_alias)?.replace(/\s+/g, ' ') ?? null,
-    location_alias: optional(body.location_alias)?.replace(/\s+/g, ' ') ?? null,
+    // Part of new work order numbers (WO-BIB-TABUM-202610-047): capitals and digits only.
+    site_alias: optional(body.site_alias)?.toUpperCase() ?? null,
+    location_alias: optional(body.location_alias)?.toUpperCase() ?? null,
     is_active: flag(body.is_active, existing?.is_active ?? 1),
   };
   if (!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(data.site_code)) errors.site_code = 'Site code must be 2-20 characters: A-Z, 0-9, _ -';
@@ -557,8 +560,8 @@ function validateSite(body, existing) {
   else if (taken('sites', 'site_name', data.site_name, existing?.id)) errors.site_name = 'Site name is already used';
   if (data.company.length < 2 || data.company.length > 100) errors.company = 'Company must be 2-100 characters';
   if (data.location && data.location.length > 200) errors.location = 'Location must be at most 200 characters';
-  if (data.site_alias && data.site_alias.length > 50) errors.site_alias = 'Site alias must be at most 50 characters';
-  if (data.location_alias && data.location_alias.length > 50) errors.location_alias = 'Location alias must be at most 50 characters';
+  if (data.site_alias && !ALIAS.test(data.site_alias)) errors.site_alias = 'Site alias must be 2-20 letters or digits (no spaces or dashes)';
+  if (data.location_alias && !ALIAS.test(data.location_alias)) errors.location_alias = 'Location alias must be 2-20 letters or digits (no spaces or dashes)';
   fail(errors);
   return data;
 }
