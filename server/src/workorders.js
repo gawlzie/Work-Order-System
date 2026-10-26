@@ -176,8 +176,7 @@ const LIST_SELECT = `
          cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
          (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
-         (SELECT ROUND(SUM((julianday(x.finished_at) - julianday(x.started_at)) * 86400 * (1 + (SELECT COUNT(*) FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.joined_at IS NULL))
-                   + COALESCE((SELECT SUM(MAX(0, julianday(x.finished_at) - julianday(c.joined_at)) * 86400) FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.joined_at IS NOT NULL), 0)))
+         (SELECT ROUND(SUM((julianday(x.finished_at) - julianday(x.started_at)) * 86400 * (1 + (SELECT COUNT(*) FROM wo_job_crew c WHERE c.wo_job_code_id = x.id))))
             FROM wo_job_codes x WHERE x.wo_uuid = wo.wo_uuid AND x.started_at IS NOT NULL AND x.finished_at IS NOT NULL) AS job_man_seconds,
          (SELECT GROUP_CONCAT(p.part_name || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
             WHERE x.wo_uuid = wo.wo_uuid) AS part_list,
@@ -763,9 +762,9 @@ export function addWoJobCode(woUuid, body, user, opts = {}) {
 }
 
 /**
- * Sets the helpers of a job code entry (body.helper_ids, the whole list). There is one timer for the crew: a helper
- * added while the job code runs counts from that moment, otherwise from its start. Once it has started, only an
- * approver can take a helper off (the time already worked would be lost).
+ * Sets the helpers of a job code entry (body.helper_ids, the whole list). There is one timer for the crew: every
+ * helper gets the lead's time, also one added while the job code runs. Once it has started, only an approver can take
+ * a helper off.
  */
 export function setWoJobCrew(woUuid, entryId, body, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
@@ -779,12 +778,11 @@ export function setWoJobCrew(woUuid, entryId, body, user, opts = {}) {
   const added = crew.ids.filter((id) => !current.includes(id));
   if (removed.length && entry.started_at && !admin) throw new HttpError(409, 'Helpers stay on the crew once the job code has started; ask the admin to change it');
   const ts = opts.at ?? now();
-  const joined = entry.started_at && !entry.finished_at && ts > entry.started_at ? ts : null;
   tx(() => {
     const drop = db.prepare('DELETE FROM wo_job_crew WHERE wo_job_code_id = ? AND employee_id = ?');
     for (const id of removed) drop.run(entry.id, id);
-    const addHelper = db.prepare('INSERT INTO wo_job_crew (wo_job_code_id, employee_id, joined_at, added_by, added_at) VALUES (?, ?, ?, ?, ?)');
-    for (const id of added) addHelper.run(entry.id, id, joined, user.id, ts);
+    const addHelper = db.prepare('INSERT INTO wo_job_crew (wo_job_code_id, employee_id, joined_at, added_by, added_at) VALUES (?, ?, NULL, ?, ?)');
+    for (const id of added) addHelper.run(entry.id, id, user.id, ts);
     db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(now(), woUuid);
   });
   return getWorkOrder(woUuid);

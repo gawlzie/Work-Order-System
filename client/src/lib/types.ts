@@ -1,3 +1,5 @@
+import { durationBetween } from './format';
+
 export type Permission =
   | 'wo.create'
   | 'wo.update'
@@ -269,10 +271,11 @@ export interface WoJobCode {
   client_ref?: string | null;
 }
 
-/** A helper on a job code entry: counted from the job code's start, or from joined_at when added while it ran. */
+/** A helper on a job code entry: gets the same time as the lead (the crew's start to finish). */
 export interface WoJobCrew {
   employee_id: number;
   full_name: string;
+  /** No longer used (always null). */
   joined_at: string | null;
   added_at: string;
 }
@@ -281,15 +284,12 @@ export interface WoJobCrew {
 export const crewNames = (j: WoJobCode) => [j.mechanic_name, ...(j.crew ?? []).map((c) => c.full_name)].join(', ');
 
 /**
- * Man-hours of a job code entry in seconds: the lead's time plus each helper's (from the start, or from when they
- * joined), up to now while it runs; null before it starts. Compared with the job code's standard (MANHOUR).
+ * Man-hours of a job code entry in seconds: its time (up to now while it runs) times the people in the crew, lead
+ * included; null before it starts. Compared with the job code's standard (MANHOUR).
  */
 export function jobManSeconds(j: WoJobCode): number | null {
-  if (!j.started_at) return null;
-  const start = new Date(j.started_at).getTime();
-  const end = j.finished_at ? new Date(j.finished_at).getTime() : Date.now();
-  const span = (from: number) => Math.max(0, Math.round((end - from) / 1000));
-  return span(start) + (j.crew ?? []).reduce((sum, c) => sum + span(c.joined_at ? Math.max(start, new Date(c.joined_at).getTime()) : start), 0);
+  const time = durationBetween(j.started_at, j.finished_at);
+  return time == null ? null : time * (1 + (j.crew?.length ?? 0));
 }
 
 /** One spare part line of a job code entry, typed freely; part_number / sparepart_id only on lines from the former spare part master. */

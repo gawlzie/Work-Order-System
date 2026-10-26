@@ -2,7 +2,7 @@
  * Gives the example job code entries of Step 7 a crew (helpers next to the lead), only on entries that have none yet;
  * nothing else is changed. The standard (MANHOUR) is in man-hours, so a crew is only added where the man-hours stay
  * within the standard (+10%):
- * - finished entries: as many helpers from the start as fit (at most 2), else or then one helper who joined half way;
+ * - finished entries: as many helpers as fit (at most 2), each with the crew's whole time;
  * - a running entry: one helper; not started big jobs (2 h and more): a planned crew, two from 10 h;
  * - small jobs (standard under 1 h) and entries stopped right after the start (under 5 min) stay with the lead alone.
  * Helpers are mechanics not already on that job code of the work order and not busy on another job code at that
@@ -28,7 +28,7 @@ export function fillCrews() {
   // Time a mechanic spends on job codes (as lead or helper), to keep a helper from being in two places at once.
   const busy = db.prepare(`SELECT 1 FROM wo_job_codes x WHERE x.id != ? AND x.started_at IS NOT NULL
     AND (x.mechanic_id = ? AND x.started_at < ? AND COALESCE(x.finished_at, ?) > ?
-      OR EXISTS (SELECT 1 FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.employee_id = ? AND COALESCE(c.joined_at, x.started_at) < ? AND COALESCE(x.finished_at, ?) > ?))`);
+      OR EXISTS (SELECT 1 FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.employee_id = ? AND x.started_at < ? AND COALESCE(x.finished_at, ?) > ?))`);
   const onWo = db.prepare(`SELECT 1 FROM wo_job_codes x WHERE x.wo_uuid = ?
     AND (x.mechanic_id = ? OR EXISTS (SELECT 1 FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.employee_id = ?))`);
   const now = new Date().toISOString();
@@ -39,11 +39,9 @@ export function fillCrews() {
       const std = e.standard_duration ?? 0;
       const minutes = e.started_at && e.finished_at ? (Date.parse(e.finished_at) - Date.parse(e.started_at)) / 60000 : null;
       let whole = 0;
-      let halfWay = false;
       if (e.finished_at) {
         if (std < 60 || minutes < 5) continue;
         while (whole < 2 && minutes * (whole + 2) <= std * MARGIN) whole++;
-        halfWay = whole < 2 && minutes * (whole + 1.5) <= std * MARGIN;
       } else if (e.started_at) {
         if (std < 30) continue;
         whole = 1;
@@ -51,29 +49,21 @@ export function fillCrews() {
         if (std < 120) continue;
         whole = std >= 600 ? 2 : 1;
       }
-      if (!whole && !halfWay) continue;
+      if (!whole) continue;
       // Same site first, then the others, rotated per entry so the crews vary.
-      const free = (m, from) => {
+      const free = (m) => {
         if (!e.started_at) return !onWo.get(e.wo_uuid, m.id, m.id);
         const to = e.finished_at ?? now;
-        return !busy.get(e.id, m.id, to, now, from, m.id, to, now, from);
+        return !busy.get(e.id, m.id, to, now, e.started_at, m.id, to, now, e.started_at);
       };
       const pool = mechanics
-        .filter((m) => m.id !== e.mechanic_id && !onJob.get(e.wo_uuid, e.job_code_id, m.id, m.id) && free(m, e.started_at))
+        .filter((m) => m.id !== e.mechanic_id && !onJob.get(e.wo_uuid, e.job_code_id, m.id, m.id) && free(m))
         .sort((a, b) => (b.site === e.site) - (a.site === e.site) || ((a.id + e.id) % 7) - ((b.id + e.id) % 7));
       const names = [];
       for (let i = 0; i < whole && pool.length; i++) {
         const m = pool.shift();
         add.run(e.id, m.id, null, e.mechanic_id, e.added_at);
         names.push(m.full_name);
-      }
-      const joined = halfWay && new Date((Date.parse(e.started_at) + Date.parse(e.finished_at)) / 2).toISOString();
-      // Free from half way is enough for the one who joins then.
-      const late = halfWay && (pool.shift() ?? mechanics.find((m) => m.id !== e.mechanic_id && !onJob.get(e.wo_uuid, e.job_code_id, m.id, m.id) && free(m, joined)));
-      if (late) {
-        const m = late;
-        add.run(e.id, m.id, joined, e.mechanic_id, joined);
-        names.push(`${m.full_name} (joined half way)`);
       }
       if (names.length) lines.push(`${e.wo_number} ${e.job_code}: + ${names.join(', ')}`);
     }

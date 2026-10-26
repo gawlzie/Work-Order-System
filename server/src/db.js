@@ -212,7 +212,8 @@ CREATE TABLE IF NOT EXISTS wo_job_parts (
 CREATE INDEX IF NOT EXISTS idx_wo_job_parts_entry ON wo_job_parts(wo_job_code_id);
 
 -- Helpers of a job code entry (Step 7); the entry's mechanic_id is the lead who started it. The lead's start / finish
--- times the whole crew: a helper counts from the start (joined_at NULL) or, when added while it ran, from joined_at.
+-- times the whole crew: every helper gets the same time as the lead, also one added while it ran.
+-- joined_at is no longer used (always NULL).
 CREATE TABLE IF NOT EXISTS wo_job_crew (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   wo_job_code_id INTEGER NOT NULL REFERENCES wo_job_codes(id) ON DELETE CASCADE,
@@ -432,6 +433,8 @@ if (!woCols.includes('hm')) db.exec('ALTER TABLE work_orders ADD COLUMN hm REAL'
 if (!woCols.includes('km')) db.exec('ALTER TABLE work_orders ADD COLUMN km REAL');
 if (!columns('wo_steps').includes('allow_add_sub')) db.exec('ALTER TABLE wo_steps ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
 if (!columns('step_templates').includes('allow_add_sub')) db.exec('ALTER TABLE step_templates ADD COLUMN allow_add_sub INTEGER NOT NULL DEFAULT 0');
+// Helpers added while a job code ran used to count from then (joined_at); they now get the whole crew time.
+db.exec('UPDATE wo_job_crew SET joined_at = NULL WHERE joined_at IS NOT NULL');
 // One repair category per work order (work_orders.category_id) became a list (wo_categories). The column stays as the
 // first category of the list, so a work order written with it alone (older seed data) gets it listed here.
 db.exec(`INSERT OR IGNORE INTO wo_categories (wo_uuid, category_id, added_by, added_at)

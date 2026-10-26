@@ -281,10 +281,8 @@ function applyOp(wo: WorkOrderDetail, op: OutboxOp): WorkOrderDetail {
     case 'job.crew': {
       const e = findEntry(next, op);
       if (e) {
-        // Same rule as the server: a helper added while the job code runs counts from then.
-        const joined = e.started_at && !e.finished_at && op.at > e.started_at ? op.at : null;
         const names = new Map(((v.crew as WoJobCrew[] | undefined) ?? []).map((c) => [c.employee_id, c.full_name]));
-        e.crew = (op.helper_ids ?? []).map((id) => (e.crew ?? []).find((c) => c.employee_id === id) ?? { employee_id: id, full_name: names.get(id) ?? '', joined_at: joined, added_at: op.at });
+        e.crew = (op.helper_ids ?? []).map((id) => (e.crew ?? []).find((c) => c.employee_id === id) ?? { employee_id: id, full_name: names.get(id) ?? '', joined_at: null, added_at: op.at });
       }
       break;
     }
