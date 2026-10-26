@@ -165,7 +165,8 @@ export function JobPage() {
               {canProgress && (
                 current.started_at ? (
                   <div className="mt-4 space-y-3">
-                    <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={t('remarks_placeholder')} maxLength={500} className="min-h-20" />
+                    {!!current.allow_add_sub && <p className="text-sm font-medium">{t('step_remarks_label', { step: `${current.step_no}. ${current.step_name}` })}</p>}
+                    <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={current.allow_add_sub ? t('repair_remarks_placeholder') : t('remarks_placeholder')} maxLength={500} className="min-h-20" />
                     <Button variant="success" className="h-14 w-full text-base" disabled={!!jobsBlock} onClick={() => run(current, 'finish')}>
                       <CheckCircle2 className="size-5" /> {t('m_finish_current')}
                     </Button>

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Check, CheckCircle2, Circle, Clock, Hash, Loader, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
+import { Check, CheckCircle2, Circle, Clock, Hash, Loader, Pencil, Play, Plus, Trash2, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -8,7 +8,7 @@ import { durationBetween, formatDateTime, formatDuration, fromDateTimeInput, toD
 import { useI18n } from '../lib/i18n';
 import { useOnline } from '../lib/pwa';
 import { useCategories, useEmployees, useJobCodeOptions } from '../lib/queries';
-import { woCategories, type WoCategory, type WoJobCode, type WorkOrderDetail } from '../lib/types';
+import { crewNames, jobManSeconds, woCategories, type WoCategory, type WoJobCode, type WorkOrderDetail } from '../lib/types';
 import { JobCodePicker, jobDuration } from './JobCodePicker';
 import { JobParts } from './JobParts';
 import { entryRef, useAct } from '../lib/act';
@@ -24,6 +24,45 @@ import { Button, Field, Input, Modal, Select } from './ui';
  * `manual` (admin page): no start / finish timers; the admin types in each job code's start and finish time instead.
  * `compact` with `manual`: shown inside the Step 7 row of the admin page, still with each job code's times.
  */
+/** Helpers of a job code as removable chips, with a list to add one more; `locked` helpers cannot be taken off. */
+function HelperPicker({ value, onChange, mechanics, exclude, locked = [], userId, className }: {
+  value: string[];
+  onChange: (ids: string[]) => void;
+  mechanics: { id: number; full_name: string }[];
+  exclude: string[];
+  locked?: string[];
+  userId?: number;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  const name = (id: string) => mechanics.find((m) => String(m.id) === id)?.full_name ?? id;
+  return (
+    <div className={className}>
+      {value.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {value.map((id) => (
+            <span key={id} className={clsx('inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 pl-2.5 text-sm', locked.includes(id) ? 'pr-2.5' : 'pr-1')}>
+              <Users className="size-3.5 text-muted-foreground" />
+              {name(id)}
+              {!locked.includes(id) && (
+                <button type="button" className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={`${t('delete')} ${name(id)}`} onClick={() => onChange(value.filter((v) => v !== id))}>
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      <Select value="" onChange={(e) => e.target.value && onChange([...value, e.target.value])} aria-label={t('add_helper')}>
+        <option value="">+ {t('add_helper')}</option>
+        {mechanics.filter((m) => !value.includes(String(m.id)) && !exclude.includes(String(m.id))).map((m) => (
+          <option key={m.id} value={m.id}>{m.id === userId ? t('m_me', { name: m.full_name }) : m.full_name}</option>
+        ))}
+      </Select>
+    </div>
+  );
+}
+
 export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDetail; className?: string; compact?: boolean; manual?: boolean }) {
   const { t } = useI18n();
   const { user, can } = useAuth();
@@ -58,6 +97,9 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
   const jobsIn = (c: WoCategory) => wo.job_codes.filter((j) => (j.category_id != null ? j.category_id === c.id : j.category_name === c.name)).length;
   const [jobId, setJobId] = useState('');
   const [mechanicId, setMechanicId] = useState(() => (!admin && can('wo.as_mechanic') && user ? String(user.id) : ''));
+  const [helperIds, setHelperIds] = useState<string[]>([]);
+  const [crewFor, setCrewFor] = useState<WoJobCode | null>(null);
+  const [crewIds, setCrewIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [start, setStart] = useState('');
   const [finish, setFinish] = useState('');
@@ -77,11 +119,12 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
     mutationFn: () =>
       api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes`, {
         method: 'POST',
-        body: { job_code_id: jobId, mechanic_id: mechanicId, ...(typeTimes ? { started_at: fromDateTimeInput(start), finished_at: fromDateTimeInput(finish) } : {}) },
+        body: { job_code_id: jobId, mechanic_id: mechanicId, helper_ids: helperIds.map(Number), ...(typeTimes ? { started_at: fromDateTimeInput(start), finished_at: fromDateTimeInput(finish) } : {}) },
       }),
     onSuccess: (data) => {
       done(data);
       setJobId('');
+      setHelperIds([]);
       setStart('');
       setFinish('');
       setErrors({});
@@ -140,6 +183,15 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
       toast('error', (err as Error).message);
     },
   });
+  const saveCrew = useMutation({
+    mutationFn: ({ entry, ids }: { entry: WoJobCode; ids: number[] }) =>
+      api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes/${entry.id}/crew`, { method: 'PUT', body: { helper_ids: ids } }),
+    onSuccess: (data) => {
+      done(data);
+      setCrewFor(null);
+    },
+    onError: (err) => toast('error', (err as Error).message),
+  });
   const remove = useMutation({
     mutationFn: (id: number) => api<WorkOrderDetail>(`/work-orders/${wo.wo_uuid}/job-codes/${id}`, { method: 'DELETE' }),
     onSuccess: done,
@@ -147,6 +199,8 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
   });
 
   const totalStd = wo.job_codes.reduce((sum, j) => sum + (j.standard_duration ?? 0), 0);
+  const totalMan = wo.job_codes.reduce((sum, j) => sum + (j.finished_at ? jobManSeconds(j) ?? 0 : 0), 0);
+  const mechanicName = (id: string) => mechanics.data?.find((m) => String(m.id) === id)?.full_name ?? '';
   const finishedJobs = wo.job_codes.filter((j) => j.finished_at).length;
   const busy = (j: WoJobCode, action: 'start' | 'finish') => timer.isPending && timer.variables?.entry.id === j.id && timer.variables.action === action;
   // Checks typed-in times; returns field errors (empty when fine).
@@ -169,15 +223,37 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
     if (Object.keys(next).length) return;
     const job = jobOptions.find((j) => String(j.id) === jobId);
     const mechanic = mechanics.data?.find((m) => String(m.id) === mechanicId);
-    const vars = { job: job ? `${job.job_code} · ${job.job_name}` : '', mechanic: mechanic?.full_name ?? '' };
+    const vars = { job: job ? `${job.job_code} · ${job.job_name}` : '', mechanic: [mechanic?.full_name ?? '', ...helperIds.map(mechanicName)].join(', ') };
     confirm({ message: typeTimes ? t('confirm_add_job_manual', { ...vars, d: formatDuration(typedDuration(start, finish)) }) : t('confirm_add_job', vars) }, () => {
       if (!queued || !job) return add.mutate();
       act({
-        type: 'job.add', wo_uuid: wo.wo_uuid, label: t('op_job_add', { job: job.job_code }), job_code_id: job.id, mechanic_id: Number(mechanicId), entry_ref: newRef(),
-        view: { job_code: job.job_code, job_name: job.job_name, category_id: job.category_id, category_name: job.category_name, standard_duration: job.standard_duration, mechanic_name: mechanic?.full_name ?? '' },
+        type: 'job.add', wo_uuid: wo.wo_uuid, label: t('op_job_add', { job: job.job_code }), job_code_id: job.id, mechanic_id: Number(mechanicId), helper_ids: helperIds.map(Number), entry_ref: newRef(),
+        view: {
+          job_code: job.job_code, job_name: job.job_name, category_id: job.category_id, category_name: job.category_name, standard_duration: job.standard_duration, mechanic_name: mechanic?.full_name ?? '',
+          crew: helperIds.map((id) => ({ employee_id: Number(id), full_name: mechanicName(id) })),
+        },
       });
       setJobId('');
+      setHelperIds([]);
       setErrors({});
+    });
+  };
+  const openCrew = (j: WoJobCode) => {
+    setCrewFor(j);
+    setCrewIds((j.crew ?? []).map((c) => String(c.employee_id)));
+  };
+  // Once a job code has started its helpers stay (their time counts); only an approver takes one off.
+  const crewLocked = crewFor?.started_at && !admin ? (crewFor.crew ?? []).map((c) => String(c.employee_id)) : [];
+  const submitCrew = () => {
+    if (!crewFor) return;
+    const entry = crewFor;
+    confirm({ message: t('confirm_crew', { job: entry.job_code, names: [entry.mechanic_name, ...crewIds.map(mechanicName)].join(', ') }) }, () => {
+      if (!queued) return saveCrew.mutate({ entry, ids: crewIds.map(Number) });
+      act({
+        type: 'job.crew', wo_uuid: wo.wo_uuid, label: t('op_job_crew', { job: entry.job_code }), ...entryRef(entry), helper_ids: crewIds.map(Number),
+        view: { crew: crewIds.map((id) => ({ employee_id: Number(id), full_name: mechanicName(id) })) },
+      });
+      setCrewFor(null);
     });
   };
   const openEdit = (j: WoJobCode) => {
@@ -207,6 +283,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
           {wo.job_codes.length > 0 && (
             <span className="shrink-0 text-right text-xs text-muted-foreground">
               {t('standard_total')}<br /><span className="text-sm font-medium text-foreground tabular-nums">{jobDuration(totalStd || null)}</span>
+              {totalMan > 0 && <><br />{t('man_hours_total')}<br /><span className="text-sm font-medium text-foreground tabular-nums">{formatDuration(totalMan)}</span></>}
             </span>
           )}
         </div>
@@ -218,6 +295,7 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
             <span className="text-xs text-muted-foreground tabular-nums">
               {t('jobs_done', { done: finishedJobs, total: wo.job_codes.length })}
               {manual && <> · {t('standard_total')} {jobDuration(totalStd || null)}</>}
+              {totalMan > 0 && <> · {t('man_hours')} {formatDuration(totalMan)}</>}
             </span>
           )}
         </div>
@@ -265,7 +343,10 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
 
       {wo.job_codes.length > 0 ? (
         <ul className={clsx('divide-y divide-border', compact && 'rounded-xl border border-border')}>
-          {wo.job_codes.map((j) => (
+          {wo.job_codes.map((j) => {
+            const crew = j.crew ?? [];
+            const man = jobManSeconds(j) ?? 0;
+            return (
             <li key={j.id} className={clsx('flex items-start gap-3', compact ? 'px-3 py-2.5' : 'px-4 py-3', j.started_at && !j.finished_at && 'bg-yellow-500/5')}>
               <span className="pt-0.5">
                 {j.finished_at ? <CheckCircle2 className="size-5 text-emerald-500" /> : j.started_at ? <Loader className="size-5 animate-spin text-yellow-500 [animation-duration:3s]" /> : <Circle className="size-5 text-muted-foreground/50" />}
@@ -273,29 +354,43 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
               <div className="min-w-0 flex-1">
                 <p className="text-sm break-words"><span className="font-mono text-xs">{j.job_code}</span> · {j.job_name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {cats.length > 1 && <>{j.category_name} · </>}{j.mechanic_name} · {t('standard_short')} {jobDuration(j.standard_duration)}
+                  {cats.length > 1 && <>{j.category_name} · </>}
+                  <span className="text-foreground">{j.mechanic_name}</span>
+                  {crew.length > 0 && <> ({t('lead_short')}) + {crew.map((c) => c.full_name).join(', ')}</>}
+                  {' · '}{t('standard_short')} {jobDuration(j.standard_duration)}
                   {(!compact || manual) && <> · {t('added_by')} {j.added_by_name ?? '-'} {formatDateTime(j.added_at)}</>}
                 </p>
                 {j.started_at && (
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
                     <span className="font-medium tabular-nums">{formatDuration(durationBetween(j.started_at, j.finished_at))}</span>
+                    {crew.length > 0 && (
+                      <span className="text-muted-foreground">
+                        <Users className="mr-0.5 inline size-3.5 align-[-2px]" />{t('crew_of', { n: crew.length + 1 })} · {t('man_hours')} <span className="font-medium text-foreground tabular-nums">{formatDuration(man)}</span>
+                      </span>
+                    )}
                     {(!compact || manual) && <span className="text-muted-foreground">{formatDateTime(j.started_at)} – {j.finished_at ? formatDateTime(j.finished_at) : '…'}</span>}
+                    {/* The standard (MANHOUR) is in man-hours: compared with the time of the whole crew. */}
                     {j.finished_at && j.standard_duration ? (
-                      (durationBetween(j.started_at, j.finished_at) ?? 0) > j.standard_duration * 60
-                        ? <span className="rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration((durationBetween(j.started_at, j.finished_at) ?? 0) - j.standard_duration * 60) })}</span>
+                      man > j.standard_duration * 60
+                        ? <span className="rounded-full bg-orange-500/10 px-1.5 text-orange-600 dark:text-orange-400">{t('over_standard', { d: formatDuration(man - j.standard_duration * 60) })}</span>
                         : <span className="rounded-full bg-emerald-500/10 px-1.5 text-emerald-700 dark:text-emerald-400">{t('within_standard')}</span>
                     ) : null}
                   </p>
+                )}
+                {editable && (admin || !j.finished_at) && (
+                  <Button size="sm" variant="ghost" className="no-print -ml-2 mt-1 h-8 text-primary" aria-label={`${t('crew_edit')} ${j.job_code}`} disabled={!queued && !online} onClick={() => openCrew(j)}>
+                    <Users className="size-4" /> {t('crew_edit')}{crew.length > 0 && ` · ${crew.length + 1}`}
+                  </Button>
                 )}
                 <JobParts wo={wo} entry={j} editable={editable} onDone={done} queued={queued} />
               </div>
               {canTime && !j.finished_at && (
                 j.started_at ? (
-                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!queued && !online} loading={busy(j, 'finish')} onClick={() => confirm({ message: t('confirm_job_finish', { job: j.job_code, mechanic: j.mechanic_name }), tone: 'success' }, () => (queued ? act({ type: 'job.finish', wo_uuid: wo.wo_uuid, label: t('op_job_finish', { job: j.job_code }), ...entryRef(j) }) : timer.mutate({ entry: j, action: 'finish' })))}>
+                  <Button variant="success" size="sm" className="no-print h-9 shrink-0" disabled={!queued && !online} loading={busy(j, 'finish')} onClick={() => confirm({ message: t('confirm_job_finish', { job: j.job_code, mechanic: crewNames(j) }), tone: 'success' }, () => (queued ? act({ type: 'job.finish', wo_uuid: wo.wo_uuid, label: t('op_job_finish', { job: j.job_code }), ...entryRef(j) }) : timer.mutate({ entry: j, action: 'finish' })))}>
                     <Check className="size-4" /> {t('finish')}
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!queued && !online} loading={busy(j, 'start')} onClick={() => confirm({ message: t('confirm_job_start', { job: j.job_code, mechanic: j.mechanic_name }) }, () => (queued ? act({ type: 'job.start', wo_uuid: wo.wo_uuid, label: t('op_job_start', { job: j.job_code }), ...entryRef(j) }) : timer.mutate({ entry: j, action: 'start' })))}>
+                  <Button variant="outline" size="sm" className="no-print h-9 shrink-0" disabled={!queued && !online} loading={busy(j, 'start')} onClick={() => confirm({ message: t('confirm_job_start', { job: j.job_code, mechanic: crewNames(j) }) }, () => (queued ? act({ type: 'job.start', wo_uuid: wo.wo_uuid, label: t('op_job_start', { job: j.job_code }), ...entryRef(j) }) : timer.mutate({ entry: j, action: 'start' })))}>
                     <Play className="size-4" /> {t('start')}
                   </Button>
                 )
@@ -311,7 +406,8 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
                 </Button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : (
         <p className={clsx('text-sm text-muted-foreground', !compact && 'px-4 py-3')}>{t('job_codes_none')}</p>
@@ -333,11 +429,22 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
             {errors.job_code_id && <p className="mt-1 text-xs text-destructive">{errors.job_code_id}</p>}
           </div>
           <div>
-            <Select value={mechanicId} onChange={(e) => { setMechanicId(e.target.value); setErrors((er) => ({ ...er, mechanic_id: '' })); }} invalid={!!errors.mechanic_id} aria-label={t('mechanic')}>
+            <Select
+              value={mechanicId}
+              onChange={(e) => {
+                setMechanicId(e.target.value);
+                setHelperIds((h) => h.filter((id) => id !== e.target.value));
+                setErrors((er) => ({ ...er, mechanic_id: '' }));
+              }}
+              invalid={!!errors.mechanic_id}
+              aria-label={t('choose_job_mechanic')}
+            >
               <option value="">{t('choose_job_mechanic')}</option>
               {mechanics.data?.map((m) => <option key={m.id} value={m.id}>{m.id === user?.id ? t('m_me', { name: m.full_name }) : m.full_name}</option>)}
             </Select>
             {errors.mechanic_id && <p className="mt-1 text-xs text-destructive">{errors.mechanic_id}</p>}
+            <HelperPicker className="mt-2" value={helperIds} onChange={setHelperIds} mechanics={mechanics.data ?? []} exclude={mechanicId ? [mechanicId] : []} userId={user?.id} />
+            {errors.helper_ids && <p className="mt-1 text-xs text-destructive">{errors.helper_ids}</p>}
           </div>
           {typeTimes && (
             <>
@@ -358,6 +465,23 @@ export function WoJobCodes({ wo, className, compact, manual }: { wo: WorkOrderDe
           {typeTimes && <p className="text-xs text-muted-foreground sm:col-span-2">{t('job_time_manual_hint')}</p>}
         </div>
       )}
+
+      <Modal
+        open={!!crewFor}
+        onClose={() => setCrewFor(null)}
+        title={t('crew_edit')}
+        description={crewFor ? `${crewFor.job_code} · ${crewFor.job_name} — ${crewFor.mechanic_name} (${t('lead_short')})` : undefined}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCrewFor(null)}>{t('cancel')}</Button>
+            <Button onClick={submitCrew} loading={saveCrew.isPending} disabled={!queued && !online}>{t('save')}</Button>
+          </>
+        }
+      >
+        <p className="mb-2 text-sm font-medium">{t('helpers')}</p>
+        <HelperPicker value={crewIds} onChange={setCrewIds} mechanics={mechanics.data ?? []} exclude={crewFor ? [String(crewFor.mechanic_id)] : []} locked={crewLocked} userId={user?.id} />
+        <p className="mt-3 text-xs text-muted-foreground">{t('crew_hint')}{crewLocked.length > 0 && <> {t('crew_locked')}</>}</p>
+      </Modal>
 
       <Modal
         open={!!editing}

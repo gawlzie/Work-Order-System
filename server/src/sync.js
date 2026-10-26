@@ -14,7 +14,7 @@ import { db } from './db.js';
 import { canSeeWo } from './scope.js';
 import {
   CHANNEL, HttpError, addAdditionalWork, addWoJobCode, addWoJobPart, createWorkOrder, getWorkOrder, progressStep, removeWoJobCode,
-  removeWoJobPart, addWoCategory, removeWoCategory, timeWoJobCode, updateWoJobPart,
+  removeWoJobPart, addWoCategory, removeWoCategory, setWoJobCrew, timeWoJobCode, updateWoJobPart,
 } from './workorders.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -109,7 +109,11 @@ export function applyOp(op, user) {
       break;
     case 'job.add':
       need(user, 'wo.progress', 'wo.approve');
-      wo = addWoJobCode(woUuid, { job_code_id: op.job_code_id, mechanic_id: op.mechanic_id }, user, { ...opts, client_ref: ref(op.entry_ref) });
+      wo = addWoJobCode(woUuid, { job_code_id: op.job_code_id, mechanic_id: op.mechanic_id, helper_ids: op.helper_ids }, user, { ...opts, client_ref: ref(op.entry_ref) });
+      break;
+    case 'job.crew':
+      need(user, 'wo.progress', 'wo.approve');
+      wo = setWoJobCrew(woUuid, entryId(woUuid, op), { helper_ids: op.helper_ids }, user, opts);
       break;
     case 'job.start':
     case 'job.finish':

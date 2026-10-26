@@ -176,6 +176,9 @@ const LIST_SELECT = `
          cb.full_name AS created_by_name,
          (SELECT GROUP_CONCAT(jc.job_code, ', ') FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_code_list,
          (SELECT SUM(jc.standard_duration) FROM wo_job_codes x JOIN job_codes jc ON jc.id = x.job_code_id WHERE x.wo_uuid = wo.wo_uuid) AS job_standard_duration,
+         (SELECT ROUND(SUM((julianday(x.finished_at) - julianday(x.started_at)) * 86400 * (1 + (SELECT COUNT(*) FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.joined_at IS NULL))
+                   + COALESCE((SELECT SUM(MAX(0, julianday(x.finished_at) - julianday(c.joined_at)) * 86400) FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.joined_at IS NOT NULL), 0)))
+            FROM wo_job_codes x WHERE x.wo_uuid = wo.wo_uuid AND x.started_at IS NOT NULL AND x.finished_at IS NOT NULL) AS job_man_seconds,
          (SELECT GROUP_CONCAT(p.part_name || ' x' || (CASE WHEN p.qty = CAST(p.qty AS INTEGER) THEN CAST(p.qty AS INTEGER) ELSE p.qty END) || ' ' || p.uom, '; ') FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
             WHERE x.wo_uuid = wo.wo_uuid) AS part_list,
          (SELECT 'Step ' || s.step_no || ' · ' || s.step_name FROM wo_steps s
@@ -302,8 +305,7 @@ const PROOF_SELECT = `SELECT p.id, p.file_name, p.mime_type, p.size, p.uploaded_
 /** Proof-of-completion files of a work order, oldest first. */
 export const listProofs = (woUuid) => db.prepare(`${PROOF_SELECT} WHERE p.wo_uuid = ? ORDER BY p.uploaded_at, p.id`).all(woUuid);
 
-/** Job codes done on a work order, in the order they were added. */
-/** Job code entries of a work order, each with the spare parts used for it. */
+/** Job code entries of a work order, in the order they were added, each with its helpers (crew) and spare parts. */
 export function listWoJobCodes(woUuid) {
   const entries = db.prepare(`SELECT x.id, x.job_code_id, j.job_code, j.job_name, j.category_id, c.name AS category_name, j.standard_duration,
                      x.mechanic_id, m.full_name AS mechanic_name, a.full_name AS added_by_name, x.added_at, x.started_at, x.finished_at, x.client_ref
@@ -315,7 +317,14 @@ export function listWoJobCodes(woUuid) {
                             FROM wo_job_parts p JOIN wo_job_codes x ON x.id = p.wo_job_code_id
                             LEFT JOIN employees a ON a.id = p.added_by
                             WHERE x.wo_uuid = ? ORDER BY p.added_at, p.id`).all(woUuid);
-  return entries.map((e) => ({ ...e, parts: parts.filter((p) => p.wo_job_code_id === e.id) }));
+  const crew = db.prepare(`SELECT c.wo_job_code_id, c.employee_id, e.full_name, c.joined_at, c.added_at
+                           FROM wo_job_crew c JOIN wo_job_codes x ON x.id = c.wo_job_code_id JOIN employees e ON e.id = c.employee_id
+                           WHERE x.wo_uuid = ? ORDER BY c.added_at, c.id`).all(woUuid);
+  return entries.map((e) => ({
+    ...e,
+    crew: crew.filter((c) => c.wo_job_code_id === e.id).map(({ wo_job_code_id, ...c }) => c),
+    parts: parts.filter((p) => p.wo_job_code_id === e.id),
+  }));
 }
 
 export function getWorkOrder(woUuid) {
@@ -693,6 +702,32 @@ function manualJobTimes(wo, body) {
   return { started_at: start.toISOString(), finished_at: finish.toISOString() };
 }
 
+/** True when the employee already works on this job code of the work order, as lead or as helper (other entries than `exceptEntry`). */
+const onJob = (woUuid, jobId, employeeId, exceptEntry = null) =>
+  !!db.prepare(`SELECT 1 FROM wo_job_codes x WHERE x.wo_uuid = ? AND x.job_code_id = ? AND x.id IS NOT ?
+                  AND (x.mechanic_id = ? OR EXISTS (SELECT 1 FROM wo_job_crew c WHERE c.wo_job_code_id = x.id AND c.employee_id = ?))`)
+    .get(woUuid, jobId, exceptEntry, employeeId, employeeId);
+
+/**
+ * Helpers (crew) for a job code entry: active mechanics, not the lead, not already on this job code elsewhere on the
+ * work order, at most 10. Returns the ids, or an error text for the helper_ids field.
+ */
+function crewIds(raw, woUuid, jobId, leadId, exceptEntry = null) {
+  const ids = [...new Set((raw == null ? [] : Array.isArray(raw) ? raw : [raw]).map(Number))];
+  if (ids.length > 10) return { error: 'A crew can have at most 10 helpers' };
+  for (const id of ids) {
+    if (!Number.isInteger(id) || !assignable(id, 'wo.as_mechanic')) return { error: 'Helpers must be active mechanics' };
+    if (id === leadId) return { error: 'The lead mechanic cannot also be a helper' };
+    if (jobId && onJob(woUuid, jobId, id, exceptEntry))
+      return { error: `${db.prepare('SELECT full_name FROM employees WHERE id = ?').get(id).full_name} is already on this job code` };
+  }
+  return { ids };
+}
+
+/**
+ * Body: job_code_id, mechanic_id (the lead, who starts and finishes it) and optionally helper_ids (the crew working
+ * with the lead; their time follows the lead's start / finish). Admin entries can come with started_at / finished_at.
+ */
 export function addWoJobCode(woUuid, body, user, opts = {}) {
   const wo = getWorkOrder(woUuid);
   const admin = jobCodeGate(wo, user);
@@ -707,16 +742,51 @@ export function addWoJobCode(woUuid, body, user, opts = {}) {
   if (!job) errors.job_code_id = 'Choose an active job code';
   else if (!wo.categories.some((c) => c.id === job.category_id)) errors.job_code_id = 'This job code is not in a repair category of the work order';
   if (!mechanicId || !assignable(mechanicId, 'wo.as_mechanic')) errors.mechanic_id = 'Choose the mechanic who does this job';
-  else if (jobId && db.prepare('SELECT 1 FROM wo_job_codes WHERE wo_uuid = ? AND job_code_id = ? AND mechanic_id = ?').get(woUuid, jobId, mechanicId))
+  else if (jobId && onJob(woUuid, jobId, mechanicId))
     errors.job_code_id = 'This job code is already added for this mechanic';
+  const crew = crewIds(body?.helper_ids, woUuid, jobId, mechanicId);
+  if (crew.error) errors.helper_ids = crew.error;
   if (Object.keys(errors).length) {
     const err = new HttpError(422, Object.values(errors)[0]);
     err.errors = errors;
     throw err;
   }
   const times = manual ? manualJobTimes(wo, body) : { started_at: null, finished_at: null };
-  db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at, started_at, finished_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(woUuid, jobId, mechanicId, user.id, opts.at ?? now(), times.started_at, times.finished_at, opts.client_ref ?? null);
+  const ts = opts.at ?? now();
+  tx(() => {
+    const { lastInsertRowid } = db.prepare('INSERT INTO wo_job_codes (wo_uuid, job_code_id, mechanic_id, added_by, added_at, started_at, finished_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(woUuid, jobId, mechanicId, user.id, ts, times.started_at, times.finished_at, opts.client_ref ?? null);
+    const addHelper = db.prepare('INSERT INTO wo_job_crew (wo_job_code_id, employee_id, joined_at, added_by, added_at) VALUES (?, ?, NULL, ?, ?)');
+    for (const id of crew.ids) addHelper.run(Number(lastInsertRowid), id, user.id, ts);
+  });
+  return getWorkOrder(woUuid);
+}
+
+/**
+ * Sets the helpers of a job code entry (body.helper_ids, the whole list). There is one timer for the crew: a helper
+ * added while the job code runs counts from that moment, otherwise from its start. Once it has started, only an
+ * approver can take a helper off (the time already worked would be lost).
+ */
+export function setWoJobCrew(woUuid, entryId, body, user, opts = {}) {
+  const wo = getWorkOrder(woUuid);
+  const admin = jobCodeGate(wo, user);
+  const entry = db.prepare('SELECT * FROM wo_job_codes WHERE id = ? AND wo_uuid = ?').get(entryId, woUuid);
+  if (!entry) throw new HttpError(404, 'Job code entry not found');
+  const crew = crewIds(body?.helper_ids, woUuid, entry.job_code_id, entry.mechanic_id, entry.id);
+  if (crew.error) throw Object.assign(new HttpError(422, crew.error), { errors: { helper_ids: crew.error } });
+  const current = db.prepare('SELECT employee_id FROM wo_job_crew WHERE wo_job_code_id = ?').all(entry.id).map((r) => r.employee_id);
+  const removed = current.filter((id) => !crew.ids.includes(id));
+  const added = crew.ids.filter((id) => !current.includes(id));
+  if (removed.length && entry.started_at && !admin) throw new HttpError(409, 'Helpers stay on the crew once the job code has started; ask the admin to change it');
+  const ts = opts.at ?? now();
+  const joined = entry.started_at && !entry.finished_at && ts > entry.started_at ? ts : null;
+  tx(() => {
+    const drop = db.prepare('DELETE FROM wo_job_crew WHERE wo_job_code_id = ? AND employee_id = ?');
+    for (const id of removed) drop.run(entry.id, id);
+    const addHelper = db.prepare('INSERT INTO wo_job_crew (wo_job_code_id, employee_id, joined_at, added_by, added_at) VALUES (?, ?, ?, ?, ?)');
+    for (const id of added) addHelper.run(entry.id, id, joined, user.id, ts);
+    db.prepare('UPDATE work_orders SET updated_at = ? WHERE wo_uuid = ?').run(now(), woUuid);
+  });
   return getWorkOrder(woUuid);
 }
 
@@ -835,7 +905,7 @@ export function removeWoJobPart(woUuid, entryId, partLineId, user) {
   return getWorkOrder(woUuid);
 }
 
-/** Removing a job code entry also removes its spare part lines (ON DELETE CASCADE). */
+/** Removing a job code entry also removes its crew and spare part lines (ON DELETE CASCADE). */
 export function removeWoJobCode(woUuid, entryId, user) {
   const wo = getWorkOrder(woUuid);
   jobCodeGate(wo, user);

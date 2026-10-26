@@ -17,7 +17,7 @@ import { PERMISSIONS } from './permissions.js';
 import { MAX_PROOF_BYTES, addProof, deleteProof, getProofFile } from './proofs.js';
 import { seed } from './seed.js';
 import {
-  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, addWoCategory, removeWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
+  APPROVAL, CHANNEL, HttpError, addAdditionalWork, addSubStep, addWoJobCode, removeWoJobCode, addWoJobPart, updateWoJobPart, removeWoJobPart, setWoJobCodeTimes, setWoJobCrew, addWoCategory, removeWoCategory, timeWoJobCode, createWorkOrder, dashboard, deleteWorkOrder,
   activeStepTemplate, getWorkOrder, listWorkOrders, progressStep, setApproval, syncStatuses, updateWorkOrder,
 } from './workorders.js';
 import { listNotifications, markAllRead, markRead, scanOverdue } from './notifications.js';
@@ -151,7 +151,7 @@ app.use('/api/work-orders/:id', (req, res, next) => {
 
 const CSV_COLUMNS = [
   ['wo_number', 'WO Number'], ['created_at', 'Created At'], ['site', 'Site'], ['maintenance_label', 'Type of Maintenance'], ['maintenance_other', 'Maintenance Notes'], ['customer_label', 'Customer Type'], ['payment_label', 'Payment'], ['payment_other', 'Payment Notes'], ['unit_number', 'Unit'], ['driver_name', 'Driver'],
-  ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['part_list', 'Spare Parts'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
+  ['mechanic_name', 'PIC Mechanic'], ['hm', 'HM'], ['km', 'KM'], ['category', 'Category'], ['job_code_list', 'Job Codes'], ['part_list', 'Spare Parts'], ['job_standard_duration', 'Standard Duration (h:mm:ss, total)'], ['job_man_seconds', 'Man-hours (h:mm:ss, total)'], ['problem', 'Problem'], ['status', 'Status'],
   ['approval_status', 'Approval Status'], ['approval_remarks', 'Approval Remarks'], ['reject_reason', 'Reject Reason'], ['channel_source', 'Channel'], ['step_information', 'Step Information'],
   ['total_time', 'Total Time (h:mm:ss)'], ['proof_count', 'Proof Files'],
 ];
@@ -185,7 +185,7 @@ app.get('/api/work-orders/export', wrap((req, res) => {
       customer_label: { INTERNAL: 'Internal', EXTERNAL: 'External' }[row.customer_type] ?? '',
       payment_label: { CUSTOMER_PAID: 'Customer Paid', FREE: 'Free', OTHERS: 'Others' }[row.payment_type] ?? '',
     };
-    lines.push(CSV_COLUMNS.map(([k]) => csvCell(k in labels ? labels[k] : k === 'total_time' ? hms(row.total_time) : k === 'job_standard_duration' ? hms(row.job_standard_duration == null ? null : row.job_standard_duration * 60) : row[k])).join(','));
+    lines.push(CSV_COLUMNS.map(([k]) => csvCell(k in labels ? labels[k] : k === 'total_time' || k === 'job_man_seconds' ? hms(row[k]) : k === 'job_standard_duration' ? hms(row.job_standard_duration == null ? null : row.job_standard_duration * 60) : row[k])).join(','));
   }
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${exportFileName(req.query)}"`);
@@ -253,6 +253,9 @@ app.post('/api/work-orders/:id/job-codes/:entryId(\\d+)/:action(start|finish)', 
 app.put('/api/work-orders/:id/job-codes/:entryId(\\d+)', requirePermission('wo.approve'), wrap((req) =>
   setWoJobCodeTimes(req.params.id, Number(req.params.entryId), req.body ?? {}, req.user)));
 app.delete('/api/work-orders/:id/job-codes/:entryId(\\d+)', canWorkJobs, wrap((req) => removeWoJobCode(req.params.id, Number(req.params.entryId), req.user)));
+// Helpers (crew) of a job code entry; the lead's timer counts for all of them.
+app.put('/api/work-orders/:id/job-codes/:entryId(\\d+)/crew', canWorkJobs, wrap((req) =>
+  setWoJobCrew(req.params.id, Number(req.params.entryId), req.body ?? {}, req.user)));
 // Spare parts per job code entry.
 app.post('/api/work-orders/:id/job-codes/:entryId(\\d+)/parts', canWorkJobs, wrap((req, res) => {
   res.status(201);

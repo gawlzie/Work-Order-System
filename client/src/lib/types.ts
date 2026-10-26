@@ -181,6 +181,8 @@ export interface WorkOrder {
   part_list: string | null;
   /** Sum of the standard durations of the WO's job codes in minutes, null when none is known. */
   job_standard_duration: number | null;
+  /** Man-hours of the finished job codes in seconds (lead + helpers); null when none is finished. */
+  job_man_seconds?: number | null;
   /** Seconds spent in the repair step (Repair Process); null before it starts. Compared with the job standard. */
   repair_time: number | null;
   problem: string;
@@ -261,8 +263,33 @@ export interface WoJobCode {
   finished_at: string | null;
   /** Spare parts used for this job code entry. */
   parts: WoJobPart[];
+  /** Helpers working with the lead (mechanic_id); the lead's timer counts for them. Missing on copies of the older app. */
+  crew?: WoJobCrew[];
   /** Reference when it was added offline in the mechanic app. */
   client_ref?: string | null;
+}
+
+/** A helper on a job code entry: counted from the job code's start, or from joined_at when added while it ran. */
+export interface WoJobCrew {
+  employee_id: number;
+  full_name: string;
+  joined_at: string | null;
+  added_at: string;
+}
+
+/** Lead and helpers of a job code entry, e.g. "Budi, Andi, Rudi". */
+export const crewNames = (j: WoJobCode) => [j.mechanic_name, ...(j.crew ?? []).map((c) => c.full_name)].join(', ');
+
+/**
+ * Man-hours of a job code entry in seconds: the lead's time plus each helper's (from the start, or from when they
+ * joined), up to now while it runs; null before it starts. Compared with the job code's standard (MANHOUR).
+ */
+export function jobManSeconds(j: WoJobCode): number | null {
+  if (!j.started_at) return null;
+  const start = new Date(j.started_at).getTime();
+  const end = j.finished_at ? new Date(j.finished_at).getTime() : Date.now();
+  const span = (from: number) => Math.max(0, Math.round((end - from) / 1000));
+  return span(start) + (j.crew ?? []).reduce((sum, c) => sum + span(c.joined_at ? Math.max(start, new Date(c.joined_at).getTime()) : start), 0);
 }
 
 /** One spare part line of a job code entry, typed freely; part_number / sparepart_id only on lines from the former spare part master. */

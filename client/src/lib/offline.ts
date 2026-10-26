@@ -15,7 +15,7 @@ import { dehydrate, hydrate, type QueryClient } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 import { api, ApiError } from './api';
 import { idbDel, idbGet, idbSet } from './idb';
-import { woCategories, type Paged, type Step, type User, type WoJobCode, type WoJobPart, type WorkOrder, type WorkOrderDetail } from './types';
+import { woCategories, type Paged, type Step, type User, type WoJobCode, type WoJobCrew, type WoJobPart, type WorkOrder, type WorkOrderDetail } from './types';
 
 /* ---------- Outbox ---------- */
 
@@ -31,6 +31,7 @@ export type OpType =
   | 'job.start'
   | 'job.finish'
   | 'job.remove'
+  | 'job.crew'
   | 'part.add'
   | 'part.update'
   | 'part.remove';
@@ -49,6 +50,8 @@ export interface OpInput {
   category_id?: number;
   job_code_id?: number;
   mechanic_id?: number;
+  /** Helpers of a job code entry (job.add, job.crew: the whole list). */
+  helper_ids?: number[];
   entry_id?: number;
   entry_ref?: string;
   /** Older app versions sent a picked master part instead of a typed name. */
@@ -271,9 +274,20 @@ function applyOp(wo: WorkOrderDetail, op: OutboxOp): WorkOrderDetail {
           id: tempId(op.entry_ref!), client_ref: op.entry_ref, job_code_id: op.job_code_id!, job_code: v.job_code, job_name: v.job_name, category_id: v.category_id, category_name: v.category_name,
           standard_duration: v.standard_duration ?? null, mechanic_id: op.mechanic_id!, mechanic_name: v.mechanic_name, added_by_name: op.user_name, added_at: op.at,
           started_at: null, finished_at: null, parts: [],
+          crew: ((v.crew as WoJobCrew[] | undefined) ?? []).map((c) => ({ ...c, joined_at: null, added_at: op.at })),
         });
       }
       break;
+    case 'job.crew': {
+      const e = findEntry(next, op);
+      if (e) {
+        // Same rule as the server: a helper added while the job code runs counts from then.
+        const joined = e.started_at && !e.finished_at && op.at > e.started_at ? op.at : null;
+        const names = new Map(((v.crew as WoJobCrew[] | undefined) ?? []).map((c) => [c.employee_id, c.full_name]));
+        e.crew = (op.helper_ids ?? []).map((id) => (e.crew ?? []).find((c) => c.employee_id === id) ?? { employee_id: id, full_name: names.get(id) ?? '', joined_at: joined, added_at: op.at });
+      }
+      break;
+    }
     case 'job.start':
     case 'job.finish': {
       const e = findEntry(next, op);

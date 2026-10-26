@@ -211,6 +211,19 @@ CREATE TABLE IF NOT EXISTS wo_job_parts (
 );
 CREATE INDEX IF NOT EXISTS idx_wo_job_parts_entry ON wo_job_parts(wo_job_code_id);
 
+-- Helpers of a job code entry (Step 7); the entry's mechanic_id is the lead who started it. The lead's start / finish
+-- times the whole crew: a helper counts from the start (joined_at NULL) or, when added while it ran, from joined_at.
+CREATE TABLE IF NOT EXISTS wo_job_crew (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  wo_job_code_id INTEGER NOT NULL REFERENCES wo_job_codes(id) ON DELETE CASCADE,
+  employee_id    INTEGER NOT NULL REFERENCES employees(id),
+  joined_at      TEXT,
+  added_by       INTEGER REFERENCES employees(id),
+  added_at       TEXT NOT NULL,
+  UNIQUE (wo_job_code_id, employee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_wo_job_crew_entry ON wo_job_crew(wo_job_code_id);
+
 -- In-app notifications, one row per recipient; data holds the work order details for the text (JSON).
 CREATE TABLE IF NOT EXISTS notifications (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
