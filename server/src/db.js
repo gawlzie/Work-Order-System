@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS sites (
   site_name   TEXT NOT NULL UNIQUE COLLATE NOCASE,
   company     TEXT NOT NULL,
   location    TEXT,
+  site_alias  TEXT, -- short name of the site, e.g. BIB
+  location_alias TEXT, -- short name of the location, e.g. KUKAR
   is_active   INTEGER NOT NULL DEFAULT 1
 );
 
@@ -334,6 +336,9 @@ if (!woCols2.includes('maintenance_other')) db.exec('ALTER TABLE work_orders ADD
 // Customer type and payment; empty on work orders from before they were asked.
 for (const col of ['customer_type', 'payment_type', 'payment_other'])
   if (!woCols2.includes(col)) db.exec(`ALTER TABLE work_orders ADD COLUMN ${col} TEXT`);
+// Optional short names of a site and of its location.
+for (const col of ['site_alias', 'location_alias'])
+  if (!columns('sites').includes(col)) db.exec(`ALTER TABLE sites ADD COLUMN ${col} TEXT`);
 
 /**
  * Work orders from before the type of maintenance was asked: Preventive when one of their job codes is a periodic

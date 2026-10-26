@@ -69,9 +69,9 @@ export function SiteMasterPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-muted-foreground">{s.site_code}</p>
-                  <p className="font-medium">{s.site_name}</p>
+                  <p className="font-medium">{s.site_name}{s.site_alias && <span className="ml-1.5 text-xs font-normal text-muted-foreground">({s.site_alias})</span>}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{s.company}</p>
-                  {s.location && <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="size-3" /> {s.location}</p>}
+                  {(s.location || s.location_alias) && <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="size-3" /> {[s.location, s.location_alias && `(${s.location_alias})`].filter(Boolean).join(' ')}</p>}
                 </div>
                 <ActiveBadge active={s.is_active} />
               </div>
@@ -109,9 +109,15 @@ export function SiteMasterPage() {
                 <tr key={s.id} className="border-t border-border hover:bg-muted/40">
                   <td className="px-4 py-3 text-muted-foreground">{(params.page - 1) * params.limit + i + 1}</td>
                   <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{s.site_code}</td>
-                  <td className="px-4 py-3 font-medium">{s.site_name}</td>
+                  <td className="px-4 py-3">
+                    <span className="font-medium">{s.site_name}</span>
+                    {s.site_alias && <span className="block text-xs text-muted-foreground">{t('alias')}: {s.site_alias}</span>}
+                  </td>
                   <td className="px-4 py-3">{s.company}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{s.location ?? '-'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {s.location ?? '-'}
+                    {s.location_alias && <span className="block text-xs">{t('alias')}: {s.location_alias}</span>}
+                  </td>
                   <td className="px-4 py-3 tabular-nums">{employees(s)}</td>
                   <td className="px-4 py-3 tabular-nums">{units(s)}</td>
                   <td className="px-4 py-3 tabular-nums">{wos(s)}</td>
@@ -159,6 +165,8 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
     site_name: site?.site_name ?? '',
     company: site?.company ?? user?.company ?? '',
     location: site?.location ?? '',
+    site_alias: site?.site_alias ?? '',
+    location_alias: site?.location_alias ?? '',
     is_active: site ? !!site.is_active : true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -226,11 +234,17 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
         <Field label={t('site_name')} required error={errors.site_name}>
           <Input value={form.site_name} onChange={set('site_name')} placeholder="Site Kalimantan - Pit C" maxLength={100} invalid={!!errors.site_name} />
         </Field>
+        <Field label={t('site_alias')} error={errors.site_alias}>
+          <Input value={form.site_alias} onChange={set('site_alias')} placeholder="PIT-C" maxLength={50} invalid={!!errors.site_alias} />
+        </Field>
         <Field label={t('company')} required error={errors.company}>
           <Input value={form.company} onChange={set('company')} maxLength={100} invalid={!!errors.company} />
         </Field>
         <Field label={t('location')} error={errors.location}>
           <Input value={form.location} onChange={set('location')} placeholder="Kutai Kartanegara, Kalimantan Timur" maxLength={200} invalid={!!errors.location} />
+        </Field>
+        <Field label={t('location_alias')} error={errors.location_alias}>
+          <Input value={form.location_alias} onChange={set('location_alias')} placeholder="KUKAR" maxLength={50} invalid={!!errors.location_alias} />
         </Field>
         <Switch checked={form.is_active} onChange={(v) => setForm((f) => ({ ...f, is_active: v }))} label={t('active')} description={t('site_active_hint')} />
       </form>

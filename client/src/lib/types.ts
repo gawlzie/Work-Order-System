@@ -319,6 +319,9 @@ export interface MasterSite {
   site_name: string;
   company: string;
   location: string | null;
+  /** Optional short names, e.g. BIB / KUKAR. */
+  site_alias: string | null;
+  location_alias: string | null;
   is_active: number;
   employee_count: number;
   unit_count: number;
