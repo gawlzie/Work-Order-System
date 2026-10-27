@@ -16,10 +16,12 @@ WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY server/src ./src
+# Demo data a new (empty) /data volume starts from.
+COPY server/demo ./demo
 COPY --from=client /app/client/dist /app/client/dist
 
 # The database, secret.key, uploads and backups all live next to WOS_DB: keep them on a volume.
-# An empty volume starts with the seed data; it is never reset.
+# An empty volume starts with the demo data (server/demo); an existing database is never replaced.
 RUN mkdir -p /data && chown node:node /data
 VOLUME /data
 USER node

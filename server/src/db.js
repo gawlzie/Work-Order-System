@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADMIN_PERMISSIONS, SYSTEM_ROLES } from './permissions.js';
@@ -8,6 +8,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = process.env.WOS_DB || join(here, '..', 'data', 'wos.db');
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
+
+// A new install (no database yet, e.g. a fresh deploy) starts from the demo data in server/demo instead of the seed.
+// An existing database is never replaced.
+const DEMO_DIR = join(here, '..', 'demo');
+if (!existsSync(DB_PATH) && existsSync(join(DEMO_DIR, 'wos.db'))) {
+  copyFileSync(join(DEMO_DIR, 'wos.db'), DB_PATH);
+  if (existsSync(join(DEMO_DIR, 'uploads')))
+    cpSync(join(DEMO_DIR, 'uploads'), join(dirname(DB_PATH), 'uploads'), { recursive: true, force: false });
+}
 
 export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
