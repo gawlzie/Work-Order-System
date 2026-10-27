@@ -1,0 +1,9 @@
+# Never ship the demo database, its backups, uploads or secret.key in the image.
+server/data
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/*.log
+.env
+.git
+.claude

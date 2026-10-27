@@ -4,7 +4,7 @@
   "private": true,
   "description": "Work Order Service - heavy equipment repair work order management",
   "scripts": {
-    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
     "dev": "concurrently -n api,web -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "build": "npm --prefix client run build",
     "start": "npm --prefix server start",
