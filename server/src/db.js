@@ -376,6 +376,13 @@ export function fillMaintenanceTypes() {
 }
 fillMaintenanceTypes();
 
+// Accounts must set their own password: at the first login after this column was added (they all shared demo
+// passwords), and after an admin sets or resets a password.
+if (!columns('employees').includes('must_change_password')) {
+  db.exec('ALTER TABLE employees ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+  const { changes } = db.prepare('UPDATE employees SET must_change_password = 1 WHERE password_hash IS NOT NULL').run();
+  if (changes) console.log(`${changes} account(s) must set their own password at the next login`);
+}
 // Things made offline in the mechanic app carry the phone's reference until they have a server id.
 for (const table of ['wo_steps', 'wo_job_codes', 'wo_job_parts']) if (!columns(table).includes('client_ref')) db.exec(`ALTER TABLE ${table} ADD COLUMN client_ref TEXT`);
 // Spare part lines became free text: rebuilt once without the required master link, keeping each line's part number and name.

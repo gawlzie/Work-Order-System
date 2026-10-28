@@ -185,7 +185,7 @@ async function doFlush() {
         touched.add(op.wo_uuid);
         setSync({ offline: false, lastSync: new Date().toISOString() });
       } catch (err) {
-        const refused = err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 408 && err.status !== 429;
+        const refused = err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 408 && err.status !== 428 && err.status !== 429;
         if (!refused) {
           // No signal, server down or login expired: keep everything and try again later.
           setSync({ offline: !(err instanceof ApiError) || err.status >= 500 });

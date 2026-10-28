@@ -1,9 +1,10 @@
 import express from 'express';
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, loadUser } from './db.js';
-import { hasPermission, hashPassword, issueToken, publicUser, requireAuth, requirePermission, verifyPassword } from './auth.js';
+import { assertLoginAllowed, clearLoginFailures, clientAddress, hasPermission, hashPassword, issueToken, publicUser, recordLoginFailure, requireAuth, requirePermission, verifyPassword } from './auth.js';
 import {
   assignableEmployees, createEmployee, createRole, createUnit, deleteEmployee, deleteRole, deleteUnit, getEmployee, getRole,
   getUnit, listEmployees, listRoles, listUnits, unitModels, unitTypes, updateEmployee, updateRole, updateUnit,
@@ -29,7 +30,46 @@ const resynced = syncStatuses();
 if (resynced) console.log(`Updated the status of ${resynced} work order(s) to the current status rules`);
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.disable('x-powered-by');
+// Request bodies are never compressed: decompression stays off (it is also where body-parser's DoS issue sits).
+app.use(express.json({ limit: '1mb', inflate: false }));
+
+/* ---------- Security headers ---------- */
+const clientDist = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
+// The page's own inline scripts (the theme set before the first paint) are allowed by their hash, nothing else.
+// Browsers hash the script text with its line breaks turned into LF (the build may have CRLF).
+const inlineScriptHashes = (() => {
+  const file = join(clientDist, 'index.html');
+  if (!existsSync(file)) return [];
+  const html = readFileSync(file, 'utf8');
+  return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash('sha256').update(m[1].replace(/\r\n?/g, '\n')).digest('base64')}'`);
+})();
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' ${inlineScriptHashes.join(' ')}`.trim(),
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "frame-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+app.use((req, res, next) => {
+  res.set({
+    'Content-Security-Policy': CSP,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(), payment=()',
+    'Strict-Transport-Security': 'max-age=15552000',
+  });
+  next();
+});
 
 const wrap = (fn) => (req, res, next) => {
   try {
@@ -43,10 +83,19 @@ const wrap = (fn) => (req, res, next) => {
 /* ---------- Auth ---------- */
 app.post('/api/auth/login', wrap((req, res) => {
   const { username, password } = req.body ?? {};
-  const user = loadUser('e.username = ? AND e.is_active = 1', String(username ?? '').trim().toLowerCase());
+  const name = String(username ?? '').trim().toLowerCase();
+  const address = clientAddress(req);
+  try {
+    assertLoginAllowed(name, address);
+  } catch (err) {
+    throw new HttpError(429, err.message);
+  }
+  const user = loadUser('e.username = ? AND e.is_active = 1', name);
   if (!user || !verifyPassword(String(password ?? ''), user.password_hash)) {
+    recordLoginFailure(name, address);
     throw new HttpError(401, 'Invalid username or password');
   }
+  clearLoginFailures(name);
   return { token: issueToken(user.id), user: publicUser(user) };
 }));
 
@@ -58,7 +107,8 @@ app.post('/api/auth/change-password', wrap((req) => {
   const { current_password, new_password } = req.body ?? {};
   if (!verifyPassword(String(current_password ?? ''), req.user.password_hash)) throw new HttpError(422, 'Current password is incorrect');
   if (String(new_password ?? '').length < 8) throw new HttpError(422, 'New password must be at least 8 characters');
-  db.prepare('UPDATE employees SET password_hash = ? WHERE id = ?').run(hashPassword(new_password), req.user.id);
+  if (new_password === current_password) throw new HttpError(422, 'The new password must be different from the current one');
+  db.prepare('UPDATE employees SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(hashPassword(new_password), req.user.id);
   return { message: 'Password updated' };
 }));
 
@@ -231,7 +281,7 @@ app.get('/api/work-orders/:id/proofs/:proofId(\\d+)', wrap((req, res) => {
 }));
 
 // The file is the raw request body; its name comes in the X-File-Name header (URI-encoded).
-app.post('/api/work-orders/:id/proofs', requirePermission('wo.approve'), express.raw({ type: () => true, limit: MAX_PROOF_BYTES }), wrap((req, res) => {
+app.post('/api/work-orders/:id/proofs', requirePermission('wo.approve'), express.raw({ type: () => true, limit: MAX_PROOF_BYTES, inflate: false }), wrap((req, res) => {
   res.status(201);
   return addProof(req.params.id, { body: req.body, fileName: req.get('X-File-Name') }, req.user);
 }));
@@ -280,7 +330,6 @@ app.post('/api/notifications/:id(\\d+)/read', wrap((req) => markRead(req.user, N
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
 
 /* ---------- Static client (production build) ---------- */
-const clientDist = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (req, res) => res.sendFile(join(clientDist, 'index.html')));
@@ -289,6 +338,8 @@ if (existsSync(clientDist)) {
 app.use((err, req, res, next) => {
   if (err instanceof HttpError) return res.status(err.status).json({ message: err.message, errors: err.errors });
   if (err.type === 'entity.too.large') return res.status(413).json({ message: 'File is too large (max 10 MB)' });
+  // Other request errors from body-parser (bad JSON, compressed body, ...) keep their 4xx status.
+  if (err.expose && err.status >= 400 && err.status < 500) return res.status(err.status).json({ message: err.message });
   console.error(err);
   res.status(500).json({ message: 'Internal server error' });
 });

@@ -34,7 +34,10 @@ function RequireAuth({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return user ? children : <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  // A shared or admin-set password is replaced before anything else.
+  if (user.must_change_password && location.pathname !== '/profile') return <Navigate to="/profile" replace />;
+  return children;
 }
 
 function RequireRole({ allowed, children, fallback = '/transaction/work-order' }: { allowed: boolean; children: ReactNode; fallback?: string }) {

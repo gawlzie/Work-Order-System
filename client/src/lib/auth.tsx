@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, setUnauthorizedHandler, tokenStore } from './api';
+import { api, ApiError, setPasswordRequiredHandler, setUnauthorizedHandler, tokenStore } from './api';
 import { clearCache, flush, startSync } from './offline';
 import type { Permission, User } from './types';
 
@@ -58,6 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUnauthorizedHandler(logout);
+    // Reading the profile brings the must_change_password flag, which sends the user to the password change.
+    setPasswordRequiredHandler(() => { if (!current?.must_change_password) void api<User>('/auth/profile').then(setUser).catch(() => {}); });
     if (!tokenStore.get()) return;
     api<User>('/auth/profile')
       .then(setUser)

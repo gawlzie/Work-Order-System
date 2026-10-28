@@ -23,6 +23,8 @@ export type ApprovalStatus = 'WAITING' | 'APPROVE' | 'REJECT';
 export type Channel = 'WEB' | 'MOBILE' | 'WHATSAPP';
 
 export interface User {
+  /** Set until the user replaces a shared or admin-set password with their own. */
+  must_change_password?: boolean;
   id: number;
   employee_id: string;
   full_name: string;

@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, ShieldAlert } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '../components/confirm';
 import { useToast } from '../components/toast';
 import { Button, Card, Field, Input, Modal, PageHeader } from '../components/ui';
@@ -11,20 +12,25 @@ import { useI18n } from '../lib/i18n';
 
 export function ProfilePage() {
   const { t } = useI18n();
-  const { user, can } = useAuth();
+  const { user, can, refresh } = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
-  const [open, setOpen] = useState(false);
+  // Opened straight away when the user still has to set their own password.
+  const [open, setOpen] = useState(() => !!user?.must_change_password);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
 
   const change = useMutation({
     mutationFn: () => api('/auth/change-password', { method: 'POST', body: { current_password: current, new_password: next } }),
-    onSuccess: () => {
+    onSuccess: async () => {
+      const forced = !!user?.must_change_password;
       toast('success', t('password_changed'));
       setOpen(false);
       setCurrent('');
       setNext('');
+      await refresh().catch(() => {});
+      if (forced) navigate('/', { replace: true });
     },
     onError: (err) => toast('error', (err as Error).message),
   });
@@ -45,6 +51,13 @@ export function ProfilePage() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title={t('profile')} subtitle={t('profile_subtitle')} />
+      {user.must_change_password && (
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm sm:flex-row sm:items-center">
+          <ShieldAlert className="size-5 shrink-0 text-yellow-600" />
+          <p className="flex-1">{t('password_must_change')}</p>
+          <Button onClick={() => setOpen(true)}><KeyRound className="size-4" /> {t('change_password')}</Button>
+        </div>
+      )}
       <Card className="p-4 sm:p-6">
         <div className="flex flex-col items-center gap-4 border-b border-border pb-6 sm:flex-row">
           <span className="flex size-16 items-center justify-center rounded-full bg-sidebar-accent text-xl font-semibold text-white">{initials(user.full_name)}</span>

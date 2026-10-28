@@ -217,9 +217,10 @@ function validateEmployee(body, existing, user) {
 export function createEmployee(body, user) {
   const d = validateEmployee(body, null, user);
   const { lastInsertRowid } = db
-    .prepare(`INSERT INTO employees (employee_id, full_name, role_id, company, site, phone, email, username, password_hash, is_active)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(d.employee_id, d.full_name, d.role_id, d.company, d.site, d.phone, d.email, d.username, d.password_hash, d.is_active);
+    .prepare(`INSERT INTO employees (employee_id, full_name, role_id, company, site, phone, email, username, password_hash, is_active, must_change_password)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    // A password set by an admin is a starting password: the user replaces it at the first login.
+    .run(d.employee_id, d.full_name, d.role_id, d.company, d.site, d.phone, d.email, d.username, d.password_hash, d.is_active, d.password_hash ? 1 : 0);
   return getEmployee(lastInsertRowid);
 }
 
@@ -228,7 +229,7 @@ export function updateEmployee(id, body, user) {
   assertCovers(user, existing);
   const d = validateEmployee(body, existing, user);
   db.prepare(`UPDATE employees SET employee_id = ?, full_name = ?, role_id = ?, company = ?, site = ?, phone = ?, email = ?,
-              username = ?, is_active = ? ${d.password_hash === undefined ? '' : ', password_hash = ?'} WHERE id = ?`)
+              username = ?, is_active = ? ${d.password_hash === undefined ? '' : ', password_hash = ?, must_change_password = 1'} WHERE id = ?`)
     .run(d.employee_id, d.full_name, d.role_id, d.company, d.site, d.phone, d.email, d.username, d.is_active,
       ...(d.password_hash === undefined ? [] : [d.password_hash]), id);
   return getEmployee(id);

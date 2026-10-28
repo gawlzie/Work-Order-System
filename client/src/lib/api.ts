@@ -32,6 +32,11 @@ let onUnauthorized: () => void = () => {};
 export const setUnauthorizedHandler = (fn: () => void) => {
   onUnauthorized = fn;
 };
+/** 428: the user has to set their own password first (the server allows only the profile and the change). */
+let onPasswordRequired: () => void = () => {};
+export const setPasswordRequiredHandler = (fn: () => void) => {
+  onPasswordRequired = fn;
+};
 
 export function qs(params: Record<string, unknown>) {
   const sp = new URLSearchParams();
@@ -55,6 +60,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && path !== '/auth/login') onUnauthorized();
+    if (res.status === 428) onPasswordRequired();
     throw new ApiError(res.status, data.message ?? res.statusText, data.errors);
   }
   return data as T;

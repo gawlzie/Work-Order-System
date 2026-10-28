@@ -57,6 +57,7 @@ export const publicUser = (u) => ({
   site: u.site,
   phone: u.phone,
   email: u.email,
+  must_change_password: !!u.must_change_password,
 });
 
 /** Express middleware: requires a valid bearer token and attaches req.user. */
@@ -66,8 +67,49 @@ export function requireAuth(req, res, next) {
   const user = data && loadUser('e.id = ? AND e.is_active = 1', data.sub);
   if (!user) return res.status(401).json({ message: 'Unauthorized' });
   req.user = user;
+  // Until the user has set their own password, only the profile and the password change are open.
+  if (user.must_change_password && !PASSWORD_CHANGE_PATHS.has(req.path)) {
+    return res.status(428).json({ message: 'Set your own password before you continue', code: 'password_change_required' });
+  }
   next();
 }
+
+const PASSWORD_CHANGE_PATHS = new Set(['/auth/profile', '/auth/change-password']);
+
+/* ---------- Sign-in lock-out ---------- */
+// Failed sign-ins per account and per address in a sliding window; at the limit the account (or address) waits.
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_PER_ACCOUNT = 5;
+const MAX_PER_ADDRESS = 20;
+const failures = new Map();
+
+/** The client's address: behind the Cloudflare tunnel (a local connection) the one Cloudflare passes on. */
+export function clientAddress(req) {
+  const local = /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress ?? '');
+  return (local && req.headers['cf-connecting-ip']) || req.socket.remoteAddress || 'unknown';
+}
+
+const recent = (key, now) => (failures.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
+
+/** Throws 429 when the account or the address has too many recent failed sign-ins. */
+export function assertLoginAllowed(username, address, now = Date.now()) {
+  for (const [key, max] of [[`u:${username}`, MAX_PER_ACCOUNT], [`a:${address}`, MAX_PER_ADDRESS]]) {
+    const list = recent(key, now);
+    if (list.length >= max) {
+      const minutes = Math.max(1, Math.ceil((list[0] + WINDOW_MS - now) / 60000));
+      const err = new Error(`Too many failed sign-ins. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+      err.status = 429;
+      throw err;
+    }
+  }
+}
+
+export function recordLoginFailure(username, address, now = Date.now()) {
+  for (const key of [`u:${username}`, `a:${address}`]) failures.set(key, [...recent(key, now), now]);
+  if (failures.size > 10000) for (const [key] of failures) if (!recent(key, now).length) failures.delete(key);
+}
+
+export const clearLoginFailures = (username) => failures.delete(`u:${username}`);
 
 export const hasPermission = (user, permission) => user.permissions.includes(permission);
 
