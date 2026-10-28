@@ -1,11 +1,12 @@
 import { clsx } from 'clsx';
-import { CheckCircle2, ChevronRight, Download, KeyRound, LogOut, Monitor, Share } from 'lucide-react';
+import { CheckCircle2, ChevronRight, CircleHelp, Download, ExternalLink, KeyRound, LogOut, Monitor, Share } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm';
 import { Button, Card, Switch } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
+import { USER_GUIDE_URL } from '../../lib/help';
 import { useI18n } from '../../lib/i18n';
 import { useInstallPrompt } from '../../lib/pwa';
 import { useTheme } from '../../lib/theme';
@@ -77,6 +78,11 @@ export function AccountPage() {
             ))}
           </div>
         </div>
+        <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer" title={t('user_guide_hint')} className="flex min-h-14 items-center gap-3 px-4 text-sm hover:bg-muted">
+          <CircleHelp className="size-5 text-muted-foreground" />
+          <span className="flex-1">{t('user_guide')}</span>
+          <ExternalLink className="size-4 text-muted-foreground" />
+        </a>
         <div className="flex min-h-14 items-center px-4">
           <Switch checked={dark} onChange={setDark} label={t('m_dark_mode')} />
         </div>

@@ -1,10 +1,11 @@
 import { clsx } from 'clsx';
 import { BrandLogo, BrandMark } from './Brand';
-import { ClipboardList, Hash, LayoutDashboard, ListOrdered, LogOut, MapPin, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Tags, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
+import { CircleHelp, ClipboardList, Hash, LayoutDashboard, ListOrdered, LogOut, MapPin, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Tags, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
+import { USER_GUIDE_URL } from '../lib/help';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import type { Permission } from '../lib/types';
@@ -136,6 +137,9 @@ export function Layout() {
                 </button>
               ))}
             </div>
+            <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer" className="rounded-md p-2 hover:bg-muted" title={t('user_guide_hint')} aria-label={t('user_guide')}>
+              <CircleHelp className="size-5" />
+            </a>
             <NotificationBell woLink={(id) => `/transaction/work-order/details/${id}`} />
             <button onClick={() => setDark(!dark)} className="rounded-md p-2 hover:bg-muted" aria-label="Toggle theme">
               {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
