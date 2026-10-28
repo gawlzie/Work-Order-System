@@ -1,0 +1,216 @@
+import { clsx } from 'clsx';
+import { BrandLogo, BrandMark } from './Brand';
+import { BookOpen, CircleHelp, ClipboardList, Compass, Hash, LayoutDashboard, ListOrdered, LogOut, MapPin, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Tags, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
+import { initials } from '../lib/format';
+import { USER_GUIDE_URLS } from '../lib/help';
+import { useTourControls } from '../lib/tour';
+import { useI18n, type TKey } from '../lib/i18n';
+import { useTheme } from '../lib/theme';
+import type { Permission } from '../lib/types';
+import { useConfirm } from './confirm';
+import { NotificationBell } from './NotificationBell';
+import { useBodyLock } from './ui';
+
+const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; permission?: Permission }[] = [
+  { to: '/dashboard/work-order', key: 'dashboard', icon: LayoutDashboard },
+  { to: '/transaction/work-order', key: 'work_order', icon: ClipboardList, group: 'transaction' },
+  { to: '/master/unit', key: 'units', icon: Truck, group: 'master_data', permission: 'master.unit' },
+  { to: '/master/employee', key: 'employees', icon: Users, group: 'master_data', permission: 'master.employee' },
+  { to: '/master/site', key: 'sites', icon: MapPin, group: 'master_data', permission: 'master.site' },
+  { to: '/master/role', key: 'roles', icon: ShieldCheck, group: 'master_data', permission: 'master.role' },
+  { to: '/master/step', key: 'repair_steps', icon: ListOrdered, group: 'master_data', permission: 'master.step' },
+  { to: '/master/category', key: 'repair_categories', icon: Tags, group: 'master_data', permission: 'master.category' },
+  { to: '/master/job-code', key: 'job_codes', icon: Hash, group: 'master_data', permission: 'master.job' },
+  { to: '/app/work-order', key: 'application', icon: Smartphone },
+  { to: '/m', key: 'mechanic_app', icon: Wrench, permission: 'wo.progress' },
+];
+
+
+/** The ? menu: the tour of the page shown (when it has one) and the user guide in the chosen language. */
+function HelpMenu() {
+  const { t, lang } = useI18n();
+  const { pageTour, start } = useTourControls();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | TouchEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+    };
+  }, [open]);
+  return (
+    <div className="relative" ref={ref} data-tour="help">
+      <button onClick={() => setOpen((o) => !o)} className="rounded-md p-2 hover:bg-muted" title={t('tour_help_t')} aria-label={t('tour_help_t')} aria-expanded={open}>
+        <CircleHelp className="size-5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 animate-fade-in rounded-lg border border-border bg-card p-1 shadow-lg">
+          {pageTour && (
+            <button onClick={() => { setOpen(false); start(pageTour); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+              <Compass className="size-4" /> {t('tour_page')}
+            </button>
+          )}
+          <a href={USER_GUIDE_URLS[lang]} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title={t('user_guide_hint')} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+            <BookOpen className="size-4" /> {t('user_guide')}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Layout() {
+  const { t, lang, setLang } = useI18n();
+  const { user, logout, can } = useAuth();
+  // Users limited to their own site see which one.
+  const roleLine = user && !can('site.all') && user.site ? `${user.role_name} · ${user.site}` : user?.role_name;
+  const confirm = useConfirm();
+  const nav = NAV.filter((item) => !item.permission || can(item.permission));
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dark, setDark] = useTheme();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setMobileOpen(false), [location.pathname]);
+  useEffect(() => {
+    const close = (e: MouseEvent | TouchEvent) => menuRef.current && !menuRef.current.contains(e.target as Node) && setMenuOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+    };
+  }, []);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMobileOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
+  useBodyLock(mobileOpen);
+
+  const sidebar = (
+    <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
+      <div className={clsx('mb-4 flex min-h-12 shrink-0 items-center gap-2.5 px-2', collapsed && 'lg:justify-center lg:px-0')}>
+        {collapsed && <BrandMark className="hidden size-9 shrink-0 lg:block" />}
+        <div className={clsx('min-w-0 leading-tight', collapsed && 'lg:hidden')}>
+          <BrandLogo className="h-9" />
+          <p className="mt-1 text-[11px] text-muted-foreground">WO ITI · {t('app_name')}</p>
+        </div>
+        <button className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-muted lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+          <X className="size-5" />
+        </button>
+      </div>
+      {nav.map((item, i) => (
+        <div key={item.to}>
+          {item.group && nav[i - 1]?.group !== item.group && (
+            <p className={clsx('mt-3 mb-1 px-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase', collapsed && 'lg:hidden')}>
+              {t(item.group)}
+            </p>
+          )}
+          <NavLink
+            to={item.to}
+            title={t(item.key)}
+            className={({ isActive }) =>
+              clsx(
+                'flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition',
+                collapsed && 'lg:justify-center lg:px-0',
+                isActive ? 'bg-sidebar-accent text-white shadow-sm' : 'text-foreground/80 hover:bg-muted',
+              )
+            }
+          >
+            <item.icon className="size-[18px] shrink-0" />
+            <span className={clsx(collapsed && 'lg:hidden')}>{t(item.key)}</span>
+          </NavLink>
+        </div>
+      ))}
+      <div className={clsx('mt-auto px-3 pt-4 pb-[env(safe-area-inset-bottom)] text-[11px] text-muted-foreground', collapsed && 'lg:hidden')}>
+        © {new Date().getFullYear()} Inline Technology International
+      </div>
+    </nav>
+  );
+
+  return (
+    <div className="flex min-h-screen">
+      <aside data-tour="nav" className={clsx('no-print sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-sidebar transition-all lg:block', collapsed ? 'w-[72px]' : 'w-64')}>
+        {sidebar}
+      </aside>
+
+      {mobileOpen && (
+        <div className="no-print fixed inset-0 z-40 lg:hidden" onClick={() => setMobileOpen(false)} role="dialog" aria-modal="true" aria-label="Menu">
+          <div className="absolute inset-0 animate-fade-in bg-black/50" />
+          <aside className="relative h-dvh w-72 max-w-[85vw] animate-slide-in bg-sidebar shadow-xl" onClick={(e) => e.stopPropagation()}>
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-card/90 px-3 backdrop-blur sm:h-16 sm:px-6">
+          <button data-tour="nav" className="rounded-md p-2 hover:bg-muted lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+            <Menu className="size-5" />
+          </button>
+          <button className="hidden rounded-md p-2 hover:bg-muted lg:block" onClick={() => setCollapsed((c) => !c)} title="Toggle Sidebar" aria-label="Toggle sidebar">
+            {collapsed ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
+          </button>
+          <NavLink to="/" className="flex items-center gap-2 lg:hidden">
+            <BrandMark className="size-7" />
+            <span className="text-sm font-semibold max-[359px]:hidden">WO ITI</span>
+          </NavLink>
+          <div className="ml-auto flex items-center gap-1">
+            <div data-tour="lang" className="flex rounded-lg border border-border p-0.5 text-xs font-medium">
+              {(['en', 'id'] as const).map((l) => (
+                <button key={l} onClick={() => setLang(l)} className={clsx('rounded-md px-2 py-1 uppercase', lang === l ? 'bg-primary text-white' : 'text-muted-foreground')}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <HelpMenu />
+            <span data-tour="bell" className="inline-flex"><NotificationBell woLink={(id) => `/transaction/work-order/details/${id}`} /></span>
+            <button onClick={() => setDark(!dark)} className="rounded-md p-2 hover:bg-muted" aria-label="Toggle theme">
+              {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
+            </button>
+            <div className="relative" ref={menuRef} data-tour="profile">
+              <button onClick={() => setMenuOpen((o) => !o)} className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted">
+                <span className="flex size-8 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-white">
+                  {initials(user?.full_name ?? '?')}
+                </span>
+                <span className="hidden text-left leading-tight sm:block">
+                  <span className="block text-sm font-medium">{user?.full_name}</span>
+                  <span className="block text-[11px] text-muted-foreground">{roleLine}</span>
+                </span>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 w-56 animate-fade-in rounded-lg border border-border bg-card p-1 shadow-lg">
+                  <div className="border-b border-border px-3 py-2 sm:hidden">
+                    <p className="truncate text-sm font-medium">{user?.full_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{roleLine}</p>
+                  </div>
+                  <button onClick={() => { setMenuOpen(false); navigate('/profile'); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+                    <UserIcon className="size-4" /> {t('profile')}
+                  </button>
+                  <button onClick={() => { setMenuOpen(false); confirm({ message: t('confirm_logout'), tone: 'destructive', confirmLabel: t('logout') }, () => { logout(); navigate('/login'); }); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-muted">
+                    <LogOut className="size-4" /> {t('logout')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+        <main className="min-w-0 flex-1 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 print:p-0">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,215 @@
+import { clsx } from 'clsx';
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Circle, Loader, MessageSquareText, Pencil, Printer, RefreshCcw, XCircle } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ApprovalDialog } from '../components/ApprovalDialog';
+import { ApprovalBadge, ChannelBadge, StatusBadge } from '../components/badges';
+
+import { formatMeter } from '../components/MeterFields';
+import { ProofSection } from '../components/ProofSection';
+import { WoJobCodes } from '../components/WoJobCodes';
+import { WoPrintForm } from '../components/WoPrintForm';
+import { customerTypeLabel, paymentLabel } from '../components/CustomerPayment';
+import { maintenanceLabel } from '../components/MaintenanceType';
+import { BtnLabel, Button, Card, EmptyState, PageHeader, Spinner } from '../components/ui';
+import { useAuth } from '../lib/auth';
+import { durationBetween, formatDateTime, formatDuration } from '../lib/format';
+import { useI18n } from '../lib/i18n';
+import { usePrintFileName } from '../lib/print';
+import { useWorkOrder } from '../lib/queries';
+import type { Step } from '../lib/types';
+import { useTour } from '../lib/tour';
+
+function Info({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm font-medium">{children}</dd>
+    </div>
+  );
+}
+
+/** Re-renders every second while something is running, so live durations show their seconds. */
+function useSecondTick(active: boolean) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1_000);
+    return () => clearInterval(id);
+  }, [active]);
+}
+
+export function WorkOrderDetailPage() {
+  const { id } = useParams();
+  const { t, lang } = useI18n();
+  const { can } = useAuth();
+  const navigate = useNavigate();
+  const { data: wo, isLoading, isError, error, refetch, isFetching } = useWorkOrder(id);
+  const [approval, setApproval] = useState<'approve' | 'reject' | null>(null);
+
+  useSecondTick(!!wo && wo.status !== 'FINISH' && !!wo.started_at);
+  // Saved PDF: WO-202610-0044_<print date>.pdf
+  usePrintFileName(wo?.wo_number);
+  useTour('wo-detail', !!wo);
+
+  if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
+  if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
+
+  // Steps are started and finished in the mechanic app only; this page shows their times.
+  const allTop = wo.steps;
+
+  const stateIcon = (s: Step) =>
+    s.finished_at ? <CheckCircle2 className="size-5 text-emerald-500" /> : s.started_at ? <Loader className="size-5 animate-spin text-yellow-500 [animation-duration:3s]" /> : <Circle className="size-5 text-muted-foreground/50" />;
+
+  const renderSteps = (steps: Step[]) => (
+    <ol className="divide-y divide-border">
+      {steps.map((step) => (
+        <li key={step.id} className={clsx('p-3 sm:p-4', step.started_at && !step.finished_at && 'bg-yellow-500/5')}>
+          <div className="flex items-start gap-3">
+            <div className="pt-0.5">{stateIcon(step)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-medium break-words">
+                  {step.step_no}. {step.step_name}
+                </p>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
+                <div><span className="block">{t('pic')}</span><span className="text-foreground">{step.pic_name ?? '-'}</span></div>
+                <div><span className="block">{t('start')}</span><span className="text-foreground">{formatDateTime(step.started_at)}</span></div>
+                <div><span className="block">{t('finish')}</span><span className="text-foreground">{formatDateTime(step.finished_at)}</span></div>
+                <div><span className="block">{t('duration')}</span><span className="text-foreground tabular-nums">{formatDuration(durationBetween(step.started_at, step.finished_at))}</span></div>
+              </dl>
+              {step.remarks && <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs"><span className="text-muted-foreground">{t('remarks')}: </span>{step.remarks}</p>}
+              {/* The job code step (Step 7) shows its repair category and job codes, each with its own time. */}
+              {step.allow_add_sub ? (
+                (step.started_at || wo.job_codes.length > 0) && <WoJobCodes wo={wo} compact manual className="mt-3 border-l-2 border-border pl-4" />
+              ) : step.sub_steps.length > 0 && (
+                <ul className="mt-3 space-y-1.5 border-l-2 border-border pl-4">
+                  {step.sub_steps.map((sub) => (
+                    <li key={sub.id} className="flex flex-wrap items-center gap-2 text-sm">
+                      {sub.finished_at ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : sub.started_at ? <Loader className="size-4 shrink-0 text-yellow-500" /> : <Circle className="size-4 shrink-0 text-muted-foreground/50" />}
+                      <span className="min-w-0 flex-1 break-words">
+                        {step.step_no}.{sub.step_no} {sub.step_name}
+                        {!!sub.is_additional && <span className="ml-1.5 text-xs text-primary">· {t('added_in_app')}</span>}
+                      </span>
+                      <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(durationBetween(sub.started_at, sub.finished_at))}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+
+  const doneCount = allTop.filter((s) => s.finished_at).length;
+
+  // Print shows the Work Order Request Form instead of this page.
+  return (
+    <>
+    <WoPrintForm wo={wo} />
+    <div className="mx-auto max-w-5xl print:hidden">
+      <Button variant="ghost" size="sm" className="no-print mb-3 -ml-2" onClick={() => navigate('/transaction/work-order')}>
+        <ArrowLeft className="size-4" /> {t('work_order')}
+      </Button>
+      <PageHeader
+        title={`${t('detail_title')} · ${wo.wo_number}`}
+        subtitle={t('detail_subtitle')}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => refetch()} title={t('reload')}>
+              <RefreshCcw className={clsx('size-4', isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
+            </Button>
+            <Button variant="outline" onClick={() => window.print()} title={t('print')}>
+              <Printer className="size-4" /> <BtnLabel>{t('print')}</BtnLabel>
+            </Button>
+            {can('wo.update') && wo.status !== 'FINISH' && (
+              <Button className="max-sm:ml-auto" onClick={() => navigate(`/transaction/work-order/update/${wo.wo_uuid}`)}>
+                <Pencil className="size-4" /> {t('edit')}
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {wo.approval_status === 'WAITING' && (
+        <div data-tour="wo-approval" className="mb-4 flex flex-col gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm sm:flex-row sm:items-center">
+          <div className="flex flex-1 items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-yellow-600" />
+            <p>{t('must_approve')}</p>
+          </div>
+          {can('wo.approve') && (
+            <div className="no-print flex gap-2 *:flex-1 sm:*:flex-none">
+              <Button variant="destructive" onClick={() => setApproval('reject')}><XCircle className="size-4" /> {t('reject')}</Button>
+              <Button variant="success" onClick={() => setApproval('approve')}><Check className="size-4" /> {t('approve')}</Button>
+            </div>
+          )}
+        </div>
+      )}
+      {wo.approval_status === 'REJECT' && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm">
+          <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
+          <p><span className="font-medium">{t('rejected_note')}:</span> {wo.reject_reason}</p>
+        </div>
+      )}
+
+      {wo.approval_remarks && (
+        <div className="mb-4 rounded-lg flex items-start gap-3 border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
+          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <p className="min-w-0 break-words whitespace-pre-wrap"><span className="font-medium">{t('approval_remarks')}:</span> {wo.approval_remarks}</p>
+        </div>
+      )}
+
+      <Card tour="wo-info" className="print-area p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <StatusBadge status={wo.status} />
+          <ApprovalBadge status={wo.approval_status} />
+          <ChannelBadge channel={wo.channel_source} />
+        </div>
+        <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <Info label={t('unit')}>{wo.unit_number} <span className="text-muted-foreground">({wo.unit_code})</span></Info>
+          <Info label={t('driver')}>{wo.driver_name}</Info>
+          <Info label={t('pic_mechanic')}>{wo.mechanic_name ?? '-'}</Info>
+          <Info label={t('maintenance_type')}>{maintenanceLabel(wo.maintenance_type, t)}</Info>
+          <Info label={t('maintenance_notes')}><span className="break-words">{wo.maintenance_other || '-'}</span></Info>
+          <Info label={t('customer_type')}>{customerTypeLabel(wo.customer_type, t)}</Info>
+          <Info label={t('payment')}><span className="break-words">{paymentLabel(wo.payment_type, wo.payment_other, t)}</span></Info>
+          <Info label={t('site')}>{wo.site ?? '-'}</Info>
+          <Info label={t('hm')}><span className="tabular-nums">{formatMeter(wo.hm, lang)}</span></Info>
+          <Info label={t('km')}><span className="tabular-nums">{formatMeter(wo.km, lang)}</span></Info>
+          <Info label={t('category')}>{wo.category ?? '-'}</Info>
+          <Info label={t('created_at')}>{formatDateTime(wo.created_at)}</Info>
+          <Info label={t('created_by')}>{wo.created_by_name ?? '-'}</Info>
+          <Info label={t('mobile_sync_time')}>{formatDateTime(wo.mobile_sync_time)}</Info>
+          <Info label={t('total_time')}><span className="tabular-nums">{formatDuration(wo.total_time)}</span></Info>
+          {wo.job_codes.length > 0 && (
+            <Info label={t('repair_time')}><span className="tabular-nums">{wo.repair_time == null ? '-' : formatDuration(wo.repair_time)}</span></Info>
+          )}
+        </dl>
+        <div className="mt-4 rounded-lg bg-muted p-4">
+          <p className="text-xs text-muted-foreground">{t('problem')}</p>
+          <p className="mt-1 text-sm whitespace-pre-wrap">{wo.problem}</p>
+        </div>
+      </Card>
+
+      <Card tour="wo-steps" className="print-area mt-4 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <h2 className="font-semibold">{t('steps')}</h2>
+          <span className="text-sm text-muted-foreground tabular-nums">{doneCount}/{allTop.length}</span>
+        </div>
+        <div className="h-1.5 bg-muted">
+          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(doneCount / Math.max(1, allTop.length)) * 100}%` }} />
+        </div>
+        {renderSteps(wo.steps)}
+      </Card>
+
+      <div data-tour="wo-proof"><ProofSection wo={wo} /></div>
+
+      {approval && <ApprovalDialog kind={approval} wo={wo} onClose={() => setApproval(null)} />}
+
+    </div>
+    </>
+  );
+}

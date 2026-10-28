@@ -1,0 +1,271 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-destructive: var(--destructive);
+
+  --animate-fade-in: fade-in 0.15s ease-out;
+  --animate-slide-in: slide-in 0.2s ease-out;
+  --animate-sheet-up: sheet-up 0.2s ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes slide-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+}
+
+:root {
+  --background: #f3f4f6;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --muted: #f1f2f5;
+  --muted-foreground: #6b7280;
+  --border: #e5e5e5;
+  --primary: #1447e6;
+  --primary-foreground: #fafafa;
+  --sidebar: #ffffff;
+  --sidebar-accent: #5c70c4;
+  --destructive: #dc2626;
+}
+
+.dark {
+  --background: #0c121a;
+  --foreground: #fafafa;
+  --card: #121a25;
+  --muted: #1a2330;
+  --muted-foreground: #9ca3af;
+  --border: #283242;
+  --primary: #3b6cf6;
+  --primary-foreground: #fafafa;
+  --sidebar: #0f1620;
+  --sidebar-accent: #5166ae;
+  --destructive: #ef4444;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
+/* ---------- Printed Work Order Request Form (components/WoPrintForm.tsx) ---------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm 11mm;
+  }
+  .woform {
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 7.6pt;
+    line-height: 1.25;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .woform table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .woform table + table,
+  .woform-section + table {
+    margin-top: 0;
+  }
+  .woform td,
+  .woform th {
+    border: 0.75pt solid #000;
+    padding: 3pt 4pt;
+    text-align: left;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+  .woform th {
+    font-weight: 700;
+  }
+  .woform-head {
+    margin-bottom: 4pt;
+  }
+  .woform-head td {
+    height: 44pt;
+  }
+  .woform-brand {
+    width: 22%;
+    text-align: center !important;
+  }
+  /* Company logos in the head: Motor Sights (its name is in the logo) above "Service & Support", PT Indonesia
+     Equipment Line above the form number. 48pt is the largest Motor Sights logo that keeps the head as tall as the
+     form number box, so page 1 still fits one A4 sheet. */
+  .woform-logo {
+    display: block;
+    height: 28pt;
+    width: auto;
+    margin: 0 auto 2pt;
+  }
+  .woform-logo-msi {
+    height: 48pt;
+  }
+  /* The file is cropped to the logo, so 46 x 22pt shows it whole without stretching. */
+  .woform-logo-iel {
+    width: 46pt;
+    height: 22pt;
+    object-fit: contain;
+  }
+  .woform-brand small {
+    font-size: 6.5pt;
+    font-weight: 700;
+  }
+  .woform-title {
+    text-align: center !important;
+    font-size: 15pt;
+    font-weight: 700;
+  }
+  .woform-meta {
+    width: 18%;
+    font-size: 6.5pt;
+    line-height: 1.4;
+  }
+  .woform-grid {
+    margin-bottom: 4pt;
+  }
+  .woform-info th,
+  .woform-info td {
+    height: 20pt;
+  }
+  .woform-info th {
+    width: 13%;
+    font-size: 6.8pt;
+  }
+  /* Section bar: a closed box, also over the indented tables below it. */
+  .woform-section {
+    border: 0.75pt solid #000;
+    background: #e5e5e5;
+    padding: 2pt 4pt;
+    font-weight: 700;
+    font-size: 7.4pt;
+  }
+  .woform-section + table {
+    margin-bottom: 4pt;
+  }
+  /* The bar's bottom line is the table's top line: no double line. */
+  .woform-section + table > :first-child > tr:first-child > th,
+  .woform-section + table > :first-child > tr:first-child > td {
+    border-top: 0;
+  }
+  .woform-indent {
+    width: calc(100% - 14pt) !important;
+    margin-left: 14pt;
+  }
+  .woform-tall {
+    height: 64pt;
+  }
+  .woform-sign td {
+    height: 18pt;
+  }
+  .woform-signspace {
+    height: 54pt !important;
+    vertical-align: bottom !important;
+    font-size: 6.8pt;
+    line-height: 1.6;
+  }
+  .woform-rows thead th {
+    background: #f2f2f2;
+    font-size: 6.8pt;
+    height: 20pt;
+  }
+  .woform-rows tbody td {
+    height: 18pt;
+  }
+  .woform-no {
+    font-size: 8.5pt;
+  }
+  /* Blank line to fill in by hand, level with the underline of a filled-in name. */
+  .woform-line {
+    display: inline-block;
+    border-bottom: 0.6pt solid #000;
+    height: 8pt;
+    vertical-align: -0.22em;
+  }
+  .woform-filled {
+    display: inline-block;
+    min-width: 9rem;
+    border-bottom: 0.6pt solid #000;
+    font-weight: 700;
+  }
+  /* Choices side by side in one cell (Payment), and a filled-in text there: underlined, may wrap. */
+  .woform-choice {
+    margin-right: 18pt;
+  }
+  .woform-filled-inline {
+    border-bottom: 0.6pt solid #000;
+  }
+  .woform-page2 {
+    break-before: page;
+  }
+  .woform-closing {
+    height: 74pt;
+    vertical-align: middle;
+    font-size: 6.8pt;
+    line-height: 1.5;
+  }
+  .woform-warranty td,
+  .woform-warranty th {
+    background: #fff6d5;
+  }
+  .woform-warranty-head th,
+  .woform-warranty-head td {
+    background: #ffeb9c !important;
+    height: 34pt;
+    font-size: 6.8pt;
+  }
+  .woform-foot {
+    margin-top: 6pt;
+    font-size: 6pt;
+    color: #555;
+    text-align: right;
+  }
+}

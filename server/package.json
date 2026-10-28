@@ -1,0 +1,17 @@
+{
+  "name": "wos-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node --watch --no-warnings src/index.js",
+    "start": "node --no-warnings src/index.js",
+    "seed": "node --no-warnings src/seed.js --reset"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

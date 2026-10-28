@@ -1,0 +1,106 @@
+const TOKEN_KEY = 'wos-token';
+
+export const tokenStore = {
+  get: () => {
+    try {
+      return localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+  set: (t: string | null) => {
+    try {
+      if (t) localStorage.setItem(TOKEN_KEY, t);
+      else localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  },
+};
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public errors?: Record<string, string>,
+  ) {
+    super(message);
+  }
+}
+
+let onUnauthorized: () => void = () => {};
+export const setUnauthorizedHandler = (fn: () => void) => {
+  onUnauthorized = fn;
+};
+/** 428: the user has to set their own password first (the server allows only the profile and the change). */
+let onPasswordRequired: () => void = () => {};
+export const setPasswordRequiredHandler = (fn: () => void) => {
+  onPasswordRequired = fn;
+};
+
+export function qs(params: Record<string, unknown>) {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
+export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const token = tokenStore.get();
+  const res = await fetch(`/api${path}`, {
+    method: init.method ?? 'GET',
+    headers: {
+      ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401 && path !== '/auth/login') onUnauthorized();
+    if (res.status === 428) onPasswordRequired();
+    throw new ApiError(res.status, data.message ?? res.statusText, data.errors);
+  }
+  return data as T;
+}
+
+/** Upload one file as the raw request body; the server reads its name from X-File-Name. */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name),
+      Authorization: `Bearer ${tokenStore.get()}`,
+    },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) onUnauthorized();
+    throw new ApiError(res.status, data.message ?? res.statusText, data.errors);
+  }
+  return data as T;
+}
+
+/** Fetch a protected file and return an object URL for it (revoke it when done). */
+export async function blobUrl(path: string) {
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${tokenStore.get()}` } });
+  if (!res.ok) throw new ApiError(res.status, (await res.json().catch(() => ({}))).message ?? 'File could not be loaded');
+  return URL.createObjectURL(await res.blob());
+}
+
+/** Download a server-generated file (e.g. CSV export) using the auth token. */
+export async function download(path: string, fallbackName: string) {
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${tokenStore.get()}` } });
+  if (!res.ok) throw new ApiError(res.status, 'Export failed');
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
