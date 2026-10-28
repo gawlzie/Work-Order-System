@@ -191,7 +191,7 @@ const en = {
   m_language: 'Language',
   m_dark_mode: 'Dark mode',
   user_guide: 'User guide',
-  user_guide_hint: 'Open the user guide (in Indonesian) in a new tab',
+  user_guide_hint: 'Open the user guide in a new tab',
   m_view_only: 'View only: your role cannot progress steps.',
   m_assigned_to: 'Assigned to {name}',
   m_unassigned: 'Unassigned',

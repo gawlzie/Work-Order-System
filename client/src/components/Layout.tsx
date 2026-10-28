@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
-import { USER_GUIDE_URL } from '../lib/help';
+import { USER_GUIDE_URLS } from '../lib/help';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import type { Permission } from '../lib/types';
@@ -137,7 +137,7 @@ export function Layout() {
                 </button>
               ))}
             </div>
-            <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer" className="rounded-md p-2 hover:bg-muted" title={t('user_guide_hint')} aria-label={t('user_guide')}>
+            <a href={USER_GUIDE_URLS[lang]} target="_blank" rel="noopener noreferrer" className="rounded-md p-2 hover:bg-muted" title={t('user_guide_hint')} aria-label={t('user_guide')}>
               <CircleHelp className="size-5" />
             </a>
             <NotificationBell woLink={(id) => `/transaction/work-order/details/${id}`} />

@@ -6,7 +6,7 @@ import { useConfirm } from '../../components/confirm';
 import { Button, Card, Switch } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
-import { USER_GUIDE_URL } from '../../lib/help';
+import { USER_GUIDE_URLS } from '../../lib/help';
 import { useI18n } from '../../lib/i18n';
 import { useInstallPrompt } from '../../lib/pwa';
 import { useTheme } from '../../lib/theme';
@@ -78,7 +78,7 @@ export function AccountPage() {
             ))}
           </div>
         </div>
-        <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer" title={t('user_guide_hint')} className="flex min-h-14 items-center gap-3 px-4 text-sm hover:bg-muted">
+        <a href={USER_GUIDE_URLS[lang]} target="_blank" rel="noopener noreferrer" title={t('user_guide_hint')} className="flex min-h-14 items-center gap-3 px-4 text-sm hover:bg-muted">
           <CircleHelp className="size-5 text-muted-foreground" />
           <span className="flex-1">{t('user_guide')}</span>
           <ExternalLink className="size-4 text-muted-foreground" />
