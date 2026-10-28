@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { CheckCircle2, ChevronRight, CircleHelp, Download, ExternalLink, KeyRound, LogOut, Monitor, Share } from 'lucide-react';
+import { CheckCircle2, ChevronRight, CircleHelp, Compass, Download, ExternalLink, KeyRound, LogOut, Monitor, Share } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useConfirm } from '../../components/confirm';
@@ -7,6 +7,7 @@ import { Button, Card, Switch } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { initials } from '../../lib/format';
 import { USER_GUIDE_URLS } from '../../lib/help';
+import { MECHANIC_TOURS, useTourControls } from '../../lib/tour';
 import { useI18n } from '../../lib/i18n';
 import { useInstallPrompt } from '../../lib/pwa';
 import { useTheme } from '../../lib/theme';
@@ -52,6 +53,7 @@ export function AccountPage() {
   const navigate = useNavigate();
   const [dark, setDark] = useTheme();
   const confirm = useConfirm();
+  const { reset } = useTourControls();
   if (!user) return null;
 
   return (
@@ -83,6 +85,11 @@ export function AccountPage() {
           <span className="flex-1">{t('user_guide')}</span>
           <ExternalLink className="size-4 text-muted-foreground" />
         </a>
+        <button onClick={() => { reset(MECHANIC_TOURS); navigate('/m'); }} className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-sm hover:bg-muted">
+          <Compass className="size-5 text-muted-foreground" />
+          <span className="flex-1">{t('tour_take')}</span>
+          <ChevronRight className="size-4 text-muted-foreground" />
+        </button>
         <div className="flex min-h-14 items-center px-4">
           <Switch checked={dark} onChange={setDark} label={t('m_dark_mode')} />
         </div>

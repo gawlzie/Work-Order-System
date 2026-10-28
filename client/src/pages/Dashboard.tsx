@@ -11,6 +11,7 @@ import { BtnLabel, Button, Card, EmptyState, MetaItem, PageHeader, Skeleton } fr
 import { formatDateTime, formatDuration, toDateInput } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useDashboard, useWorkOrders } from '../lib/queries';
+import { useTour } from '../lib/tour';
 
 const defaultStart = () => toDateInput(new Date(Date.now() - 29 * 86_400_000));
 
@@ -34,6 +35,7 @@ export function DashboardPage() {
   const stats = useDashboard(start, end, site);
   const list = useWorkOrders({ created_start: start, created_end: end, status, site, page, limit, sort_by: 'created_at', sort_order: 'desc' });
   const s = stats.data;
+  useTour('web', !stats.isLoading && !list.isLoading);
 
   const statusCards = [
     { key: 'status_open' as TKey, desc: 'status_open_desc' as TKey, value: s?.open, icon: CircleDot, color: 'text-blue-500 bg-blue-500/10', filter: 'OPEN' },
@@ -59,7 +61,7 @@ export function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div data-tour="dash-cards" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {statusCards.map((c) => (
           <button key={c.key} onClick={() => { setStatus(status === c.filter ? '' : c.filter); setPage(1); }} className="h-full text-left">
             <Card className={clsx('h-full p-4 transition hover:border-primary/50 sm:p-5', status === c.filter && 'ring-2 ring-primary')}>
@@ -111,7 +113,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="mt-4 overflow-hidden">
+      <Card tour="dash-list" className="mt-4 overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-semibold">{t('list_work_order')}</h2>

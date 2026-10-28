@@ -17,6 +17,7 @@ import { formatDateTime, formatDuration } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useCategories, useEmployees, useUnits, useWorkOrders, type WoListParams } from '../lib/queries';
 import type { WorkOrder } from '../lib/types';
+import { useTour } from '../lib/tour';
 
 const FILTER_KEYS = ['status', 'approval_status', 'channel_source', 'site', 'unit_id', 'mechanic_id', 'category_id', 'created_start', 'created_end'] as const;
 
@@ -108,6 +109,7 @@ export function WorkOrderListPage() {
   };
 
   const activeFilters = FILTER_KEYS.filter((k) => sp.get(k)).length;
+  useTour('wo-list', !!list.data);
   const rows = list.data?.data ?? [];
   const rowNo = (i: number) => ((params.page ?? 1) - 1) * (params.limit ?? 10) + i + 1;
 
@@ -164,8 +166,8 @@ export function WorkOrderListPage() {
         }
       />
 
-      <Card className="print-area overflow-hidden">
-        <div className="no-print flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
+      <Card tour="wo-table" className="print-area overflow-hidden">
+        <div data-tour="wo-search" className="no-print flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder={t('search')} className="pl-9" />

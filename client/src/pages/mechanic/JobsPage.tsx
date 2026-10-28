@@ -12,6 +12,7 @@ import { useI18n, type TKey } from '../../lib/i18n';
 import { useOutbox } from '../../lib/offline';
 import { fetchWorkOrder, useWorkOrders, type WoListParams } from '../../lib/queries';
 import type { Permission, WorkOrder } from '../../lib/types';
+import { useTour } from '../../lib/tour';
 
 const NOT_FINISHED = 'OPEN,ON_PROGRESS,WAITING';
 // Not rejected: work may start before the admin approves.
@@ -95,6 +96,7 @@ export function JobsPage() {
   const tab = tabs.find((x) => x.id === tabId) ?? tabs[0];
   const current = queries[tab.id];
   const refreshing = Object.values(queries).some((q) => q.isFetching);
+  useTour('m-home', !current.isLoading);
 
   return (
     <div>
@@ -112,7 +114,7 @@ export function JobsPage() {
         </button>
       </div>
 
-      <div className="mb-3 grid gap-2">
+      <div data-tour="m-search" className="mb-3 grid gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search')} className="h-11 pl-9" />
@@ -121,7 +123,7 @@ export function JobsPage() {
       </div>
 
       <div className="sticky top-14 z-20 -mx-4 mb-3 bg-background/95 px-4 py-2 backdrop-blur">
-        <div className="flex gap-1 rounded-xl bg-muted p-1" role="tablist">
+        <div data-tour="m-tabs" className="flex gap-1 rounded-xl bg-muted p-1" role="tablist">
           {tabs.map((x) => {
             const total = queries[x.id].data?.meta.total;
             return (
@@ -153,7 +155,7 @@ export function JobsPage() {
         // With an offline copy the saved jobs are shown even when the last refresh failed (no signal).
         <EmptyState title={(current.error as Error).message} />
       ) : current.data?.data.length ? (
-        <div className="space-y-3">
+        <div data-tour="m-list" className="space-y-3">
           {current.data.data.map((wo) => <JobCard key={wo.wo_uuid} wo={wo} />)}
         </div>
       ) : (

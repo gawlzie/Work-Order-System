@@ -71,8 +71,8 @@ export function Field({ label, required, error, children, className }: { label: 
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={clsx('rounded-xl border border-border bg-card shadow-sm', className)}>{children}</div>;
+export function Card({ className, children, tour }: { className?: string; children: ReactNode; tour?: string }) {
+  return <div data-tour={tour} className={clsx('rounded-xl border border-border bg-card shadow-sm', className)}>{children}</div>;
 }
 
 const badgeVariants = {
@@ -193,7 +193,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
         <h1 className="text-xl font-semibold break-words sm:text-2xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
-      {actions && <div className="no-print flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div data-tour="page-actions" className="no-print flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

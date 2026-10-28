@@ -9,6 +9,7 @@ import { AuthProvider, cachedUser } from './lib/auth';
 import { loadOutbox, restoreCache, startPersist } from './lib/offline';
 import { I18nProvider } from './lib/i18n';
 import { setupPwa } from './lib/pwa';
+import { TourProvider } from './lib/tour';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -33,7 +34,9 @@ const render = () => createRoot(document.getElementById('root')!).render(
           <ConfirmProvider>
           <BrowserRouter>
             <AuthProvider>
-              <App />
+              <TourProvider>
+                <App />
+              </TourProvider>
             </AuthProvider>
           </BrowserRouter>
           </ConfirmProvider>

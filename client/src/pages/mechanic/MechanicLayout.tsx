@@ -41,7 +41,7 @@ export function MechanicLayout() {
             <p className="text-sm font-semibold">WO ITI</p>
             <p className="truncate text-[11px] text-muted-foreground">{t('mechanic_app')}</p>
           </div>
-          <NotificationBell woLink={(id) => `/m/wo/${id}`} className="ml-auto" />
+          <span data-tour="bell" className="ml-auto inline-flex"><NotificationBell woLink={(id) => `/m/wo/${id}`} /></span>
           <NavLink to="/m/account" className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-white" aria-label={t('m_account')}>
             {initials(user?.full_name ?? '?')}
           </NavLink>
@@ -60,6 +60,7 @@ export function MechanicLayout() {
               key={tab.to}
               to={tab.to}
               end={tab.end}
+              data-tour={`m-nav-${tab.key.replace('m_', '')}`}
               className={({ isActive }) =>
                 clsx('flex h-16 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition', isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground')
               }

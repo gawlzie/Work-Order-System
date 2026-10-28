@@ -1,11 +1,12 @@
 import { clsx } from 'clsx';
 import { BrandLogo, BrandMark } from './Brand';
-import { CircleHelp, ClipboardList, Hash, LayoutDashboard, ListOrdered, LogOut, MapPin, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Tags, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
+import { BookOpen, CircleHelp, ClipboardList, Compass, Hash, LayoutDashboard, ListOrdered, LogOut, MapPin, Menu, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Smartphone, Sun, Tags, Truck, User as UserIcon, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { initials } from '../lib/format';
 import { USER_GUIDE_URLS } from '../lib/help';
+import { useTourControls } from '../lib/tour';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
 import type { Permission } from '../lib/types';
@@ -27,6 +28,43 @@ const NAV: { to: string; key: TKey; icon: typeof LayoutDashboard; group?: TKey; 
   { to: '/m', key: 'mechanic_app', icon: Wrench, permission: 'wo.progress' },
 ];
 
+
+/** The ? menu: the tour of the page shown (when it has one) and the user guide in the chosen language. */
+function HelpMenu() {
+  const { t, lang } = useI18n();
+  const { pageTour, start } = useTourControls();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | TouchEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+    };
+  }, [open]);
+  return (
+    <div className="relative" ref={ref} data-tour="help">
+      <button onClick={() => setOpen((o) => !o)} className="rounded-md p-2 hover:bg-muted" title={t('tour_help_t')} aria-label={t('tour_help_t')} aria-expanded={open}>
+        <CircleHelp className="size-5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 animate-fade-in rounded-lg border border-border bg-card p-1 shadow-lg">
+          {pageTour && (
+            <button onClick={() => { setOpen(false); start(pageTour); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+              <Compass className="size-4" /> {t('tour_page')}
+            </button>
+          )}
+          <a href={USER_GUIDE_URLS[lang]} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title={t('user_guide_hint')} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+            <BookOpen className="size-4" /> {t('user_guide')}
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Layout() {
   const { t, lang, setLang } = useI18n();
@@ -104,7 +142,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen">
-      <aside className={clsx('no-print sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-sidebar transition-all lg:block', collapsed ? 'w-[72px]' : 'w-64')}>
+      <aside data-tour="nav" className={clsx('no-print sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-sidebar transition-all lg:block', collapsed ? 'w-[72px]' : 'w-64')}>
         {sidebar}
       </aside>
 
@@ -119,7 +157,7 @@ export function Layout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-card/90 px-3 backdrop-blur sm:h-16 sm:px-6">
-          <button className="rounded-md p-2 hover:bg-muted lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+          <button data-tour="nav" className="rounded-md p-2 hover:bg-muted lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu className="size-5" />
           </button>
           <button className="hidden rounded-md p-2 hover:bg-muted lg:block" onClick={() => setCollapsed((c) => !c)} title="Toggle Sidebar" aria-label="Toggle sidebar">
@@ -130,21 +168,19 @@ export function Layout() {
             <span className="text-sm font-semibold max-[359px]:hidden">WO ITI</span>
           </NavLink>
           <div className="ml-auto flex items-center gap-1">
-            <div className="flex rounded-lg border border-border p-0.5 text-xs font-medium">
+            <div data-tour="lang" className="flex rounded-lg border border-border p-0.5 text-xs font-medium">
               {(['en', 'id'] as const).map((l) => (
                 <button key={l} onClick={() => setLang(l)} className={clsx('rounded-md px-2 py-1 uppercase', lang === l ? 'bg-primary text-white' : 'text-muted-foreground')}>
                   {l}
                 </button>
               ))}
             </div>
-            <a href={USER_GUIDE_URLS[lang]} target="_blank" rel="noopener noreferrer" className="rounded-md p-2 hover:bg-muted" title={t('user_guide_hint')} aria-label={t('user_guide')}>
-              <CircleHelp className="size-5" />
-            </a>
-            <NotificationBell woLink={(id) => `/transaction/work-order/details/${id}`} />
+            <HelpMenu />
+            <span data-tour="bell" className="inline-flex"><NotificationBell woLink={(id) => `/transaction/work-order/details/${id}`} /></span>
             <button onClick={() => setDark(!dark)} className="rounded-md p-2 hover:bg-muted" aria-label="Toggle theme">
               {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
             </button>
-            <div className="relative" ref={menuRef}>
+            <div className="relative" ref={menuRef} data-tour="profile">
               <button onClick={() => setMenuOpen((o) => !o)} className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-muted">
                 <span className="flex size-8 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-white">
                   {initials(user?.full_name ?? '?')}

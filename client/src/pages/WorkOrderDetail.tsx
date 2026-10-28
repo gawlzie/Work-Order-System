@@ -18,6 +18,7 @@ import { useI18n } from '../lib/i18n';
 import { usePrintFileName } from '../lib/print';
 import { useWorkOrder } from '../lib/queries';
 import type { Step } from '../lib/types';
+import { useTour } from '../lib/tour';
 
 function Info({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -49,6 +50,7 @@ export function WorkOrderDetailPage() {
   useSecondTick(!!wo && wo.status !== 'FINISH' && !!wo.started_at);
   // Saved PDF: WO-202610-0044_<print date>.pdf
   usePrintFileName(wo?.wo_number);
+  useTour('wo-detail', !!wo);
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   if (isError || !wo) return <EmptyState title={(error as Error)?.message ?? 'Not found'} action={<Button variant="outline" onClick={() => navigate('/transaction/work-order')}>{t('work_order')}</Button>} />;
@@ -133,7 +135,7 @@ export function WorkOrderDetailPage() {
       />
 
       {wo.approval_status === 'WAITING' && (
-        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm sm:flex-row sm:items-center">
+        <div data-tour="wo-approval" className="mb-4 flex flex-col gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm sm:flex-row sm:items-center">
           <div className="flex flex-1 items-start gap-3">
             <AlertTriangle className="mt-0.5 size-5 shrink-0 text-yellow-600" />
             <p>{t('must_approve')}</p>
@@ -160,7 +162,7 @@ export function WorkOrderDetailPage() {
         </div>
       )}
 
-      <Card className="print-area p-4 sm:p-5">
+      <Card tour="wo-info" className="print-area p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <StatusBadge status={wo.status} />
           <ApprovalBadge status={wo.approval_status} />
@@ -192,7 +194,7 @@ export function WorkOrderDetailPage() {
         </div>
       </Card>
 
-      <Card className="print-area mt-4 overflow-hidden">
+      <Card tour="wo-steps" className="print-area mt-4 overflow-hidden">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="font-semibold">{t('steps')}</h2>
           <span className="text-sm text-muted-foreground tabular-nums">{doneCount}/{allTop.length}</span>
@@ -203,7 +205,7 @@ export function WorkOrderDetailPage() {
         {renderSteps(wo.steps)}
       </Card>
 
-      <ProofSection wo={wo} />
+      <div data-tour="wo-proof"><ProofSection wo={wo} /></div>
 
       {approval && <ApprovalDialog kind={approval} wo={wo} onClose={() => setApproval(null)} />}
 

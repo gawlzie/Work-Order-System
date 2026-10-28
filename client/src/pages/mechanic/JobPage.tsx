@@ -17,6 +17,7 @@ import { useI18n } from '../../lib/i18n';
 import { newRef, useOutbox } from '../../lib/offline';
 import { useWorkOrder } from '../../lib/queries';
 import type { Step } from '../../lib/types';
+import { useTour } from '../../lib/tour';
 
 /** Re-renders every `ms` so running timers stay current. */
 function useTick(ms: number) {
@@ -56,6 +57,7 @@ export function JobPage() {
   const act = useAct();
   const unsent = useOutbox(user?.id).filter((o) => o.wo_uuid === id).length;
   useTick(1_000);
+  useTour('m-wo', !!wo);
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner /></div>;
   // With an offline copy the job stays usable even when the last refresh failed.
@@ -138,7 +140,7 @@ export function JobPage() {
 
       {/* Current step: the one thing the mechanic works on right now. */}
       {workable && (
-        <Card className={clsx('overflow-hidden', current?.started_at && 'border-yellow-500/50')}>
+        <Card tour="m-step" className={clsx('overflow-hidden', current?.started_at && 'border-yellow-500/50')}>
           {current ? (
             <div className="p-4">
               <div className="flex items-center justify-between gap-3">
@@ -160,11 +162,11 @@ export function JobPage() {
                 <p className="mt-1 text-xs text-muted-foreground">{t('m_assigned_to', { name: wo.mechanic_name })}</p>
               )}
 
-              {!!current.allow_add_sub && current.started_at && <WoJobCodes wo={wo} compact className="mt-4" />}
+              {!!current.allow_add_sub && current.started_at && <div data-tour="m-jobcodes"><WoJobCodes wo={wo} compact className="mt-4" /></div>}
 
               {canProgress && (
                 current.started_at ? (
-                  <div className="mt-4 space-y-3">
+                  <div data-tour="m-finish" className="mt-4 space-y-3">
                     {!!current.allow_add_sub && <p className="text-sm font-medium">{t('step_remarks_label', { step: `${current.step_no}. ${current.step_name}` })}</p>}
                     <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={current.allow_add_sub ? t('repair_remarks_placeholder') : t('remarks_placeholder')} maxLength={500} className="min-h-20" />
                     <Button variant="success" className="h-14 w-full text-base" disabled={!!jobsBlock} onClick={() => run(current, 'finish')}>
@@ -216,7 +218,7 @@ export function JobPage() {
         </dl>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card tour="m-steps" className="overflow-hidden">
         <h2 className="border-b border-border p-4 font-semibold">{t('m_all_steps')}</h2>
         <ol className="divide-y divide-border">
           {allTop.map((step) => (
