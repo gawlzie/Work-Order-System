@@ -1,0 +1,16 @@
+# WOS on a server: the app listens on 127.0.0.1:3000 only; nginx in front of it serves the domain with HTTPS.
+# The wos-data volume keeps the database, secret.key, uploads and backups; an empty one starts from server/demo.
+services:
+  wos:
+    build:
+      context: ..
+    image: wos:latest
+    container_name: wos
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - wos-data:/data
+
+volumes:
+  wos-data:
