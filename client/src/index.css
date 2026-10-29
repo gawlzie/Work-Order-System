@@ -269,3 +269,115 @@ body {
     text-align: right;
   }
 }
+
+/* ---------- Printed Work Order List grouped by unit (components/WoListPrint.tsx) ---------- */
+@media print {
+  @page wolist {
+    size: A4 landscape;
+    margin: 10mm 8mm 12mm;
+    @bottom-right {
+      content: 'Page ' counter(page);
+      font: 7pt Arial, Helvetica, sans-serif;
+      color: #555;
+    }
+  }
+  .wolist {
+    page: wolist;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 7pt;
+    line-height: 1.25;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .wolist h1 {
+    margin: 0 0 2pt;
+    color: #1f3a5f;
+    font-size: 20pt;
+    font-weight: 700;
+  }
+  .wolist h2 {
+    margin: 12pt 0 4pt;
+    color: #1f3a5f;
+    font-size: 10.5pt;
+    font-weight: 700;
+    break-after: avoid;
+  }
+  .wolist-sub {
+    margin: 0 0 8pt;
+    color: #555;
+    font-size: 7.5pt;
+  }
+  .wolist table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .wolist td,
+  .wolist th {
+    border: 0.75pt solid #b4c3d3;
+    padding: 3pt 4pt;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  .wolist th {
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  .wolist tr {
+    break-inside: avoid;
+  }
+  .wolist .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .wolist-info td {
+    width: 25%;
+    background: #f1f4f8;
+    padding: 5pt 6pt;
+  }
+  .wolist-info b {
+    display: block;
+    margin-bottom: 2pt;
+  }
+  .wolist-info span {
+    display: block;
+    min-height: 9pt;
+    border-bottom: 0.75pt solid #777;
+  }
+  .wolist-summary th {
+    background: #1f3a5f;
+    color: #fff;
+    border-color: #1f3a5f;
+  }
+  .wolist-unit {
+    margin-top: 10pt;
+  }
+  .wolist-unit-head {
+    margin: 0 0 3pt;
+    color: #1f3a5f;
+    font-size: 8.5pt;
+    font-weight: 700;
+    break-after: avoid;
+  }
+  .wolist-unit-head span {
+    display: inline-block;
+    min-width: 90pt;
+    margin: 0 12pt 0 2pt;
+    border-bottom: 0.75pt solid #1f3a5f;
+    color: #000;
+  }
+  .wolist-detail th {
+    background: #d9e7f4;
+  }
+  .wolist-detail td div + div {
+    margin-top: 2pt;
+  }
+  .wolist-foot {
+    margin-top: 14pt;
+    color: #444;
+    font-size: 6.5pt;
+    break-inside: avoid;
+  }
+}
