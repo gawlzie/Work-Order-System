@@ -70,7 +70,8 @@ export function SiteMasterPage() {
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-muted-foreground">{s.site_code}</p>
                   <p className="font-medium">{s.site_name}{s.site_alias && <span className="ml-1.5 text-xs font-normal text-muted-foreground">({s.site_alias})</span>}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{s.company}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('customer_company')}: <span className="text-foreground">{s.customer_company || '-'}</span></p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('company')}: {s.company}</p>
                   {(s.location || s.location_alias) && <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="size-3" /> {[s.location, s.location_alias && `(${s.location_alias})`].filter(Boolean).join(' ')}</p>}
                 </div>
                 <ActiveBadge active={s.is_active} />
@@ -95,6 +96,7 @@ export function SiteMasterPage() {
                 <Th>{t('no')}</Th>
                 <Th><SortHeader field="site_code" label="site_code" state={state} /></Th>
                 <Th><SortHeader field="site_name" label="site_name" state={state} /></Th>
+                <Th><SortHeader field="customer_company" label="customer_company" state={state} /></Th>
                 <Th><SortHeader field="company" label="company" state={state} /></Th>
                 <Th>{t('location')}</Th>
                 <Th><SortHeader field="employee_count" label="employees" state={state} /></Th>
@@ -113,7 +115,8 @@ export function SiteMasterPage() {
                     <span className="font-medium">{s.site_name}</span>
                     {s.site_alias && <span className="block text-xs text-muted-foreground">{t('alias')}: {s.site_alias}</span>}
                   </td>
-                  <td className="px-4 py-3">{s.company}</td>
+                  <td className="px-4 py-3">{s.customer_company || '-'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{s.company}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {s.location ?? '-'}
                     {s.location_alias && <span className="block text-xs">{t('alias')}: {s.location_alias}</span>}
@@ -164,6 +167,7 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
     site_code: site?.site_code ?? '',
     site_name: site?.site_name ?? '',
     company: site?.company ?? user?.company ?? '',
+    customer_company: site?.customer_company ?? '',
     location: site?.location ?? '',
     site_alias: site?.site_alias ?? '',
     location_alias: site?.location_alias ?? '',
@@ -203,6 +207,7 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{1,19}$/.test(form.site_code.trim())) next.site_code = 'Site code must be 2-20 characters: A-Z, 0-9, _ -';
     if (form.site_name.trim().length < 2) next.site_name = 'Site name must be 2-100 characters';
     if (form.company.trim().length < 2) next.company = 'Company must be 2-100 characters';
+    if (form.customer_company.trim().length < 2) next.customer_company = 'Customer company must be 2-100 characters';
     setErrors(next);
     if (Object.keys(next).length) return;
     // Renaming a site with employees renames it on them too: say so in the confirmation.
@@ -242,6 +247,9 @@ function SiteForm({ site, onClose }: { site: MasterSite | null; onClose: () => v
         </Field>
         <Field label={t('site_alias')} error={errors.site_alias}>
           <Input value={form.site_alias} onChange={alias('site_alias')} placeholder="BIB" maxLength={20} invalid={!!errors.site_alias} className="font-mono uppercase" />
+        </Field>
+        <Field label={t('customer_company')} required error={errors.customer_company}>
+          <Input value={form.customer_company} onChange={set('customer_company')} placeholder="PT Bara Indah Bersama" maxLength={100} invalid={!!errors.customer_company} />
         </Field>
         <Field label={t('company')} required error={errors.company}>
           <Input value={form.company} onChange={set('company')} maxLength={100} invalid={!!errors.company} />

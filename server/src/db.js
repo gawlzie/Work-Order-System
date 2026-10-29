@@ -362,6 +362,12 @@ for (const col of ['customer_type', 'payment_type', 'payment_other'])
 // Optional short names of a site and of its location.
 for (const col of ['site_alias', 'location_alias'])
   if (!columns('sites').includes(col)) db.exec(`ALTER TABLE sites ADD COLUMN ${col} TEXT`);
+// Customer company the site works for, apart from the company of its employees. Sites without one start from their company.
+if (!columns('sites').includes('customer_company')) db.exec('ALTER TABLE sites ADD COLUMN customer_company TEXT');
+{
+  const { changes } = db.prepare("UPDATE sites SET customer_company = company WHERE IFNULL(customer_company, '') = ''").run();
+  if (changes) console.log(`${changes} site(s): customer company filled in from the company`);
+}
 
 /**
  * Work orders from before the type of maintenance was asked: Preventive when one of their job codes is a periodic
