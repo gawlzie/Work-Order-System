@@ -10,13 +10,14 @@ import { Pagination } from '../components/Pagination';
 import { useToast } from '../components/toast';
 import { BtnLabel, Button, Card, EmptyState, Field, Input, MetaItem, Modal, PageHeader, Select, Skeleton } from '../components/ui';
 import { SiteFilter } from '../components/SiteSelect';
+import { WoListPrint } from '../components/WoListPrint';
 import { api, download, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { localDate, usePrintFileName } from '../lib/print';
 import { formatDateTime, formatDuration } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
 import { useCategories, useEmployees, useUnits, useWorkOrders, type WoListParams } from '../lib/queries';
-import type { WorkOrder } from '../lib/types';
+import type { Paged, WorkOrder } from '../lib/types';
 import { useTour } from '../lib/tour';
 
 const FILTER_KEYS = ['status', 'approval_status', 'channel_source', 'site', 'unit_id', 'mechanic_id', 'category_id', 'created_start', 'created_end'] as const;
@@ -25,7 +26,7 @@ type Dialog = { kind: 'approve' | 'reject' | 'delete'; wo: WorkOrder } | null;
 
 export function WorkOrderListPage() {
   const { t } = useI18n();
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -81,6 +82,33 @@ export function WorkOrderListPage() {
     },
     onError: (err) => toast('error', (err as Error).message),
   });
+
+  // Print: the "Work Order List" grouped by unit, with every work order of the current filters (not only this page).
+  const [printRows, setPrintRows] = useState<WorkOrder[] | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const printList = async () => {
+    setPrinting(true);
+    try {
+      const { page: _p, limit: _l, ...filters } = params;
+      const all: WorkOrder[] = [];
+      for (let page = 1; ; page++) {
+        const res = await api<Paged<WorkOrder>>(`/work-orders${qs({ ...filters, page, limit: 500 })}`);
+        all.push(...res.data);
+        if (page >= res.meta.total_pages) break;
+      }
+      setPrintRows(all);
+    } catch (err) {
+      toast('error', (err as Error).message);
+    } finally {
+      setPrinting(false);
+    }
+  };
+  // Print once the fetched rows are on the page (the browser waits here until the print dialog closes).
+  useEffect(() => {
+    if (!printRows) return;
+    window.print();
+    setPrintRows(null);
+  }, [printRows]);
 
   const exportCsv = async () => {
     setExporting(true);
@@ -142,7 +170,13 @@ export function WorkOrderListPage() {
   );
 
   return (
-    <div>
+    <>
+    {/* Ctrl+P without the Print button prints the rows of this page. */}
+    <WoListPrint
+      rows={printRows ?? rows}
+      info={{ site: String(params.site ?? ''), start: params.created_start ?? '', end: params.created_end ?? '', preparedBy: user?.full_name ?? '' }}
+    />
+    <div className="print:hidden">
       <PageHeader
         title={t('work_order')}
         subtitle={t('wo_subtitle')}
@@ -151,8 +185,8 @@ export function WorkOrderListPage() {
             <Button variant="outline" onClick={() => list.refetch()} title={t('reload')}>
               <RefreshCcw className={clsx('size-4', list.isFetching && 'animate-spin')} /> <BtnLabel>{t('reload')}</BtnLabel>
             </Button>
-            <Button variant="outline" onClick={() => window.print()} title={t('print')}>
-              <Printer className="size-4" /> <BtnLabel>{t('print')}</BtnLabel>
+            <Button variant="outline" onClick={printList} loading={printing} title={t('print')}>
+              {!printing && <Printer className="size-4" />} <BtnLabel>{t('print')}</BtnLabel>
             </Button>
             <Button variant="outline" onClick={exportCsv} loading={exporting} title={t('export')}>
               {!exporting && <Download className="size-4" />} <BtnLabel>{t('export')}</BtnLabel>
@@ -353,5 +387,6 @@ export function WorkOrderListPage() {
       </Modal>
       {dialog && dialog.kind !== 'delete' && <ApprovalDialog kind={dialog.kind} wo={dialog.wo} onClose={() => setDialog(null)} />}
     </div>
+    </>
   );
 }
