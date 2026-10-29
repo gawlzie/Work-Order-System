@@ -76,9 +76,9 @@ export const useEmployees = (role: 'driver' | 'mechanic') =>
 export const useNotifications = () =>
   useQuery({ queryKey: ['notifications'], queryFn: () => api<NotificationList>('/notifications?limit=30'), refetchInterval: 30_000, refetchIntervalInBackground: true });
 
-/** Sites for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
+/** Sites for dropdowns. Pass `all` to include inactive ones (e.g. list filters). Reloaded on every form, so a site just added is there. */
 export const useSites = (all = false) =>
-  useQuery({ queryKey: ['sites', 'options', all], queryFn: () => api<SiteOption[]>(`/master/sites${all ? '?all=1' : ''}`), staleTime: 300_000 });
+  useQuery({ queryKey: ['sites', 'options', all], queryFn: () => api<SiteOption[]>(`/master/sites${all ? '?all=1' : ''}`), staleTime: 0 });
 
 /** Categories for dropdowns. Pass `all` to include inactive ones (e.g. list filters). */
 export const useCategories = (all = false) =>
