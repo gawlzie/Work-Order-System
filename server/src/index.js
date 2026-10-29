@@ -143,8 +143,10 @@ app.get('/api/master/spareparts', wrap((req) => {
 }));
 // Sites within the user's scope: Admin Company every site of the company, others their own site.
 app.get('/api/master/sites', wrap((req) => {
-  const scope = siteCondition(req.user, 'site_name');
-  return db.prepare(`SELECT id, site_code, site_name, company, is_active FROM sites WHERE ${req.query.all ? '1' : 'is_active = 1'} AND ${scope.sql} ORDER BY site_name`)
+  // Qualified: the company scope's subquery also reads `sites`, where a bare site_name would mean its own row.
+  const scope = siteCondition(req.user, 's.site_name');
+  return db.prepare(`SELECT s.id, s.site_code, s.site_name, s.company, s.is_active FROM sites s
+                     WHERE ${req.query.all ? '1' : 's.is_active = 1'} AND ${scope.sql} ORDER BY s.site_name`)
     .all(...scope.params);
 }));
 
