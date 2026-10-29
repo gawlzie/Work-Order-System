@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareText, Play, Plus, RefreshCcw, Timer, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, Loader, MessageSquareText, Play, RefreshCcw, Timer, XCircle } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApprovalBadge, StatusBadge } from '../../components/badges';
@@ -9,12 +9,12 @@ import { formatMeter } from '../../components/MeterFields';
 import { WoJobCodes } from '../../components/WoJobCodes';
 import { useConfirm } from '../../components/confirm';
 import { useToast } from '../../components/toast';
-import { Button, Card, EmptyState, Input, Spinner, Textarea } from '../../components/ui';
+import { Button, Card, EmptyState, Spinner, Textarea } from '../../components/ui';
 import { stepRef, useAct } from '../../lib/act';
 import { useAuth } from '../../lib/auth';
 import { durationBetween, formatDateTime, formatDuration } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
-import { newRef, useOutbox } from '../../lib/offline';
+import { useOutbox } from '../../lib/offline';
 import { useWorkOrder } from '../../lib/queries';
 import type { Step } from '../../lib/types';
 import { useTour } from '../../lib/tour';
@@ -52,7 +52,6 @@ export function JobPage() {
   const navigate = useNavigate();
   const { data: wo, isLoading, error, refetch, isFetching } = useWorkOrder(id);
   const [remarks, setRemarks] = useState('');
-  const [extra, setExtra] = useState('');
   // Every action goes through the outbox, so the steps can be done without signal too.
   const act = useAct();
   const unsent = useOutbox(user?.id).filter((o) => o.wo_uuid === id).length;
@@ -239,24 +238,6 @@ export function JobPage() {
             </li>
           ))}
         </ol>
-        {canProgress && (
-          <form
-            className="flex gap-2 border-t border-border p-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (extra.trim().length >= 3)
-                confirm({ message: t('confirm_add_extra', { name: extra.trim() }) }, () => {
-                  act({ type: 'work.add', wo_uuid: wo.wo_uuid, label: t('op_work_add', { name: extra.trim() }), name: extra.trim(), step_ref: newRef() });
-                  setExtra('');
-                });
-            }}
-          >
-            <Input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder={t('add_additional_work')} maxLength={120} className="h-11" />
-            <Button type="submit" variant="outline" className="h-11" disabled={extra.trim().length < 3} aria-label={t('create')}>
-              <Plus className="size-5" />
-            </Button>
-          </form>
-        )}
       </Card>
     </div>
   );
