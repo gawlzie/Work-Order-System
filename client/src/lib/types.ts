@@ -332,6 +332,8 @@ export interface MasterSite {
   site_code: string;
   site_name: string;
   company: string;
+  /** The customer the site works for (the company above employs the people at the site). */
+  customer_company: string | null;
   location: string | null;
   /** Optional short names, e.g. BIB / KUKAR. */
   site_alias: string | null;

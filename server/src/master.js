@@ -522,14 +522,14 @@ const SITE_COLUMNS = `s.*, (SELECT COUNT(*) FROM employees e WHERE e.site = s.si
 
 export function listSites(q = {}) {
   const s = `%${str(q.search)}%`;
-  const where = [`(s.site_code LIKE ? OR s.site_name LIKE ? OR s.company LIKE ? OR IFNULL(s.location, '') LIKE ?
+  const where = [`(s.site_code LIKE ? OR s.site_name LIKE ? OR s.company LIKE ? OR IFNULL(s.customer_company, '') LIKE ? OR IFNULL(s.location, '') LIKE ?
     OR IFNULL(s.site_alias, '') LIKE ? OR IFNULL(s.location_alias, '') LIKE ?)`];
   if (q.status === 'active' || q.status === 'inactive') where.push(`s.is_active = ${q.status === 'active' ? 1 : 0}`);
   return pagedQuery({
     select: SITE_COLUMNS,
     from: `FROM sites s WHERE ${where.join(' AND ')}`,
-    params: [s, s, s, s, s, s],
-    order: orderBy(q, { site_code: 's.site_code', site_name: 's.site_name', company: 's.company', employee_count: 'employee_count', unit_count: 'unit_count', wo_count: 'wo_count' }, 'site_code'),
+    params: [s, s, s, s, s, s, s],
+    order: orderBy(q, { site_code: 's.site_code', site_name: 's.site_name', company: 's.company', customer_company: 's.customer_company', employee_count: 'employee_count', unit_count: 'unit_count', wo_count: 'wo_count' }, 'site_code'),
     q,
   });
 }
@@ -542,13 +542,15 @@ export function getSite(id) {
 
 const ALIAS = /^[A-Z0-9]{2,20}$/;
 
-/** Body: site_code, site_name, company, location, site_alias, location_alias (the last three optional), is_active. */
+/** Body: site_code, site_name, company, customer_company, location, site_alias, location_alias (the last three optional), is_active. */
 function validateSite(body, existing) {
   const errors = {};
   const data = {
     site_code: str(body.site_code).toUpperCase(),
     site_name: str(body.site_name).replace(/\s+/g, ' '),
     company: str(body.company).replace(/\s+/g, ' '),
+    // The customer the site works for; the company above is the employer of the people at the site.
+    customer_company: str(body.customer_company).replace(/\s+/g, ' '),
     location: optional(body.location),
     // Part of new work order numbers (WO-BIB-TABUM-202610-047): capitals and digits only.
     site_alias: optional(body.site_alias)?.toUpperCase() ?? null,
@@ -560,6 +562,7 @@ function validateSite(body, existing) {
   if (data.site_name.length < 2 || data.site_name.length > 100) errors.site_name = 'Site name must be 2-100 characters';
   else if (taken('sites', 'site_name', data.site_name, existing?.id)) errors.site_name = 'Site name is already used';
   if (data.company.length < 2 || data.company.length > 100) errors.company = 'Company must be 2-100 characters';
+  if (data.customer_company.length < 2 || data.customer_company.length > 100) errors.customer_company = 'Customer company must be 2-100 characters';
   if (data.location && data.location.length > 200) errors.location = 'Location must be at most 200 characters';
   if (data.site_alias && !ALIAS.test(data.site_alias)) errors.site_alias = 'Site alias must be 2-20 letters or digits (no spaces or dashes)';
   if (data.location_alias && !ALIAS.test(data.location_alias)) errors.location_alias = 'Location alias must be 2-20 letters or digits (no spaces or dashes)';
@@ -569,8 +572,8 @@ function validateSite(body, existing) {
 
 export function createSite(body) {
   const d = validateSite(body);
-  const { lastInsertRowid } = db.prepare('INSERT INTO sites (site_code, site_name, company, location, site_alias, location_alias, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(d.site_code, d.site_name, d.company, d.location, d.site_alias, d.location_alias, d.is_active);
+  const { lastInsertRowid } = db.prepare('INSERT INTO sites (site_code, site_name, company, customer_company, location, site_alias, location_alias, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(d.site_code, d.site_name, d.company, d.customer_company, d.location, d.site_alias, d.location_alias, d.is_active);
   return getSite(lastInsertRowid);
 }
 
@@ -579,8 +582,8 @@ export function updateSite(id, body) {
   const existing = getSite(id);
   const d = validateSite(body, existing);
   tx(() => {
-    db.prepare('UPDATE sites SET site_code = ?, site_name = ?, company = ?, location = ?, site_alias = ?, location_alias = ?, is_active = ? WHERE id = ?')
-      .run(d.site_code, d.site_name, d.company, d.location, d.site_alias, d.location_alias, d.is_active, id);
+    db.prepare('UPDATE sites SET site_code = ?, site_name = ?, company = ?, customer_company = ?, location = ?, site_alias = ?, location_alias = ?, is_active = ? WHERE id = ?')
+      .run(d.site_code, d.site_name, d.company, d.customer_company, d.location, d.site_alias, d.location_alias, d.is_active, id);
     if (d.site_name !== existing.site_name)
       for (const table of ['employees', 'units', 'work_orders']) db.prepare(`UPDATE ${table} SET site = ? WHERE site = ? COLLATE NOCASE`).run(d.site_name, existing.site_name);
   });
