@@ -1,6 +1,6 @@
 /**
  * Gives the example sites their aliases (only where still empty) and renumbers work orders that still have the old
- * number (WO-YYYYMM-NNNN) to the alias number of their site (WO-BIB-TABUM-YYYYMM-NNN), keeping month and sequence.
+ * number (WO-YYYYMM-NNNN) to the alias number of their site (WO-BIB-TABUM-YYYY-MM-NNN), keeping month and sequence.
  * The copies of the number in notifications and in the example proof file names follow. Runs once per work order:
  * numbers already in the new form are left alone.
  *
@@ -38,7 +38,7 @@ export function applyWoNumberAliases() {
     for (const wo of db.prepare('SELECT wo_uuid, wo_number, site FROM work_orders ORDER BY wo_number').all()) {
       const m = OLD_NUMBER.exec(wo.wo_number);
       if (!m) continue;
-      const number = woNumber(wo.site, m[1], Number(m[2]));
+      const number = woNumber(wo.site, `${m[1].slice(0, 4)}-${m[1].slice(4)}`, Number(m[2]));
       setNumber.run(number, wo.wo_uuid);
       for (const n of notes.all(wo.wo_uuid)) {
         const data = JSON.parse(n.data);
