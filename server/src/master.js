@@ -552,7 +552,7 @@ function validateSite(body, existing) {
     // The customer the site works for; the company above is the employer of the people at the site.
     customer_company: str(body.customer_company).replace(/\s+/g, ' '),
     location: optional(body.location),
-    // Part of new work order numbers (WO-BIB-TABUM-202610-047): capitals and digits only.
+    // Part of new work order numbers (WO-BIB-TABUM-2026-10-047): capitals and digits only.
     site_alias: optional(body.site_alias)?.toUpperCase() ?? null,
     location_alias: optional(body.location_alias)?.toUpperCase() ?? null,
     is_active: flag(body.is_active, existing?.is_active ?? 1),

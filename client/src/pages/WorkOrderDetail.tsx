@@ -48,7 +48,7 @@ export function WorkOrderDetailPage() {
   const [approval, setApproval] = useState<'approve' | 'reject' | null>(null);
 
   useSecondTick(!!wo && wo.status !== 'FINISH' && !!wo.started_at);
-  // Saved PDF: WO-202610-0044_<print date>.pdf
+  // Saved PDF: WO-BIB-TABUM-2026-10-047_<print date>.pdf
   usePrintFileName(wo?.wo_number);
   useTour('wo-detail', !!wo);
 

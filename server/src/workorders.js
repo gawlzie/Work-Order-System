@@ -48,25 +48,27 @@ const assertWorkable = (wo) => {
 };
 
 /**
- * Work order number: WO-<site alias>-<location alias>-<YYYYMM>-<NNN>, e.g. WO-BIB-TABUM-202610-047. A site without
- * an alias leaves that part out. The number is fixed once given (a later alias or unit change does not renumber).
+ * Work order number: WO-<site alias>-<location alias>-<YYYY>-<MM>-<NNN>, e.g. WO-BIB-TABUM-2026-10-047. A site
+ * without an alias leaves that part out. The number is fixed once given (a later alias or unit change does not renumber).
+ * `ym` is "YYYY-MM".
  */
 export function woNumber(site, ym, seq) {
   const aliases = site ? db.prepare('SELECT site_alias, location_alias FROM sites WHERE site_name = ? COLLATE NOCASE').get(site) : null;
   return ['WO', aliases?.site_alias, aliases?.location_alias, ym, String(seq).padStart(3, '0')].filter(Boolean).join('-');
 }
 
-/** Ends of the numbers: "-YYYYMM-NNN" (also the older WO-YYYYMM-NNNN). */
-const NUMBER_TAIL = /-(\d{6})-(\d+)$/;
+/** Ends of the numbers: "-YYYY-MM-NNN" (also the older "-YYYYMM-NNN"); groups: year, month, sequence. */
+export const NUMBER_TAIL = /-(\d{4})-?(\d{2})-(\d+)$/;
 
 /** The next number at `site`: the sequence runs per month over all sites, so it stays unique whatever the aliases. */
 export function nextWoNumber(site, date = new Date()) {
-  const ym = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
-  const last = db.prepare('SELECT wo_number FROM work_orders WHERE wo_number LIKE ?').all(`%-${ym}-%`)
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const last = db.prepare('SELECT wo_number FROM work_orders WHERE wo_number LIKE ?').all(`%-${year}%`)
     .map((r) => NUMBER_TAIL.exec(r.wo_number))
-    .filter((m) => m && m[1] === ym)
-    .reduce((max, m) => Math.max(max, Number(m[2])), 0);
-  return woNumber(site, ym, last + 1);
+    .filter((m) => m && m[1] === year && m[2] === month)
+    .reduce((max, m) => Math.max(max, Number(m[3])), 0);
+  return woNumber(site, `${year}-${month}`, last + 1);
 }
 
 /** Comparable form of a step list: names, flags and sub-steps in order. */
